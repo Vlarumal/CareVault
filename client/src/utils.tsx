@@ -48,3 +48,16 @@ export const assertNever = (value: never): never => {
     `Unhandled discriminated union member: ${JSON.stringify(value)}`
   );
 };
+
+export const isDateValid = (dateString: string): boolean => {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateString)) return false;
+  
+  const date = new Date(dateString);
+  return !isNaN(date.getTime());
+};
+
+export const isSSNValid = (ssn: string): boolean => {
+  const regex = /^\d{3}-\d{2}-\d{4}$/;
+  return regex.test(ssn);
+};
