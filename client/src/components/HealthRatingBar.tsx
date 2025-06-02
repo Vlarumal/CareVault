@@ -4,7 +4,7 @@ import { Favorite } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 
 type BarProps = {
-  rating: number;
+  rating: number | null;
   showText: boolean;
 };
 
@@ -25,6 +25,8 @@ const HEALTHBAR_TEXTS = [
 ];
 
 const HealthRatingBar = ({ rating, showText }: BarProps) => {
+  if (rating === null) return <span>N/A</span>;
+  
   return (
     <div className="health-bar">
       <StyledRating

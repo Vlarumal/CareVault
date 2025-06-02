@@ -15,6 +15,7 @@ export interface PatientEntry {
   gender: Gender;
   dateOfBirth: string;
   entries?: Entry[];
+  healthRating?: number | null;
 }
 
 export enum Gender {
@@ -31,7 +32,9 @@ export type NewPatientEntryWithoutEntries = UnionOmit<
 export type NonSensitivePatientEntry = UnionOmit<
   PatientEntry,
   'ssn' | 'entries'
->;
+> & {
+  healthRating?: number | null;
+};
 interface BaseEntry {
   id: string;
   description: string;

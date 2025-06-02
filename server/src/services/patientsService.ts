@@ -6,38 +6,53 @@ import {
   NewEntryWithoutId,
   NewPatientEntryWithoutEntries,
   NonSensitivePatientEntry,
-  PatientEntry,
+  PatientEntry
 } from '../types';
+
+// Helper to compute health rating from entries
+const computeHealthRating = (patient: PatientEntry): number | null => {
+  if (!patient.entries || patient.entries.length === 0) return null;
+  
+  const healthChecks = patient.entries.filter(
+    e => e.type === 'HealthCheck'
+  );
+  
+  return healthChecks.length > 0 
+    ? healthChecks[healthChecks.length-1].healthCheckRating
+    : null;
+};
 
 const getPatientEntries = (): PatientEntry[] => {
   return patients;
 };
 
 const getNonSensitiveEntries = (): NonSensitivePatientEntry[] => {
-  return patients.map(
-    ({ id, name, dateOfBirth, gender, occupation }) => ({
-      id,
-      name,
-      dateOfBirth,
-      gender,
-      occupation,
-    })
-  );
+  return patients.map(patient => ({
+    id: patient.id,
+    name: patient.name,
+    dateOfBirth: patient.dateOfBirth,
+    gender: patient.gender,
+    occupation: patient.occupation,
+    healthRating: computeHealthRating(patient)
+  }));
 };
 
 const findById = (id: string): PatientEntry | undefined => {
-  const entry = patients.find((patient) => patient.id === id);
-  return entry;
+  return patients.find(patient => patient.id === id);
 };
 
 const addPatient = (
   entry: NewPatientEntryWithoutEntries
 ): PatientEntry => {
   const id: string = uuid();
-  const newPatientEntry = {
+  const newPatientEntry: PatientEntry = {
     id,
+    name: entry.name,
+    occupation: entry.occupation,
+    gender: entry.gender,
+    dateOfBirth: entry.dateOfBirth,
     entries: [],
-    ...entry,
+    healthRating: null
   };
 
   patients.push(newPatientEntry);
@@ -54,8 +69,13 @@ const addEntry = (
     ...entry,
   };
 
-  if (patient.entries) {
-    patient.entries.push(newEntry);
+  // Initialize entries array if undefined
+  if (!patient.entries) patient.entries = [];
+  patient.entries.push(newEntry);
+
+  // Update health rating if HealthCheck entry
+  if (entry.type === 'HealthCheck') {
+    patient.healthRating = entry.healthCheckRating;
   }
 
   return newEntry;
