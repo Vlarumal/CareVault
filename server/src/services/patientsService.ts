@@ -50,6 +50,7 @@ const findById = (id: string): PatientEntry => {
 const addPatient = (
   entry: NewPatientEntryWithoutEntries
 ): PatientEntry => {
+
   // Validate required fields
   const requiredFields: Array<keyof NewPatientEntryWithoutEntries> = ['name', 'occupation', 'gender'];
   const missingFields = requiredFields.filter(field => !entry[field]);

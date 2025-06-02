@@ -26,9 +26,50 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
   const [gender, setGender] = useState(Gender.Other);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Real-time validation handlers
+  const validateName = () => {
+    if (!name.trim()) {
+      setErrors(prev => ({...prev, name: 'Name is required'}));
+    } else if (name.trim().length < 3) {
+      setErrors(prev => ({...prev, name: 'Name must be at least 3 characters'}));
+    } else {
+      setErrors(prev => ({...prev, name: ''}));
+    }
+  };
+
+  const validateSsn = () => {
+    if (!ssn.trim()) {
+      setErrors(prev => ({...prev, ssn: 'SSN is required'}));
+    } else if (!isSSNValid(ssn)) {
+      setErrors(prev => ({...prev, ssn: 'SSN must be in format XXX-XX-XXXX'}));
+    } else {
+      setErrors(prev => ({...prev, ssn: ''}));
+    }
+  };
+
+  const validateDateOfBirth = () => {
+    if (!dateOfBirth) {
+      setErrors(prev => ({...prev, dateOfBirth: 'Date of birth is required'}));
+    } else if (!isDateValid(dateOfBirth)) {
+      setErrors(prev => ({...prev, dateOfBirth: 'Invalid date format (use YYYY-MM-DD)'}));
+    } else if (new Date(dateOfBirth) > new Date()) {
+      setErrors(prev => ({...prev, dateOfBirth: 'Date cannot be in the future'}));
+    } else {
+      setErrors(prev => ({...prev, dateOfBirth: ''}));
+    }
+  };
+
+  const validateOccupation = () => {
+    if (!occupation.trim()) {
+      setErrors(prev => ({...prev, occupation: 'Occupation is required'}));
+    } else {
+      setErrors(prev => ({...prev, occupation: ''}));
+    }
+  };
+
   const onGenderChange = (event: SelectChangeEvent<string>) => {
     event.preventDefault();
-    if ( typeof event.target.value === "string") {
+    if (typeof event.target.value === "string") {
       const value = event.target.value;
       const gender = Object.values(Gender).find(g => g.toString() === value);
       if (gender) {
@@ -38,34 +79,11 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
   };
 
   const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!name.trim()) {
-      newErrors.name = 'Name is required';
-    } else if (name.trim().length < 3) {
-      newErrors.name = 'Name must be at least 3 characters';
-    }
-    
-    if (!ssn.trim()) {
-      newErrors.ssn = 'SSN is required';
-    } else if (!isSSNValid(ssn)) {
-      newErrors.ssn = 'SSN must be in format XXX-XX-XXXX';
-    }
-    
-    if (!dateOfBirth) {
-      newErrors.dateOfBirth = 'Date of birth is required';
-    } else if (!isDateValid(dateOfBirth)) {
-      newErrors.dateOfBirth = 'Invalid date format (use YYYY-MM-DD)';
-    } else if (new Date(dateOfBirth) > new Date()) {
-      newErrors.dateOfBirth = 'Date cannot be in the future';
-    }
-    
-    if (!occupation.trim()) {
-      newErrors.occupation = 'Occupation is required';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    validateName();
+    validateSsn();
+    validateDateOfBirth();
+    validateOccupation();
+    return Object.values(errors).every(error => error === '');
   };
 
   const addPatient = (event: SyntheticEvent) => {
@@ -89,7 +107,11 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
           label="Name"
           fullWidth 
           value={name}
-          onChange={({ target }) => setName(target.value)}
+          onChange={({ target }) => {
+            setName(target.value);
+            validateName();
+          }}
+          onBlur={validateName}
           error={!!errors.name}
           helperText={errors.name}
         />
@@ -97,7 +119,11 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
           label="Social security number"
           fullWidth
           value={ssn}
-          onChange={({ target }) => setSsn(target.value)}
+          onChange={({ target }) => {
+            setSsn(target.value);
+            validateSsn();
+          }}
+          onBlur={validateSsn}
           error={!!errors.ssn}
           helperText={errors.ssn}
         />
@@ -106,7 +132,11 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
           placeholder="YYYY-MM-DD"
           fullWidth
           value={dateOfBirth}
-          onChange={({ target }) => setDateOfBirth(target.value)}
+          onChange={({ target }) => {
+            setDateOfBirth(target.value);
+            validateDateOfBirth();
+          }}
+          onBlur={validateDateOfBirth}
           type='date'
           InputLabelProps={{ shrink: true }}
           error={!!errors.dateOfBirth}
@@ -116,7 +146,11 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
           label="Occupation"
           fullWidth
           value={occupation}
-          onChange={({ target }) => setOccupation(target.value)}
+          onChange={({ target }) => {
+            setOccupation(target.value);
+            validateOccupation();
+          }}
+          onBlur={validateOccupation}
           error={!!errors.occupation}
           helperText={errors.occupation}
         />
