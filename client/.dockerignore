@@ -1,0 +1,77 @@
+# Docker Compose Files
+docker-compose*.yml
+docker-compose.*.yml
+compose*.yml
+compose.*.yml
+
+# Docker files (optional)
+.dockerignore
+Dockerfile*
+dev.Dockerfile*
+.npmrc
+
+# Version Control
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+
+# IDE Configs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Runtime Files
+*.log
+*.tmp
+*.pid
+*.DS_Store
+
+# Dependency Directories
+node_modules/
+.pnpm-store
+npm-debug.log
+vendor/
+__pycache__/
+*.egg-info/
+
+# Build Artifacts
+dist/
+build/
+out/
+*.exe
+*.a
+*.o
+*.so
+
+# Environment Files
+.env
+.env.example
+.env.local
+.env*.local
+.env.dev
+.env.prod
+secrets/
+
+# Documentation
+*.md
+LICENSE
+CHANGELOG
+
+# Test Files
+coverage/
+*.test
+*.spec
+.nyc_output
+
+# System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Custom Extensions
+*.bak
+*.backup
+*.dump
+*.sublime-*

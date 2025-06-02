@@ -1,0 +1,43 @@
+name: URL health check
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '*/5 * * * *'
+  
+
+env:
+  TZ: Europe/Vilnius
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check the deployed service URL
+        uses: jtalk/url-health-check-action@b716ccb6645355dd9fcce8002ce460e5474f7f00
+        with:
+          # Check the following URLs one by one sequentially
+          url: https://render.com/|https://patientapp-wzu7.onrender.com/api/ping
+          # Follow redirects, or just report success on 3xx status codes
+          follow-redirect: false # Optional, defaults to "false"
+          # Fail this action after this many failed attempts
+          max-attempts: 5 # Optional, defaults to 1
+          # Delay between retries
+          retry-delay: 50s # Optional, only applicable to max-attempts > 1
+          # Retry all errors, including 404. This option might trigger curl upgrade.
+          retry-all: true # Optional, defaults to "false"
+          # String representation of cookie attached to health check request.
+          # Format: `Name=Value`
+          # cookie: 'token=asdf1234' # Optional, default is empty
+          # Basic auth login password pair.
+          # Format: `login:password`
+          # basic-auth: 'login:password' # Optional, default is empty
+
+      - name: Success Notification
+        if: success()
+        run: echo "All services are up and running!"
+        
+      - name: Failure Notification
+        if: failure()
+        run: echo "Health check failed! Check service endpoints."

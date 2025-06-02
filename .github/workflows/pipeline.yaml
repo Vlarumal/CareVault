@@ -1,0 +1,108 @@
+name: Deployment pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+env:
+  CONDITION_SKIP: ${{ contains(join(github.event.commits.*.message, ' '), '#skip') }}
+  CONDITION_PUSH: ${{ github.event_name == 'push' }}
+
+jobs:
+  simple_deployment_pipeline:
+    runs-on: ubuntu-latest
+    outputs:
+      author: ${{ steps.get_author.outputs.author }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get last commit author
+        id: get_author
+        run: |
+          AUTHOR=$(git log -1 --pretty=format:'%an')
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+
+      # - name: Try to fail
+      #   run: exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: ./server
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ./client
+
+      - name: Check backend style
+        run: npm run lint
+        working-directory: ./server
+
+      - name: Check frontend style
+        run: npm run lint
+        working-directory: ./client
+
+      - name: Build UI
+        run: npm run build:ui
+        working-directory: ./server
+
+      - name: Trigger deployment
+        id: deploy
+        if: ${{ env.CONDITION_PUSH == 'true' && env.CONDITION_SKIP == 'false' }}
+        run: curl https://api.render.com/deploy/srv-${{ secrets.MY_RENDER_SERVICE_ID }}?key=${{ secrets.MY_RENDER_API_KEY }}
+        
+
+      # - name: Debug deploy conclusion and outcome
+      #   run: | 
+      #     echo "Deploy outcome: ${{ steps.deploy.outcome }}"
+      #     echo "Deploy conclusion: ${{ steps.deploy.conclusion }}"
+
+      - name: Deployment success notification
+        uses: rjstone/discord-webhook-notify@89b0bf43c2c8514f70d0dcba4a706b904e8a3112
+        if: ${{ steps.deploy.outcome != 'skipped' && steps.deploy.outcome == 'success' && steps.deploy.conclusion != 'skipped' && steps.deploy.conclusion == 'success' && env.CONDITION_PUSH == 'true' && env.CONDITION_SKIP == 'false' }}
+        with:
+          severity: info
+          description: to https://patientapp-wzu7.onrender.com/ by ${{ steps.get_author.outputs.author }} succeeded!
+          details: Deployment was successful.
+          text: A new version of Patientapp deployed
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+
+      - name: Build failed - notification
+        uses: rjstone/discord-webhook-notify@89b0bf43c2c8514f70d0dcba4a706b904e8a3112
+        if: failure()
+        with:
+          severity: error
+          description: commit https://github.com/${{ github.repository }}/commit/${{ github.sha }} by ${{ steps.get_author.outputs.author }} broke the build
+          # details: Build failed!
+          text: Build failed!
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+
+      - name: Cancelled - notification
+        uses: rjstone/discord-webhook-notify@89b0bf43c2c8514f70d0dcba4a706b904e8a3112
+        if: cancelled()
+        with:
+          severity: warn
+          details: Deployment Cancelled!
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+
+  tag_release:
+    needs: [simple_deployment_pipeline]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        if: ${{ env.CONDITION_PUSH == 'true' && env.CONDITION_SKIP == 'false' }}
+        uses: anothrNick/github-tag-action@f278d49d30cdd8775cc3e7dd00b5ee11686ee297
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch
+          # DRY_RUN: true
