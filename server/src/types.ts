@@ -35,7 +35,7 @@ export type NonSensitivePatientEntry = UnionOmit<
 > & {
   healthRating?: number | null;
 };
-interface BaseEntry {
+export interface BaseEntry {
   id: string;
   description: string;
   date: string;
