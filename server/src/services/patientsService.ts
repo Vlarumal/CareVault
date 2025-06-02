@@ -7,7 +7,8 @@ import {
   NewEntryWithoutId,
   NewPatientEntryWithoutEntries,
   NonSensitivePatientEntry,
-  PatientEntry
+  PatientEntry,
+  HealthCheckRating
 } from '../types';
 import { ValidationError, NotFoundError } from '../utils/errors';
 
@@ -98,6 +99,22 @@ const addEntry = (
       `Invalid entry type: ${entry.type}`,
       { invalidType: entry.type }
     );
+  }
+  
+  // HealthCheck-specific validation
+  if (entry.type === 'HealthCheck') {
+    if (entry.healthCheckRating === undefined) {
+      throw new ValidationError(
+        'Missing healthCheckRating for HealthCheck entry',
+        { missingField: 'healthCheckRating' }
+      );
+    }
+  if (entry.healthCheckRating < HealthCheckRating.Healthy || entry.healthCheckRating > HealthCheckRating.CriticalRisk) {
+    throw new ValidationError(
+      'Invalid healthCheckRating: must be 0-3',
+      { invalidField: 'healthCheckRating' }
+    );
+  }
   }
 
   const id: string = uuid();
