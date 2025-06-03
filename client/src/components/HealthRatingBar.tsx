@@ -53,7 +53,7 @@ const HealthRatingBar = ({ rating, showText }: BarProps) => {
   return (
     <div className="health-bar" style={{ display: 'flex', alignItems: 'center' }}>
       {hearts}
-      {showText && <p style={{ marginLeft: 8 }}>{HEALTHBAR_TEXTS[rating]}</p>}
+      {showText && <p style={{ marginLeft: 8 }} data-testid="health-rating-text">{HEALTHBAR_TEXTS[rating]}</p>}
     </div>
   );
 };

@@ -65,6 +65,13 @@ const PatientListPage = ({ patients, setPatients } : Props ) => {
     }
   };
 
+  // Sort patients by date of birth (oldest first)
+  const sortedPatients = [...patients].sort((a, b) => {
+    const dateA = a.dateOfBirth ? new Date(a.dateOfBirth).getTime() : 0;
+    const dateB = b.dateOfBirth ? new Date(b.dateOfBirth).getTime() : 0;
+    return dateA - dateB;
+  });
+
   return (
     <div className="App">
       <Box>
@@ -82,16 +89,22 @@ const PatientListPage = ({ patients, setPatients } : Props ) => {
           </TableRow>
         </TableHead>
         <TableBody>
-          {Object.values(patients).map((patient: Patient) => (
+          {sortedPatients.map((patient: Patient) => (
             <TableRow key={patient.id}>
-              <TableCell><Link to={patient.id}>{patient.name}</Link></TableCell>
+              <TableCell>
+                <Link to={patient.id} data-testid="patient-name">
+                  {patient.name}
+                </Link>
+              </TableCell>
               <TableCell>{patient.gender}</TableCell>
               <TableCell>{patient.occupation}</TableCell>
               <TableCell>
-                <HealthRatingBar 
-                  showText={false} 
-                  rating={getLatestHealthRating(patient)} 
-                />
+                <div data-testid="health-rating-bar">
+                  <HealthRatingBar 
+                    showText={false} 
+                    rating={getLatestHealthRating(patient)} 
+                  />
+                </div>
               </TableCell>
             </TableRow>
           ))}

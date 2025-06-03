@@ -18,29 +18,31 @@ const PatientPage = () => {
     null
   );
 
+  // Move getData outside useEffect so it can be reused
+  const getData = async () => {
+    if (!id) return;
+
+    try {
+      setLoading(true);
+      setErrorMessage(null); // Reset error when retrying
+      const [patientData, diagnosesData] = await Promise.all([
+        patientService.getById(id),
+        diagnosisService.getAllDiagnoses(),
+      ]);
+      setPatient(patientData);
+      setDiagnoses(diagnosesData);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Failed to load data'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const getData = async () => {
-      if (!id) return;
-
-      try {
-        setLoading(true);
-        const [patientData, diagnosesData] = await Promise.all([
-          patientService.getById(id),
-          diagnosisService.getAllDiagnoses(),
-        ]);
-        setPatient(patientData);
-        setDiagnoses(diagnosesData);
-      } catch (error) {
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : 'Failed to load data'
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
     getData();
   }, [id]);
 
@@ -59,13 +61,24 @@ const PatientPage = () => {
       <Box
         display='flex'
         justifyContent='center'
+        data-testid='loading-spinner'
       >
         <CircularProgress />
       </Box>
     );
 
   if (errorMessage)
-    return <Alert severity='error'>{errorMessage}</Alert>;
+    return (
+      <div>
+        <Alert severity='error'>{errorMessage}</Alert>
+        <button 
+          onClick={getData}
+          style={{ marginTop: '10px' }}
+        >
+          Retry
+        </button>
+      </div>
+    );
 
   if (!patient)
     return <Alert severity='warning'>No patient found</Alert>;
@@ -91,7 +104,7 @@ const PatientPage = () => {
 
   return (
     <div>
-      <h2>
+      <h2 data-testid="patient-name">
         {patient.name} {getIcon(patient.gender)}
       </h2>
       <div>ssn: {patient.ssn}</div>
