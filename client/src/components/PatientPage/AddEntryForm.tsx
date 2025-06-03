@@ -23,6 +23,7 @@ import {
   BaseEntry,
   DiagnosisEntry,
 } from '../../types';
+import { isDateValid, validateDateRange, validateHealthRating, validateRequired } from '../../utils';
 
 const AddEntryForm: React.FC<{
   setPatient: React.Dispatch<React.SetStateAction<Patient | null>>;
@@ -45,7 +46,7 @@ const AddEntryForm: React.FC<{
   };
 
   const [formData, setFormData] = useState(initialFormState);
-
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [entryType, setEntryType] =
     useState<Entry['type']>('HealthCheck');
@@ -60,6 +61,58 @@ const AddEntryForm: React.FC<{
       ...prevData,
       [name]: value,
     }));
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({...prev, [name]: ''}));
+    }
+  };
+
+  const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    validateField(name, value);
+  };
+
+  const validateField = (fieldName: string, value: string) => {
+    let error = '';
+    
+    switch (fieldName) {
+      case 'description':
+      case 'date':
+      case 'dischargeCriteria':
+      case 'employerName':
+        error = validateRequired(value, fieldName.charAt(0).toUpperCase() + fieldName.slice(1));
+        break;
+        
+      case 'specialist':
+        error = validateRequired(value, 'Specialist');
+        break;
+        
+      case 'healthCheckRating':
+        error = validateHealthRating(Number(value));
+        break;
+        
+      case 'dischargeDate':
+        if (!value) {
+          error = 'Discharge date is required';
+        } else if (!isDateValid(value)) {
+          error = 'Invalid date format (YYYY-MM-DD)';
+        }
+        break;
+        
+      case 'sickLeaveStartDate':
+      case 'sickLeaveEndDate':
+        if (value && !isDateValid(value)) {
+          error = 'Invalid date format (YYYY-MM-DD)';
+        } else if (formData.sickLeaveStartDate && formData.sickLeaveEndDate) {
+          // Validate date range only if both dates are present
+          error = validateDateRange(formData.sickLeaveStartDate, formData.sickLeaveEndDate);
+        }
+        break;
+        
+    }
+    
+    setErrors(prev => ({...prev, [fieldName]: error}));
+    return !error;
   };
 
   const clearFields = () => {
@@ -85,38 +138,37 @@ const AddEntryForm: React.FC<{
       return;
     }
 
+    // Form-wide validation before submission
+    const formErrors: Record<string, string> = {};
+    
+    // Validate base fields
+    formErrors.description = validateRequired(formData.description, 'Description');
+    formErrors.date = validateRequired(formData.date, 'Date');
+    formErrors.specialist = validateRequired(formData.specialist, 'Specialist');
+    
+    // Validate entry-specific fields
     if (entryType === 'HealthCheck') {
-      const healthCheckRatingNumber = Number(
-        formData.healthCheckRating
-      );
-      if (
-        isNaN(healthCheckRatingNumber) ||
-        healthCheckRatingNumber < 0 ||
-        healthCheckRatingNumber > 3
-      ) {
-        setMessage(
-          'HealthCheck rating must be a number between 0 and 3'
-        );
-        return;
-      }
+      formErrors.healthCheckRating = validateHealthRating(Number(formData.healthCheckRating));
     }
-
+    
     if (entryType === 'Hospital') {
-      if (!formData.dischargeDate || !formData.dischargeCriteria) {
-        setMessage(
-          'Discharge date and criteria are required for Hospital entries'
-        );
-        return;
-      }
+      formErrors.dischargeDate = validateRequired(formData.dischargeDate, 'Discharge date');
+      formErrors.dischargeCriteria = validateRequired(formData.dischargeCriteria, 'Discharge criteria');
     }
-
+    
     if (entryType === 'OccupationalHealthcare') {
-      if (!formData.employerName) {
-        setMessage(
-          'Employer name is required for Occupational Healthcare entries'
-        );
-        return;
-      }
+      formErrors.employerName = validateRequired(formData.employerName, 'Employer name');
+    }
+    
+    // Filter out empty errors
+    const filteredErrors = Object.fromEntries(
+      Object.entries(formErrors).filter(([_, value]) => value)
+    );
+    
+    if (Object.keys(filteredErrors).length > 0) {
+      setErrors(filteredErrors);
+      setMessage('Please fix the validation errors');
+      return;
     }
 
     const diagnosisCodesArray =
@@ -203,17 +255,19 @@ const AddEntryForm: React.FC<{
               helperText='Date when the patient was discharged from the hospital.'
             />
 
-            <TextField
-              name='dischargeCriteria'
-              label='Discharge criteria'
-              value={formData.dischargeCriteria}
-              onChange={handleChange}
-              fullWidth
-              margin='normal'
-              required
-              data-name='Discharge criteria'
-              helperText='Conditions that must be met for discharge.'
-            />
+          <TextField
+            name='specialist'
+            label='Specialist'
+            value={formData.specialist}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={Boolean(errors.specialist)}
+            helperText={errors.specialist || 'Name of the specialist responsible.'}
+            fullWidth
+            margin='normal'
+            required
+            data-name='Specialist'
+          />
           </>
         );
       case 'OccupationalHealthcare':
@@ -352,11 +406,13 @@ const AddEntryForm: React.FC<{
             label='Description'
             value={formData.description}
             onChange={handleChange}
+            onBlur={handleBlur}
+            error={Boolean(errors.description)}
+            helperText={errors.description || 'Provide a brief description of the entry.'}
             fullWidth
             margin='normal'
             required
             data-name='Description'
-            helperText='Provide a brief description of the entry.'
           />
 
           <TextField
@@ -364,13 +420,15 @@ const AddEntryForm: React.FC<{
             label='Date'
             value={formData.date}
             onChange={handleChange}
+            onBlur={handleBlur}
+            error={Boolean(errors.date)}
+            helperText={errors.date || 'Select the date of the entry.'}
             fullWidth
             margin='normal'
             type='date'
             required
             InputLabelProps={{ shrink: true }}
             data-name='Date'
-            helperText='Select the date of the entry.'
           />
 
           <TextField
