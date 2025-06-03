@@ -57,6 +57,31 @@ export const isDateValid = (dateString: string): boolean => {
   return !isNaN(date.getTime());
 };
 
+export const validateHealthRating = (value: number): string => {
+  if (value < 0 || value > 3) {
+    return 'Health rating must be between 0 and 3';
+  }
+  return '';
+};
+
+export const validateRequired = (value: string, fieldName: string): string => {
+  if (!value.trim()) {
+    return `${fieldName} is required`;
+  }
+  return '';
+};
+
+export const validateDateRange = (startDate: string, endDate: string): string => {
+  if (!startDate || !endDate) return '';
+  
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (start > end) {
+    return 'End date must be after start date';
+  }
+  return '';
+};
+
 export const isSSNValid = (ssn: string): boolean => {
   const regex = /^\d{3}-\d{2}-\d{4}$/;
   return regex.test(ssn);
