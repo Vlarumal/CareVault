@@ -1,21 +1,11 @@
-import { Rating } from '@mui/material';
+import { Tooltip } from '@mui/material';
 import { Favorite } from '@mui/icons-material';
-
-import { styled } from '@mui/material/styles';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
 type BarProps = {
   rating: number | null;
   showText: boolean;
 };
-
-const StyledRating = styled(Rating)({
-  iconFilled: {
-    color: "#ff6d75",
-  },
-  iconHover: {
-    color: "#ff3d47",
-  }
-});
 
 const HEALTHBAR_TEXTS = [
   "The patient is in great shape",
@@ -24,19 +14,46 @@ const HEALTHBAR_TEXTS = [
   "The patient has a diagnosed condition",
 ];
 
-const HealthRatingBar = ({ rating, showText }: BarProps) => {
-  if (rating === null) return <span>N/A</span>;
-  
-  return (
-    <div className="health-bar">
-      <StyledRating
-        readOnly
-        value={4 - rating}
-        max={4}
-        icon={<Favorite fontSize="inherit" />}
-      />
+// Color scheme matching patient page entries
+const HEALTHBAR_COLORS = [
+  '#4caf50', // Green (success) - rating 0
+  '#ffeb3b', // Yellow - rating 1
+  '#ff9800', // Orange (warning) - rating 2
+  '#f44336', // Red (error) - rating 3
+];
 
-      {showText ? <p>{HEALTHBAR_TEXTS[rating]}</p> : null}
+const HealthRatingBar = ({ rating, showText }: BarProps) => {
+  if (rating === null) {
+    return (
+      <Tooltip 
+        title="Health rating is only available for patients with HealthCheck entries" 
+        arrow
+      >
+        <span style={{ display: 'flex', alignItems: 'center' }}>
+          N/A <HelpOutlineIcon fontSize="small" style={{ marginLeft: 4 }} />
+        </span>
+      </Tooltip>
+    );
+  }
+  
+  const heartCount = 4 - rating;
+  const heartColor = rating < 4 ? HEALTHBAR_COLORS[rating] : '#ff6d75';
+  
+  const hearts = Array.from({ length: 4 }, (_, i) => (
+    <Favorite
+      key={i}
+      fontSize="inherit"
+      style={{ 
+        color: i < heartCount ? heartColor : 'transparent',
+        marginRight: 2 
+      }}
+    />
+  ));
+
+  return (
+    <div className="health-bar" style={{ display: 'flex', alignItems: 'center' }}>
+      {hearts}
+      {showText && <p style={{ marginLeft: 8 }}>{HEALTHBAR_TEXTS[rating]}</p>}
     </div>
   );
 };

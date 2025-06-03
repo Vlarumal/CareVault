@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Box, Table, Button, TableHead, Typography, TableCell, TableRow, TableBody } from '@mui/material';
 import axios from 'axios';
 
-import { PatientFormValues, Patient } from "../../types";
+import { PatientFormValues, Patient, HealthCheckEntry, Entry } from "../../types";
 import AddPatientModal from "../AddPatientModal";
 
 import HealthRatingBar from "../HealthRatingBar";
@@ -14,6 +14,23 @@ interface Props {
   patients : Patient[]
   setPatients: React.Dispatch<React.SetStateAction<Patient[]>>
 }
+
+// Helper to get latest health rating from entries
+const getLatestHealthRating = (patient: Patient): number | null => {
+  if (!patient.entries) return null;
+  
+  const healthCheckEntries = patient.entries.filter(
+    (entry: Entry): entry is HealthCheckEntry => entry.type === 'HealthCheck'
+  );
+  
+  if (healthCheckEntries.length === 0) return null;
+  
+  const sortedEntries = [...healthCheckEntries].sort(
+    (a, b) => b.date.localeCompare(a.date)
+  );
+  
+  return sortedEntries[0].healthCheckRating;
+};
 
 const PatientListPage = ({ patients, setPatients } : Props ) => {
 
@@ -73,7 +90,7 @@ const PatientListPage = ({ patients, setPatients } : Props ) => {
               <TableCell>
                 <HealthRatingBar 
                   showText={false} 
-                  rating={patient.healthRating ?? null} 
+                  rating={getLatestHealthRating(patient)} 
                 />
               </TableCell>
             </TableRow>

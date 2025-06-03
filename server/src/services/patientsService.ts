@@ -12,18 +12,6 @@ import {
 } from '../types';
 import { ValidationError, NotFoundError } from '../utils/errors';
 
-// Helper to compute health rating from entries
-const computeHealthRating = (patient: PatientEntry): number | null => {
-  if (!patient.entries || patient.entries.length === 0) return null;
-  
-  const healthChecks = patient.entries.filter(
-    e => e.type === 'HealthCheck'
-  );
-  
-  return healthChecks.length > 0 
-    ? healthChecks[healthChecks.length-1].healthCheckRating
-    : null;
-};
 
 const getPatientEntries = (): PatientEntry[] => {
   return patients;
@@ -36,7 +24,7 @@ const getNonSensitiveEntries = (): NonSensitivePatientEntry[] => {
     dateOfBirth: patient.dateOfBirth,
     gender: patient.gender,
     occupation: patient.occupation,
-    healthRating: computeHealthRating(patient)
+    entries: patient.entries || []  // Include entries for health rating calculation
   }));
 };
 
@@ -71,7 +59,6 @@ const addPatient = (
     gender: entry.gender,
     dateOfBirth: entry.dateOfBirth,
     entries: [],
-    healthRating: null
   };
 
   patients.push(newPatientEntry);
@@ -127,10 +114,6 @@ const addEntry = (
   if (!patient.entries) patient.entries = [];
   patient.entries.push(newEntry);
 
-  // Update health rating if HealthCheck entry
-  if (entry.type === 'HealthCheck') {
-    patient.healthRating = entry.healthCheckRating;
-  }
 
   return newEntry;
 };
