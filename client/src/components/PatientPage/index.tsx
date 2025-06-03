@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { DiagnosisEntry, Patient } from '../../types';
+import { DiagnosisEntry, HealthCheckEntry, Patient } from '../../types';
 import { getIcon } from '../../utils';
 import patientService from '../../services/patients';
 import diagnosisService from '../../services/diagnoses';
@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Box, Card, CircularProgress } from '@mui/material';
 import EntryDetails from './EntryDetails';
 import AddEntryForm from './AddEntryForm';
+import HealthRatingBar from '../HealthRatingBar';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -68,6 +69,25 @@ const PatientPage = () => {
 
   if (!patient)
     return <Alert severity='warning'>No patient found</Alert>;
+    
+  // Get latest health rating from entries
+  const getLatestHealthRating = (): number | null => {
+    if (!patient.entries) return null;
+    
+    const healthCheckEntries = patient.entries.filter(
+      entry => entry.type === 'HealthCheck'
+    ) as HealthCheckEntry[];
+    
+    if (healthCheckEntries.length === 0) return null;
+    
+    const sortedEntries = [...healthCheckEntries].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    return sortedEntries[0].healthCheckRating;
+  };
+  
+  const latestHealthRating = getLatestHealthRating();
 
   return (
     <div>
@@ -76,6 +96,13 @@ const PatientPage = () => {
       </h2>
       <div>ssn: {patient.ssn}</div>
       <div>occupation: {patient.occupation}</div>
+      <div style={{ margin: '10px 0' }}>
+        Latest Health Rating: 
+        <HealthRatingBar 
+          rating={latestHealthRating} 
+          showText={true} 
+        />
+      </div>
 
       <section>
         <AddEntryForm
