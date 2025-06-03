@@ -53,13 +53,27 @@ export const isDateValid = (dateString: string): boolean => {
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
   
-  const date = new Date(dateString);
-  return !isNaN(date.getTime());
+  // Parse date components
+  const [year, month, day] = dateString.split('-').map(Number);
+  
+  // Check for valid month (1-12) and day (1-31)
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  
+  // Check for February and leap years
+  if (month === 2) {
+    const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    if (day > (isLeapYear ? 29 : 28)) return false;
+  }
+  
+  // Check for months with 30 days
+  if ([4, 6, 9, 11].includes(month) && day > 30) return false;
+  
+  return true;
 };
 
 export const validateHealthRating = (value: number): string => {
-  if (value < 0 || value > 3) {
-    return 'Health rating must be between 0 and 3';
+  if (!Number.isInteger(value) || value < 0 || value > 3) {
+    return 'Health rating must be an integer between 0 and 3';
   }
   return '';
 };
