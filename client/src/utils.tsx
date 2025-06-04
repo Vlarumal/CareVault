@@ -8,6 +8,17 @@ import {
 } from '@mui/icons-material';
 import { Entry, HealthCheckEntry, Patient } from './types';
 
+/**
+ * Returns corresponding icon component for medical/gender types
+ * @param icon - Gender, entry type, or health rating value
+ * @returns MUI Icon component or undefined
+ * 
+ * @example
+ * // Returns Male icon
+ * getIcon('male')
+ * 
+ * @context7 /microsoft/typescript-website
+ */
 export const getIcon = (
   icon:
     | Patient['gender']
@@ -41,7 +52,22 @@ export const getIcon = (
 };
 
 /**
- * Helper function for exhaustive type checking
+ * Ensures exhaustive type checking for discriminated unions
+ * @param value - Value that should be of type never
+ * @throws Error when called
+ * @returns Never returns, always throws
+ * 
+ * @example
+ * type Action = { type: 'A' } | { type: 'B' };
+ * function reducer(action: Action) {
+ *   switch (action.type) {
+ *     case 'A': ... break;
+ *     case 'B': ... break;
+ *     default: assertNever(action); // Ensures all cases handled
+ *   }
+ * }
+ * 
+ * @context7 /microsoft/typescript-website
  */
 export const assertNever = (value: never): never => {
   throw new Error(
@@ -49,6 +75,17 @@ export const assertNever = (value: never): never => {
   );
 };
 
+/**
+ * Validates date string in YYYY-MM-DD format
+ * @param dateString - Date string to validate
+ * @returns True if valid, false otherwise
+ * 
+ * @example
+ * // Returns true
+ * isDateValid('2025-06-04')
+ * 
+ * @context7 /microsoft/typescript-website
+ */
 export const isDateValid = (dateString: string): boolean => {
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
@@ -71,6 +108,17 @@ export const isDateValid = (dateString: string): boolean => {
   return true;
 };
 
+/**
+ * Validates health rating value (0-3)
+ * @param value - Health rating to validate
+ * @returns Error message if invalid, empty string if valid
+ * 
+ * @example
+ * // Returns 'Health rating must be an integer between 0 and 3'
+ * validateHealthRating(5)
+ * 
+ * @context7 /microsoft/typescript-website
+ */
 export const validateHealthRating = (value: number): string => {
   if (!Number.isInteger(value) || value < 0 || value > 3) {
     return 'Health rating must be an integer between 0 and 3';
@@ -78,6 +126,18 @@ export const validateHealthRating = (value: number): string => {
   return '';
 };
 
+/**
+ * Validates required field value
+ * @param value - Field value to check
+ * @param fieldName - Name of field for error message
+ * @returns Error message if invalid, empty string if valid
+ * 
+ * @example
+ * // Returns 'Name is required'
+ * validateRequired('', 'Name')
+ * 
+ * @context7 /microsoft/typescript-website
+ */
 export const validateRequired = (value: string, fieldName: string): string => {
   if (!value.trim()) {
     return `${fieldName} is required`;
@@ -85,6 +145,18 @@ export const validateRequired = (value: string, fieldName: string): string => {
   return '';
 };
 
+/**
+ * Validates that end date is after start date
+ * @param startDate - Start date string
+ * @param endDate - End date string
+ * @returns Error message if invalid, empty string if valid
+ * 
+ * @example
+ * // Returns 'End date must be after start date'
+ * validateDateRange('2025-06-10', '2025-06-01')
+ * 
+ * @context7 /microsoft/typescript-website
+ */
 export const validateDateRange = (startDate: string, endDate: string): string => {
   if (!startDate || !endDate) return '';
   
@@ -96,7 +168,29 @@ export const validateDateRange = (startDate: string, endDate: string): string =>
   return '';
 };
 
-export const isSSNValid = (ssn: string): boolean => {
-  const regex = /^\d{3}-\d{2}-\d{4}$/;
-  return regex.test(ssn);
+/**
+ * Validates Social Security Number formats
+ * Supported formats:
+ * 1. XXXXXX-XXXX (without letter)
+ * 2. XXXXXX-XXXL (with letter)
+ * @param ssn - SSN string to validate
+ * @returns Error message if invalid, empty string if valid
+ * 
+ * @example
+ * // Returns ''
+ * validateSSN('090471-8890')
+ * validateSSN('050174-432N')
+ * 
+ * // Returns 'Invalid SSN format. Use XXXXXX-XXXX'
+ * validateSSN('123-45-6789')
+ * 
+ * @context7 /microsoft/typescript-website
+ */
+export const validateSSN = (ssn: string): string => {
+  const regex = /^(\d{6}-\d{4}|\d{6}-\d{3}[A-Za-z])$/;
+  
+  if (!regex.test(ssn)) {
+    return 'Invalid SSN format. Use XXXXXX-XXXX';
+  }
+  return '';
 };

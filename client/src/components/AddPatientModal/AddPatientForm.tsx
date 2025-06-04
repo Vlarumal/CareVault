@@ -1,6 +1,6 @@
 import { useState, SyntheticEvent } from "react";
 import { TextField, InputLabel, MenuItem, Select, Grid, Button, SelectChangeEvent } from '@mui/material';
-import { isDateValid, isSSNValid } from '../../utils';
+import { isDateValid, validateSSN } from '../../utils';
 
 import { PatientFormValues, Gender } from "../../types";
 
@@ -40,7 +40,7 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
   const validateSsn = () => {
     if (!ssn.trim()) {
       setErrors(prev => ({...prev, ssn: 'SSN is required'}));
-    } else if (!isSSNValid(ssn)) {
+    } else if (!validateSSN(ssn)) {
       setErrors(prev => ({...prev, ssn: 'SSN must be in format XXX-XX-XXXX'}));
     } else {
       setErrors(prev => ({...prev, ssn: ''}));
@@ -93,7 +93,7 @@ const validateForm = () => {
 
   if (!ssn.trim()) {
     newErrors.ssn = 'SSN is required';
-  } else if (!isSSNValid(ssn)) {
+  } else if (!validateSSN(ssn)) {
     newErrors.ssn = 'SSN must be in format XXX-XX-XXXX';
   } else {
     newErrors.ssn = '';

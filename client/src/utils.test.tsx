@@ -4,7 +4,7 @@ import {
   validateHealthRating,
   validateRequired,
   validateDateRange,
-  isSSNValid,
+  validateSSN,
   getIcon,
   assertNever
 } from './utils';
@@ -80,18 +80,24 @@ describe('Validation Utilities', () => {
     });
   });
 
-  describe('isSSNValid', () => {
-    it('validates correct SSN formats', () => {
-      expect(isSSNValid('123-45-6789')).toBe(true);
-      expect(isSSNValid('001-01-0001')).toBe(true);
+  describe('validateSSN', () => {
+    it('returns empty string for valid SSN formats', () => {
+      expect(validateSSN('090471-8890')).toBe(''); // format without letter
+      expect(validateSSN('050174-432N')).toBe(''); // format with uppercase letter
+      expect(validateSSN('300179-777a')).toBe(''); // format with lowercase letter
     });
 
-    it('rejects invalid SSN formats', () => {
-      expect(isSSNValid('123456789')).toBe(false);
-      expect(isSSNValid('123-45-678')).toBe(false);
-      expect(isSSNValid('123-456-789')).toBe(false);
-      expect(isSSNValid('12-45-6789')).toBe(false);
-      expect(isSSNValid('abc-de-fghi')).toBe(false);
+    it('returns error message for invalid SSN formats', () => {
+      expect(validateSSN('123456789')).toBe('Invalid SSN format. Use XXXXXX-XXXX');
+      expect(validateSSN('123-45-678')).toBe('Invalid SSN format. Use XXXXXX-XXXX');
+      expect(validateSSN('123-456-789')).toBe('Invalid SSN format. Use XXXXXX-XXXX');
+      expect(validateSSN('12-45-6789')).toBe('Invalid SSN format. Use XXXXXX-XXXX');
+      expect(validateSSN('abc-de-fghi')).toBe('Invalid SSN format. Use XXXXXX-XXXX');
+      // Format invalid cases
+      expect(validateSSN('090471-889')).toBe('Invalid SSN format. Use XXXXXX-XXXX'); // Too short after dash
+      expect(validateSSN('050174-432NN')).toBe('Invalid SSN format. Use XXXXXX-XXXX'); // Too long after dash
+      expect(validateSSN('300179-77!A')).toBe('Invalid SSN format. Use XXXXXX-XXXX'); // Invalid character
+      expect(validateSSN('090786-122')).toBe('Invalid SSN format. Use XXXXXX-XXXX'); // Missing letter/digit
     });
   });
 });

@@ -121,8 +121,10 @@ const addEntry = (
     ...entry,
   };
 
-  // Initialize entries array if undefined
-  if (!patient.entries) patient.entries = [];
+  // Ensure entries is an array
+  if (!Array.isArray(patient.entries)) {
+    patient.entries = [];
+  }
   patient.entries.push(newEntry);
 
 
