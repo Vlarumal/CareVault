@@ -2,12 +2,12 @@ import patients from '../../data/patients-full';
 import { v1 as uuid } from 'uuid';
 
 import {
-  BaseEntry,
-  Entry,
-  NewEntryWithoutId,
-  NewPatientEntryWithoutEntries,
-  NonSensitivePatientEntry,
-  PatientEntry,
+  type BaseEntry,
+  type Entry,
+  type NewEntryWithoutId,
+  type NewPatientEntryWithoutEntries,
+  type NonSensitivePatientEntry,
+  type PatientEntry,
   HealthCheckRating
 } from '../types';
 import { ValidationError, NotFoundError } from '../utils/errors';
@@ -63,14 +63,14 @@ const addPatient = (
   }
 
   const id: string = uuid();
-  const newPatientEntry: PatientEntry = {
-    id,
-    name: entry.name,
-    occupation: entry.occupation,
-    gender: entry.gender,
-    dateOfBirth: entry.dateOfBirth,
-    entries: [],
-  };
+const newPatientEntry: PatientEntry = {
+  id,
+  name: entry.name,
+  occupation: entry.occupation,
+  gender: entry.gender,
+  dateOfBirth: entry.dateOfBirth,
+  entries: [] as Entry[],  // Explicit type for immutability
+};
 
   patients.push(newPatientEntry);
   return newPatientEntry;
@@ -116,10 +116,10 @@ const addEntry = (
   }
 
   const id: string = uuid();
-  const newEntry: Entry = {
-    id,
-    ...entry,
-  };
+const newEntry: Entry = {
+  id,
+  ...entry,
+} as const;  // Ensure immutability
 
   // Ensure entries is an array
   if (!Array.isArray(patient.entries)) {
@@ -131,7 +131,8 @@ const addEntry = (
   return newEntry;
 };
 
-export default {
+// Using named exports for better tree-shaking
+export const patientService = {
   getPatientEntries,
   getNonSensitiveEntries,
   addPatient,

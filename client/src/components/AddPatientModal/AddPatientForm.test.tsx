@@ -85,7 +85,7 @@ describe('AddPatientForm', () => {
     await userEvent.type(ssnInput, '123-45-678'); // Too short
     await userEvent.tab();
     
-    expect(await screen.findByText('SSN must be in format XXX-XX-XXXX')).toBeInTheDocument();
+    expect(await screen.findByText('Invalid SSN format. Use XXXXXX-XXXX')).toBeInTheDocument();
   });
 
   it('clears error when valid SSN is entered', async () => {
@@ -154,16 +154,17 @@ describe('AddPatientForm', () => {
     
     // Fill valid data
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe');
-    await userEvent.type(screen.getByLabelText('Social security number'), '123-45-6789');
+    await userEvent.type(screen.getByLabelText('Social security number'), '123456-7890'); // Correct format
     await userEvent.type(screen.getByLabelText('Date of birth'), '1990-01-01');
     await userEvent.type(screen.getByLabelText('Occupation'), 'Developer');
     
     const submitButton = screen.getByText('Add');
+    await waitFor(() => expect(submitButton).toBeEnabled());
     await userEvent.click(submitButton);
     
     expect(mockOnSubmit).toHaveBeenCalledWith({
       name: 'John Doe',
-      ssn: '123-45-6789',
+      ssn: '123456-7890',
       dateOfBirth: '1990-01-01',
       occupation: 'Developer',
       gender: Gender.Other

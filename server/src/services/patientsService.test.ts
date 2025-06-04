@@ -1,5 +1,5 @@
 import patients from '../../data/patients-full';
-import patientsService from './patientsService';
+import { patientService } from './patientsService';
 import { NewPatientEntryWithoutEntries, NewEntryWithoutId, Gender, PatientEntry } from '../types';
 import { ValidationError, NotFoundError } from '../utils/errors';
 import { HealthCheckRating } from '../types';
@@ -45,7 +45,7 @@ describe('patientsService', () => {
 
   describe('getPatientEntries', () => {
     test('returns all patient entries', () => {
-      const result = patientsService.getPatientEntries();
+      const result = patientService.getPatientEntries();
       expect(result.length).toBe(2);
       expect(result[0].name).toBe('John Doe');
     });
@@ -70,7 +70,7 @@ describe('patientsService', () => {
         }]
       });
 
-      const result = patientsService.getNonSensitiveEntries();
+      const result = patientService.getNonSensitiveEntries();
       expect(result.length).toBe(3);
       expect(result[2]).toEqual({
         id: '3',
@@ -101,7 +101,7 @@ describe('patientsService', () => {
       };
       patients.push(noEntriesPatient);
 
-      const result = patientsService.getNonSensitiveEntries();
+      const result = patientService.getNonSensitiveEntries();
       const patientInResult = result.find(p => p.id === '4');
       
       // Use toHaveProperty matcher to avoid type errors
@@ -111,34 +111,34 @@ describe('patientsService', () => {
 
   describe('findById', () => {
     test('returns patient by id', () => {
-      const result = patientsService.findById('1');
+      const result = patientService.findById('1');
       expect(result.name).toBe('John Doe');
     });
 
     test('throws NotFoundError for invalid id', () => {
-      expect(() => patientsService.findById('999')).toThrow(NotFoundError);
-      expect(() => patientsService.findById('999')).toThrowError('Patient with ID 999 not found');
+      expect(() => patientService.findById('999')).toThrow(NotFoundError);
+      expect(() => patientService.findById('999')).toThrowError('Patient with ID 999 not found');
     });
   });
 
   describe('addPatient', () => {
     test('adds new patient', () => {
-      const result = patientsService.addPatient(testPatient);
+      const result = patientService.addPatient(testPatient);
       expect(patients.length).toBe(3);
       expect(result.name).toBe('Test Patient');
     });
 
   test('validates required fields', () => {
     const invalidName = { ...testPatient, name: '' };
-    expect(() => patientsService.addPatient(invalidName)).toThrow(ValidationError);
+    expect(() => patientService.addPatient(invalidName)).toThrow(ValidationError);
     
     const invalidOccupation = { ...testPatient, occupation: '' };
-    expect(() => patientsService.addPatient(invalidOccupation)).toThrow(ValidationError);
+    expect(() => patientService.addPatient(invalidOccupation)).toThrow(ValidationError);
   });
 
   test('validates date format', () => {
     const invalidDatePatient = { ...testPatient, dateOfBirth: 'invalid-date' };
-    expect(() => patientsService.addPatient(invalidDatePatient))
+    expect(() => patientService.addPatient(invalidDatePatient))
       .toThrow('Invalid date format: YYYY-MM-DD');
   });
   });
@@ -146,7 +146,7 @@ describe('patientsService', () => {
   describe('addEntry', () => {
     test('adds new entry to patient', () => {
       const patient = patients[0];
-      const result = patientsService.addEntry(patient, testEntry);
+      const result = patientService.addEntry(patient, testEntry);
       expect(patient.entries?.length).toBe(1);
       expect(result.description).toBe('Test entry');
     });
@@ -155,7 +155,7 @@ describe('patientsService', () => {
       // Create a patient object with undefined entries
       const patient = { ...patients[0], entries: undefined } as PatientEntry;
       
-      const result = patientsService.addEntry(patient, testEntry);
+      const result = patientService.addEntry(patient, testEntry);
       
       // Verify the entries array was initialized
       expect(patient.entries).toBeDefined();
@@ -166,32 +166,32 @@ describe('patientsService', () => {
     test('validates required fields', () => {
       const patient = patients[0];
       const invalidDescription = { ...testEntry, description: '' };
-      expect(() => patientsService.addEntry(patient, invalidDescription)).toThrow(ValidationError);
+      expect(() => patientService.addEntry(patient, invalidDescription)).toThrow(ValidationError);
       
       const invalidDate = { ...testEntry, date: '' };
-      expect(() => patientsService.addEntry(patient, invalidDate)).toThrow(ValidationError);
+      expect(() => patientService.addEntry(patient, invalidDate)).toThrow(ValidationError);
       
       const invalidSpecialist = { ...testEntry, specialist: '' };
-      expect(() => patientsService.addEntry(patient, invalidSpecialist)).toThrow(ValidationError);
+      expect(() => patientService.addEntry(patient, invalidSpecialist)).toThrow(ValidationError);
     });
 
     test('validates HealthCheck rating', () => {
       const patient = patients[0];
       const invalidHigh = { ...testEntry, healthCheckRating: 5 };
-      expect(() => patientsService.addEntry(patient, invalidHigh)).toThrow(ValidationError);
+      expect(() => patientService.addEntry(patient, invalidHigh)).toThrow(ValidationError);
       
       const invalidLow = { ...testEntry, healthCheckRating: -1 };
-      expect(() => patientsService.addEntry(patient, invalidLow)).toThrow(ValidationError);
+      expect(() => patientService.addEntry(patient, invalidLow)).toThrow(ValidationError);
       
       const boundaryHigh = { ...testEntry, healthCheckRating: 3 };
-      expect(() => patientsService.addEntry(patient, boundaryHigh)).not.toThrow();
+      expect(() => patientService.addEntry(patient, boundaryHigh)).not.toThrow();
     });
 
     test('validates missing HealthCheck rating', () => {
       const patient = patients[0];
       // Create invalid entry without healthCheckRating
       const missingRating = { ...testEntry, healthCheckRating: undefined } as unknown as NewEntryWithoutId;
-      expect(() => patientsService.addEntry(patient, missingRating))
+      expect(() => patientService.addEntry(patient, missingRating))
         .toThrow('Missing healthCheckRating for HealthCheck entry');
     });
 
@@ -199,7 +199,7 @@ describe('patientsService', () => {
       const patient = patients[0];
       // Using type assertion to bypass TypeScript for negative testing
       const invalidEntry = { ...testEntry, type: 'InvalidType' } as unknown as NewEntryWithoutId;
-      expect(() => patientsService.addEntry(patient, invalidEntry)).toThrow(ValidationError);
+      expect(() => patientService.addEntry(patient, invalidEntry)).toThrow(ValidationError);
     });
     
     test('adds Hospital entry', () => {
@@ -214,7 +214,7 @@ describe('patientsService', () => {
           criteria: 'Recovered'
         }
       };
-      const result = patientsService.addEntry(patient, hospitalEntry);
+      const result = patientService.addEntry(patient, hospitalEntry);
       expect(result.type).toBe('Hospital');
       expect(patient.entries?.length).toBe(1);
     });
@@ -228,7 +228,7 @@ describe('patientsService', () => {
         type: 'OccupationalHealthcare',
         employerName: 'Acme Inc'
       };
-      const result = patientsService.addEntry(patient, occupationalEntry);
+      const result = patientService.addEntry(patient, occupationalEntry);
       expect(result.type).toBe('OccupationalHealthcare');
       expect(patient.entries?.length).toBe(1);
     });

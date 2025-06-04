@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import patientsService from '../services/patientsService';
+import { patientService } from '../services/patientsService';
 import {
   NewEntryWithoutId,
   NewPatientEntryWithoutEntries,
@@ -12,14 +12,14 @@ const patientsRouter = express.Router();
 patientsRouter.get(
   '/',
   (_req, res: Response<NonSensitivePatientEntry[]>) => {
-    res.send(patientsService.getNonSensitiveEntries());
+    res.send(patientService.getNonSensitiveEntries());
   }
 );
 
 patientsRouter.get(
   '/:id',
   (req, res: Response<PatientEntry>) => {
-    const patient = patientsService.findById(req.params.id);
+    const patient = patientService.findById(req.params.id);
     res.send(patient);
   }
 );
@@ -30,7 +30,7 @@ patientsRouter.post(
     req: Request<unknown, unknown, NewPatientEntryWithoutEntries>,
     res: Response<PatientEntry>
   ) => {
-    const addedPatientEntry = patientsService.addPatient(req.body);
+    const addedPatientEntry = patientService.addPatient(req.body);
     res.json(addedPatientEntry);
   }
 );
@@ -41,8 +41,8 @@ patientsRouter.post(
     req: Request<{ id: string }, unknown, NewEntryWithoutId>,
     res: Response
   ) => {
-    const patient = patientsService.findById(req.params.id);
-    const addedEntry = patientsService.addEntry(patient, req.body);
+    const patient = patientService.findById(req.params.id);
+    const addedEntry = patientService.addEntry(patient, req.body);
     res.status(201).json(addedEntry);
   }
 );

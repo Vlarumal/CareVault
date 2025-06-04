@@ -40,10 +40,9 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
   const validateSsn = () => {
     if (!ssn.trim()) {
       setErrors(prev => ({...prev, ssn: 'SSN is required'}));
-    } else if (!validateSSN(ssn)) {
-      setErrors(prev => ({...prev, ssn: 'SSN must be in format XXX-XX-XXXX'}));
     } else {
-      setErrors(prev => ({...prev, ssn: ''}));
+      const errorMessage = validateSSN(ssn);
+      setErrors(prev => ({...prev, ssn: errorMessage}));
     }
   };
 
@@ -91,13 +90,11 @@ const validateForm = () => {
     newErrors.name = '';
   }
 
-  if (!ssn.trim()) {
-    newErrors.ssn = 'SSN is required';
-  } else if (!validateSSN(ssn)) {
-    newErrors.ssn = 'SSN must be in format XXX-XX-XXXX';
-  } else {
-    newErrors.ssn = '';
-  }
+    if (!ssn.trim()) {
+      newErrors.ssn = 'SSN is required';
+    } else {
+      newErrors.ssn = validateSSN(ssn);
+    }
 
   if (!dateOfBirth) {
     newErrors.dateOfBirth = 'Date of birth is required';

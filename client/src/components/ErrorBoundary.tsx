@@ -1,5 +1,16 @@
 import React, { Component, ReactNode } from 'react';
 
+/**
+ * ErrorBoundary component - Catches JavaScript errors in child components
+ * @component
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components to render
+ * @param {ReactNode} [props.fallback] - Custom fallback UI when error occurs
+ * @example
+ * <ErrorBoundary fallback={<ErrorScreen />}>
+ *   <App />
+ * </ErrorBoundary>
+ */
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;

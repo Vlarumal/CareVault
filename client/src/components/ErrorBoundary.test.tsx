@@ -86,4 +86,41 @@ test('recovers after retry button click', async () => {
   expect(await screen.findByTestId('recovered')).toBeInTheDocument();
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
+
+test('handles error in same component after recovery', async () => {
+  // Component that can throw on command
+  const ToggleErrorComponent = ({ shouldThrow }: { shouldThrow: boolean }) => {
+    if (shouldThrow) {
+      throw new Error('Controlled error');
+    }
+    return <div data-testid="normal-state">Normal content</div>;
+  };
+  
+  const { rerender } = render(
+    <ErrorBoundary>
+      <ToggleErrorComponent shouldThrow={true} />
+    </ErrorBoundary>
+  );
+  
+  // Verify initial error
+  const alert = await screen.findByRole('alert');
+  expect(alert).toBeInTheDocument();
+  
+  // Recover
+  rerender(
+    <ErrorBoundary>
+      <ToggleErrorComponent shouldThrow={false} />
+    </ErrorBoundary>
+  );
+  fireEvent.click(screen.getByText('Retry'));
+  expect(await screen.findByTestId('normal-state')).toBeInTheDocument();
+  
+  // Cause error again in the same component
+  rerender(
+    <ErrorBoundary>
+      <ToggleErrorComponent shouldThrow={true} />
+    </ErrorBoundary>
+  );
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
+});
 });
