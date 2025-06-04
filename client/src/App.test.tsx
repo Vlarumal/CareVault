@@ -4,6 +4,7 @@ import axios from 'axios';
 import App from './App';
 import patientService from './services/patients';
 import { Gender, Patient } from './types';
+import { apiBaseUrl } from './constants';
 
 // Mock API calls
 vi.mock('./services/patients');
@@ -73,7 +74,7 @@ describe('App', () => {
     expect(await screen.findByText('Jane Smith')).toBeInTheDocument();
   });
 
-  test('renders patient links with correct hrefs', async () => {
+test('renders patient links with correct hrefs', async () => {
     render(<App />);
     
     await waitFor(() => {
@@ -86,5 +87,24 @@ describe('App', () => {
     
     const janeLink = await screen.findByText('Jane Smith');
     expect(janeLink).toHaveAttribute('href', '/2');
+  });
+
+  test('handles API ping failure', async () => {
+    (axios.get as jest.Mock).mockRejectedValue(new Error('Network error'));
+    render(<App />);
+    
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(`${apiBaseUrl}/ping`);
+      expect(screen.getByText('Error connecting to backend')).toBeInTheDocument();
+    });
+  });
+
+  test('displays empty state when no patients', async () => {
+    (patientService.getAll as jest.Mock).mockResolvedValue([]);
+    render(<App />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('No patients found')).toBeInTheDocument();
+    });
   });
 });

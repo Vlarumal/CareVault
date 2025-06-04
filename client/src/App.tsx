@@ -22,9 +22,13 @@ import PatientPage from './components/PatientPage';
 
 const App = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void axios.get<void>(`${apiBaseUrl}/ping`);
+    axios.get<void>(`${apiBaseUrl}/ping`)
+      .catch(() => {
+        setError('Error connecting to backend');
+      });
 
     const fetchPatientList = async () => {
       const patients = await patientService.getAll();
@@ -69,6 +73,28 @@ const App = () => {
           </Routes>
         </Container>
       </Router>
+      {patients.length === 0 && !error && (
+        <div style={{ 
+          textAlign: 'center', 
+          marginTop: '20px',
+          fontWeight: 'bold'
+        }}>
+          No patients found
+        </div>
+      )}
+      {error && (
+        <div style={{ 
+          position: 'fixed', 
+          bottom: 20, 
+          right: 20, 
+          backgroundColor: 'red', 
+          color: 'white', 
+          padding: '10px',
+          borderRadius: '5px'
+        }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 };
