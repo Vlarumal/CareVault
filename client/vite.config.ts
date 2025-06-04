@@ -8,5 +8,16 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],
+    poolOptions: {
+      threads: {
+        execArgv: [
+          '--cpu-prof',
+          '--cpu-prof-dir=test-runner-profile',
+          '--heap-prof',
+          '--heap-prof-dir=test-runner-profile'
+        ],
+        singleThread: true
+      }
+    }
   }
 });
