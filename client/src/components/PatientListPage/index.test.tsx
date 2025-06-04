@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import PatientListPage from './index';
 import { Patient, Gender, HealthCheckRating, HealthCheckEntry } from '../../../src/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import patientService from '../../services/patients';
 
 describe('PatientListPage Component', () => {
   const patients: Patient[] = [
@@ -76,6 +77,83 @@ describe('PatientListPage Component', () => {
       hearts.forEach(heart => {
         expect(heart).toHaveStyle({ color: '#4caf50' }); // Green for rating 0
       });
+    });
+  });
+
+  it('opens add patient modal when button clicked', async () => {
+    render(
+      <MemoryRouter>
+        <PatientListPage patients={patients} setPatients={() => {}} />
+      </MemoryRouter>
+    );
+    
+    const addButton = screen.getByText('Add New Patient');
+    fireEvent.click(addButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Add a new patient')).toBeInTheDocument();
+    });
+  });
+
+  it('displays error message when patient creation fails', async () => {
+    const errorMessage = 'Database connection failed';
+    vi.spyOn(patientService, 'create').mockRejectedValue(new Error(errorMessage));
+    
+    render(
+      <MemoryRouter>
+        <PatientListPage patients={patients} setPatients={() => {}} />
+      </MemoryRouter>
+    );
+    
+    // Open modal
+    fireEvent.click(screen.getByText('Add New Patient'));
+    
+    // Get modal element
+    const modal = screen.getByRole('dialog');
+    
+    // Fill form
+    fireEvent.change(within(modal).getByLabelText('Name'), { target: { value: 'Test Patient' } });
+    fireEvent.change(within(modal).getByLabelText('Social security number'), { target: { value: '123-45-6789' } });
+    fireEvent.change(within(modal).getByLabelText('Date of birth'), { target: { value: '1990-01-01' } });
+    fireEvent.change(within(modal).getByLabelText('Occupation'), { target: { value: 'Engineer' } });
+    
+    // Gender selection - robust method using role queries
+    fireEvent.mouseDown(within(modal).getByLabelText('Gender'));
+    const listbox = screen.getByRole('listbox');
+    const otherOption = within(listbox).getByText(Gender.Other);
+    fireEvent.click(otherOption);
+    
+    // Submit form
+    fireEvent.click(within(modal).getByText('Add'));
+    
+    // Verify error message
+    await waitFor(() => {
+      expect(within(modal).getByRole('alert')).toHaveTextContent(errorMessage);
+    });
+  });
+
+  it('handles patients without dateOfBirth', async () => {
+    const patientsWithoutDOB = [
+      ...patients,
+      {
+        id: '4',
+        name: 'No Birthday',
+        gender: Gender.Other,
+        occupation: 'Unknown',
+        ssn: '000-00-0000',
+        entries: [],
+      }
+    ];
+    
+    render(
+      <MemoryRouter>
+        <PatientListPage patients={patientsWithoutDOB} setPatients={() => {}} />
+      </MemoryRouter>
+    );
+    
+    await waitFor(() => {
+      const names = screen.getAllByTestId('patient-name').map(el => el.textContent);
+      expect(names[0]).toBe('No Birthday');
     });
   });
 });

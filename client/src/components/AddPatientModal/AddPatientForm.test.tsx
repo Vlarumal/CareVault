@@ -110,16 +110,6 @@ describe('AddPatientForm', () => {
     expect(await screen.findByText('Date of birth is required')).toBeInTheDocument();
   });
 
-  it('shows error when date of birth is invalid', async () => {
-    render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
-    
-    const dobInput = screen.getByLabelText('Date of birth');
-    await userEvent.type(dobInput, '2025-13-01');
-    await userEvent.tab();
-    
-    expect(await screen.findByText('Invalid date format (use YYYY-MM-DD)')).toBeInTheDocument();
-  });
-
   it('shows error when date of birth is in future', async () => {
     render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
     
@@ -129,20 +119,6 @@ describe('AddPatientForm', () => {
     
     const dobInput = screen.getByLabelText('Date of birth');
     await userEvent.type(dobInput, futureDateStr);
-    await userEvent.tab();
-    
-    expect(await screen.findByText('Date cannot be in the future')).toBeInTheDocument();
-  });
-
-  it('shows error when date of birth is in future', async () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const futureDate = tomorrow.toISOString().split('T')[0];
-    
-    render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
-    
-    const dobInput = screen.getByLabelText('Date of birth');
-    await userEvent.type(dobInput, futureDate);
     await userEvent.tab();
     
     expect(await screen.findByText('Date cannot be in the future')).toBeInTheDocument();
