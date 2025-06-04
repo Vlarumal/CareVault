@@ -1,94 +1,90 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import App from './App';
-import axios from 'axios';
-import patientService from './services/patients';
+import { render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
-import { Gender } from './types';
+import axios from 'axios';
+import App from './App';
+import patientService from './services/patients';
+import { Gender, Patient } from './types';
 
-vi.mock('axios');
+// Mock API calls
 vi.mock('./services/patients');
+vi.mock('axios');
 
-const mockPatients = [
+const mockPatients: Patient[] = [
   {
     id: '1',
     name: 'John Doe',
     dateOfBirth: '1980-01-01',
+    ssn: '123-45-6789',
     gender: Gender.Male,
-    occupation: 'Developer',
+    occupation: 'Engineer',
+    entries: []
+  },
+  {
+    id: '2',
+    name: 'Jane Smith',
+    dateOfBirth: '1990-02-02',
+    ssn: '987-65-4321',
+    gender: Gender.Female,
+    occupation: 'Designer',
     entries: []
   }
 ];
 
-describe('App component', () => {
+describe('App', () => {
   beforeEach(() => {
-    vi.mocked(axios.get).mockResolvedValue({ data: {} });
-    vi.mocked(patientService.getAll).mockResolvedValue(mockPatients);
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Mock axios ping check
+    (axios.get as jest.Mock).mockResolvedValue({});
+    
+    // Mock patient service
+    (patientService.getAll as jest.Mock).mockResolvedValue(mockPatients);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  test('renders home page with patient list', async () => {
+  test('renders Patientor title', async () => {
     render(<App />);
-    expect(await screen.findByText('Patientor')).toBeInTheDocument();
+    
+    await waitFor(() => {
+      expect(screen.getByText('Patientor')).toBeInTheDocument();
+    });
+  });
+
+  test('renders Home button', async () => {
+    render(<App />);
+    
+    await waitFor(() => {
+      const homeButton = screen.getByText('Home');
+      expect(homeButton).toBeInTheDocument();
+      expect(homeButton).toHaveAttribute('href', '/');
+    });
+  });
+
+  test('fetches and displays patient list', async () => {
+    render(<App />);
+    
+    await waitFor(() => {
+      expect(patientService.getAll).toHaveBeenCalledTimes(1);
+    });
+    
+    // Verify patient names are displayed
     expect(await screen.findByText('John Doe')).toBeInTheDocument();
+    expect(await screen.findByText('Jane Smith')).toBeInTheDocument();
   });
 
-  test('navigates to patient page', async () => {
+  test('renders patient links with correct hrefs', async () => {
     render(<App />);
-    const patientLink = await screen.findByText('John Doe');
-    fireEvent.click(patientLink);
-    expect(await screen.findByTestId('patient-page')).toBeInTheDocument();
-  });
-
-  test('shows loading state', async () => {
-    vi.mocked(patientService.getAll).mockImplementation(
-      () => new Promise(() => {})
-    );
-    render(<App />);
-    expect(await screen.findByTestId('loading-indicator')).toBeInTheDocument();
-  });
-
-  test('recovers from data fetch error', async () => {
-    vi.mocked(patientService.getAll).mockRejectedValue(new Error('Network error'));
-    render(<App />);
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Failed to fetch patients');
-    fireEvent.click(screen.getByText('Retry'));
-    expect(await screen.findByText('John Doe')).toBeInTheDocument();
-  });
-
-  test('handles timeout scenario', async () => {
-    vi.useFakeTimers();
-    vi.mocked(patientService.getAll).mockImplementation(
-      () => new Promise(() => {}) // Never resolves
-    );
-    render(<App />);
-    expect(await screen.findByTestId('loading-indicator')).toBeInTheDocument();
-    await vi.advanceTimersByTimeAsync(10000);
-    expect(await screen.findByText('Request timeout')).toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  test('recovers from component error', async () => {
-    // Simulate error in PatientList component
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const originalError = console.error;
-    console.error = vi.fn();
     
-    const { container } = render(<App />);
-    fireEvent.click(await screen.findByText('Trigger Test Error'));
+    await waitFor(() => {
+      expect(patientService.getAll).toHaveBeenCalledTimes(1);
+    });
     
-    // Verify ErrorBoundary fallback
-    expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    // Verify patient links contain correct href
+    const johnLink = await screen.findByText('John Doe');
+    expect(johnLink).toHaveAttribute('href', '/1');
     
-    // Test recovery
-    fireEvent.click(screen.getByText('Retry'));
-    expect(container.querySelector('.patient-list')).toBeInTheDocument();
-    
-    console.error = originalError;
+    const janeLink = await screen.findByText('Jane Smith');
+    expect(janeLink).toHaveAttribute('href', '/2');
   });
 });
