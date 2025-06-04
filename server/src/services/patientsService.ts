@@ -51,6 +51,17 @@ const addPatient = (
     );
   }
 
+  // Validate date format if provided
+  if (entry.dateOfBirth) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(entry.dateOfBirth)) {
+      throw new ValidationError(
+        'Invalid date format: YYYY-MM-DD',
+        { invalidField: 'dateOfBirth' }
+      );
+    }
+  }
+
   const id: string = uuid();
   const newPatientEntry: PatientEntry = {
     id,

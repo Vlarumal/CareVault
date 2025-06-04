@@ -23,6 +23,11 @@ describe('App component', () => {
   beforeEach(() => {
     vi.mocked(axios.get).mockResolvedValue({ data: {} });
     vi.mocked(patientService.getAll).mockResolvedValue(mockPatients);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   test('renders home page with patient list', async () => {
@@ -53,5 +58,37 @@ describe('App component', () => {
     expect(alert).toHaveTextContent('Failed to fetch patients');
     fireEvent.click(screen.getByText('Retry'));
     expect(await screen.findByText('John Doe')).toBeInTheDocument();
+  });
+
+  test('handles timeout scenario', async () => {
+    vi.useFakeTimers();
+    vi.mocked(patientService.getAll).mockImplementation(
+      () => new Promise(() => {}) // Never resolves
+    );
+    render(<App />);
+    expect(await screen.findByTestId('loading-indicator')).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(await screen.findByText('Request timeout')).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  test('recovers from component error', async () => {
+    // Simulate error in PatientList component
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const originalError = console.error;
+    console.error = vi.fn();
+    
+    const { container } = render(<App />);
+    fireEvent.click(await screen.findByText('Trigger Test Error'));
+    
+    // Verify ErrorBoundary fallback
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    
+    // Test recovery
+    fireEvent.click(screen.getByText('Retry'));
+    expect(container.querySelector('.patient-list')).toBeInTheDocument();
+    
+    console.error = originalError;
   });
 });

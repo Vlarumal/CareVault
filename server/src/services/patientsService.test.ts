@@ -3,7 +3,6 @@ import patientsService from './patientsService';
 import { NewPatientEntryWithoutEntries, NewEntryWithoutId, Gender } from '../types';
 import { ValidationError, NotFoundError } from '../utils/errors';
 import { HealthCheckRating } from '../types';
-import { expect, describe, test, beforeEach } from '@jest/globals';
 
 describe('patientsService', () => {
   const testPatient: NewPatientEntryWithoutEntries = {
@@ -85,10 +84,16 @@ describe('patientsService', () => {
       expect(result.name).toBe('Test Patient');
     });
 
-    test('validates required fields', () => {
-      const invalidPatient = { ...testPatient, name: '' };
-      expect(() => patientsService.addPatient(invalidPatient)).toThrow(ValidationError);
-    });
+  test('validates required fields', () => {
+    const invalidPatient = { ...testPatient, name: '' };
+    expect(() => patientsService.addPatient(invalidPatient)).toThrow(ValidationError);
+  });
+
+  test('validates date format', () => {
+    const invalidDatePatient = { ...testPatient, dateOfBirth: 'invalid-date' };
+    expect(() => patientsService.addPatient(invalidDatePatient))
+      .toThrow('Invalid date format: YYYY-MM-DD');
+  });
   });
 
   describe('addEntry', () => {

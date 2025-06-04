@@ -18,6 +18,14 @@ export default tseslint.config({
     '@stylistic': stylistic,
   },
   ignores: ['build/*'],
+  overrides: [
+    {
+      files: ['**/*.test.ts'],
+      env: {
+        jest: true,
+      },
+    },
+  ],
   rules: {
     '@stylistic/semi': 'error',
     '@typescript-eslint/no-unsafe-assignment': 'error',
