@@ -4,8 +4,12 @@ import {
   validateHealthRating,
   validateRequired,
   validateDateRange,
-  isSSNValid
+  isSSNValid,
+  getIcon,
+  assertNever
 } from './utils';
+import { Favorite, Male, Female, Healing, Work, MedicalServices } from '@mui/icons-material';
+import { Patient, Entry, HealthCheckEntry } from './types';
 
 describe('Validation Utilities', () => {
   describe('isDateValid', () => {
@@ -89,5 +93,40 @@ describe('Validation Utilities', () => {
       expect(isSSNValid('12-45-6789')).toBe(false);
       expect(isSSNValid('abc-de-fghi')).toBe(false);
     });
+  });
+});
+
+describe('getIcon Utility', () => {
+  it('returns correct icon for gender types', () => {
+    expect(getIcon('male' as Patient['gender'])).toEqual(<Male />);
+    expect(getIcon('female' as Patient['gender'])).toEqual(<Female />);
+    expect(getIcon('other' as Patient['gender'])).toBeUndefined();
+  });
+  
+  it('returns correct icon for entry types', () => {
+    expect(getIcon('Hospital' as Entry['type'])).toEqual(<Healing />);
+    expect(getIcon('OccupationalHealthcare' as Entry['type'])).toEqual(<Work />);
+    expect(getIcon('HealthCheck' as Entry['type'])).toEqual(<MedicalServices />);
+  });
+  
+  it('returns correct icon for health ratings', () => {
+    expect(getIcon(0 as HealthCheckEntry['healthCheckRating'])).toEqual(<Favorite color='success' />);
+    expect(getIcon(1 as HealthCheckEntry['healthCheckRating'])).toEqual(<Favorite sx={{ color: 'yellow' }} />);
+    expect(getIcon(2 as HealthCheckEntry['healthCheckRating'])).toEqual(<Favorite color='warning' />);
+    expect(getIcon(3 as HealthCheckEntry['healthCheckRating'])).toEqual(<Favorite color='error' />);
+  });
+  
+  it('returns undefined for unknown types', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(getIcon('unknown' as any)).toBeUndefined();
+  });
+});
+
+describe('assertNever Utility', () => {
+  it('throws error with correct message', () => {
+    const testValue = { kind: 'invalid' } as never;
+    expect(() => assertNever(testValue)).toThrowError(
+      'Unhandled discriminated union member: {"kind":"invalid"}'
+    );
   });
 });

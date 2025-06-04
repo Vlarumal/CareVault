@@ -78,19 +78,58 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
     }
   };
 
-  const validateForm = () => {
-    validateName();
-    validateSsn();
-    validateDateOfBirth();
-    validateOccupation();
-    return Object.values(errors).every(error => error === '');
-  };
+const validateForm = () => {
+  // Create a copy of current errors
+  const newErrors: Record<string, string> = { ...errors };
+  
+  // Validate each field and update newErrors
+  if (!name.trim()) {
+    newErrors.name = 'Name is required';
+  } else if (name.trim().length < 3) {
+    newErrors.name = 'Name must be at least 3 characters';
+  } else {
+    newErrors.name = '';
+  }
 
-  const addPatient = (event: SyntheticEvent) => {
-    event.preventDefault();
-    
-    if (!validateForm()) return;
-    
+  if (!ssn.trim()) {
+    newErrors.ssn = 'SSN is required';
+  } else if (!isSSNValid(ssn)) {
+    newErrors.ssn = 'SSN must be in format XXX-XX-XXXX';
+  } else {
+    newErrors.ssn = '';
+  }
+
+  if (!dateOfBirth) {
+    newErrors.dateOfBirth = 'Date of birth is required';
+  } else if (!isDateValid(dateOfBirth)) {
+    newErrors.dateOfBirth = 'Invalid date format (use YYYY-MM-DD)';
+  } else if (new Date(dateOfBirth) > new Date()) {
+    newErrors.dateOfBirth = 'Date cannot be in the future';
+  } else {
+    newErrors.dateOfBirth = '';
+  }
+
+  if (!occupation.trim()) {
+    newErrors.occupation = 'Occupation is required';
+  } else {
+    newErrors.occupation = '';
+  }
+
+  // Update state with all errors at once
+  setErrors(newErrors);
+  
+  // Return validation result
+  return Object.values(newErrors).every(error => error === '');
+};
+
+const addPatient = (event: SyntheticEvent) => {
+  event.preventDefault();
+  
+  // First validate all fields
+  const isValid = validateForm();
+  
+  // Only submit if valid
+  if (isValid) {
     onSubmit({
       name: name.trim(),
       occupation: occupation.trim(),
@@ -98,7 +137,8 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
       dateOfBirth,
       gender
     });
-  };
+  }
+};
 
   return (
     <div>
@@ -155,13 +195,20 @@ const AddPatientForm = ({ onCancel, onSubmit }: Props) => {
           helperText={errors.occupation}
         />
 
-        <InputLabel style={{ marginTop: 20 }}>Gender</InputLabel>
-        <Select
-          label="Gender"
-          fullWidth
-          value={gender}
-          onChange={onGenderChange}
-        >
+<InputLabel 
+  id="gender-label" 
+  style={{ marginTop: 20 }}
+>
+  Gender
+</InputLabel>
+<Select
+  labelId="gender-label"
+  label="Gender"
+  fullWidth
+  value={gender}
+  onChange={onGenderChange}
+  inputProps={{ "data-testid": "gender-select" }}
+>
         {genderOptions.map(option =>
           <MenuItem
             key={option.label}

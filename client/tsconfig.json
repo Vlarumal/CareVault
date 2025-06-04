@@ -22,8 +22,10 @@
     "noFallthroughCasesInSwitch": true,
     
     /* Vitest types */
-    "types": ["vitest/globals", "vite/client", "vitest"],
+    "types": ["vitest/globals", "vite/client"],
+    /* Custom type roots */
+    "typeRoots": ["./node_modules/@types", "./src/types"],
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "references": [{ "path": "./tsconfig.node.json" }],
 }
