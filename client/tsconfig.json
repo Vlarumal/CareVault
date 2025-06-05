@@ -21,8 +21,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     
-    /* Vitest types */
-    "types": ["vitest/globals", "vite/client"],
+    /* Vitest types are included automatically */
+    "types": ["vite/client"],
     /* Custom type roots */
     "typeRoots": ["./node_modules/@types", "./src/types"],
   },

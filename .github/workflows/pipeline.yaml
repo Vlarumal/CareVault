@@ -71,7 +71,7 @@ jobs:
           severity: info
           description: to https://patientapp-wzu7.onrender.com/ by ${{ steps.get_author.outputs.author }} succeeded!
           details: Deployment was successful.
-          text: A new version of Patientapp deployed
+          text: A new version of CareVault deployed
           webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Build failed - notification

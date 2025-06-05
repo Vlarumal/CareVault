@@ -1,21 +1,18 @@
 import axios from 'axios';
 import { DiagnosisEntry } from '../types';
 import { apiBaseUrl } from '../constants';
+import { apiRetry } from '../utils/apiUtils';
 
 const getAllDiagnoses = async () => {
-  const { data } = await axios.get<DiagnosisEntry[]>(
-    `${apiBaseUrl}/diagnoses`
+  return apiRetry(() =>
+    axios.get<DiagnosisEntry[]>(`${apiBaseUrl}/diagnoses`).then(res => res.data)
   );
-
-  return data;
 };
 
 const getDiagnosisByCode = async (code: string) => {
-  const { data } = await axios.get<DiagnosisEntry>(
-    `${apiBaseUrl}/diagnoses/${code}`
+  return apiRetry(() =>
+    axios.get<DiagnosisEntry>(`${apiBaseUrl}/diagnoses/${code}`).then(res => res.data)
   );
-
-  return data;
 };
 
 export default {

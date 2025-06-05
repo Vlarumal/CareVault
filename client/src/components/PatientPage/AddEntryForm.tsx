@@ -100,12 +100,19 @@ const AddEntryForm: React.FC<{
         break;
         
       case 'sickLeaveStartDate':
+        if (value && !isDateValid(value)) {
+          error = 'Invalid date format (YYYY-MM-DD)';
+        } else if (formData.sickLeaveEndDate) {
+          // Validate range when both dates are present
+          error = validateDateRange(value, formData.sickLeaveEndDate);
+        }
+        break;
       case 'sickLeaveEndDate':
         if (value && !isDateValid(value)) {
           error = 'Invalid date format (YYYY-MM-DD)';
-        } else if (formData.sickLeaveStartDate && formData.sickLeaveEndDate) {
-          // Validate date range only if both dates are present
-          error = validateDateRange(formData.sickLeaveStartDate, formData.sickLeaveEndDate);
+        } else if (formData.sickLeaveStartDate) {
+          // Always validate range against start date
+          error = validateDateRange(formData.sickLeaveStartDate, value);
         }
         break;
         
@@ -303,12 +310,14 @@ const AddEntryForm: React.FC<{
               label='Sick leave end date'
               value={formData.sickLeaveEndDate}
               onChange={handleChange}
+              onBlur={handleBlur}
+              error={Boolean(errors.sickLeaveEndDate)}
+              helperText={errors.sickLeaveEndDate || 'End date of the sick leave period (optional). Must be after start date.'}
               fullWidth
               margin='normal'
               type='date'
               InputLabelProps={{ shrink: true }}
               data-name='Sick leave end date'
-              helperText='End date of the sick leave period (optional).'
             />
           </>
         );

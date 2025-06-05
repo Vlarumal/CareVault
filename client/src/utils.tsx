@@ -10,13 +10,22 @@ import { Entry, HealthCheckEntry, Patient } from './types';
 
 /**
  * Returns corresponding icon component for medical/gender types
- * @param icon - Gender, entry type, or health rating value
- * @returns MUI Icon component or undefined
- * 
+ *
+ * @param icon - The type of icon to return. Possible values:
+ *   - Patient gender: 'male', 'female', 'other'
+ *   - Entry type: 'Hospital', 'OccupationalHealthcare', 'HealthCheck'
+ *   - HealthCheck rating: 0, 1, 2, 3
+ * @returns {JSX.Element | undefined} The corresponding MUI Icon component,
+ *         or undefined if no icon is defined for the input.
+ *
  * @example
  * // Returns Male icon
  * getIcon('male')
- * 
+ *
+ * @example
+ * // Returns Hospital icon
+ * getIcon('Hospital')
+ *
  * @context7 /microsoft/typescript-website
  */
 export const getIcon = (
@@ -52,11 +61,12 @@ export const getIcon = (
 };
 
 /**
- * Ensures exhaustive type checking for discriminated unions
- * @param value - Value that should be of type never
- * @throws Error when called
- * @returns Never returns, always throws
- * 
+ * Ensures exhaustive type checking for discriminated unions.
+ *
+ * @param value - Value that should be of type never at compile time.
+ * @throws {Error} Always throws an error with the unhandled value.
+ * @returns Never returns, always throws.
+ *
  * @example
  * type Action = { type: 'A' } | { type: 'B' };
  * function reducer(action: Action) {
@@ -66,7 +76,7 @@ export const getIcon = (
  *     default: assertNever(action); // Ensures all cases handled
  *   }
  * }
- * 
+ *
  * @context7 /microsoft/typescript-website
  */
 export const assertNever = (value: never): never => {
@@ -169,21 +179,24 @@ export const validateDateRange = (startDate: string, endDate: string): string =>
 };
 
 /**
- * Validates Social Security Number formats
+ * Validates Social Security Number (SSN).
+ *
  * Supported formats:
  * 1. XXXXXX-XXXX (without letter)
  * 2. XXXXXX-XXXL (with letter)
+ *
  * @param ssn - SSN string to validate
- * @returns Error message if invalid, empty string if valid
- * 
+ * @returns {string} Error message if invalid, empty string if valid
+ *
  * @example
- * // Returns ''
+ * // Returns empty string (valid)
  * validateSSN('090471-8890')
  * validateSSN('050174-432N')
- * 
+ *
+ * @example
  * // Returns 'Invalid SSN format. Use XXXXXX-XXXX'
  * validateSSN('123-45-6789')
- * 
+ *
  * @context7 /microsoft/typescript-website
  */
 export const validateSSN = (ssn: string): string => {

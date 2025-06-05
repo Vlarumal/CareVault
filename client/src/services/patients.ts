@@ -1,39 +1,30 @@
 import axios from 'axios';
 import { Entry, NewEntryFormValues, Patient, PatientFormValues } from '../types';
-
 import { apiBaseUrl } from '../constants';
+import { apiRetry } from '../utils/apiUtils';
 
 const getAll = async () => {
-  const { data } = await axios.get<Patient[]>(
-    `${apiBaseUrl}/patients`
+  return apiRetry(() =>
+    axios.get<Patient[]>(`${apiBaseUrl}/patients`).then(res => res.data)
   );
-
-  return data;
 };
 
 const getById = async (id: string) => {
-  const { data } = await axios.get<Patient>(
-    `${apiBaseUrl}/patients/${id}`
+  return apiRetry(() =>
+    axios.get<Patient>(`${apiBaseUrl}/patients/${id}`).then(res => res.data)
   );
-  return data;
 };
 
 const create = async (object: PatientFormValues) => {
-  const { data } = await axios.post<Patient>(
-    `${apiBaseUrl}/patients`,
-    object
+  return apiRetry(() =>
+    axios.post<Patient>(`${apiBaseUrl}/patients`, object).then(res => res.data)
   );
-
-  return data;
 };
 
 const createNewEntry = async (id: string, object: NewEntryFormValues) => {
-  const { data } = await axios.post<Entry>(
-    `${apiBaseUrl}/patients/${id}/entries`,
-    object
+  return apiRetry(() =>
+    axios.post<Entry>(`${apiBaseUrl}/patients/${id}/entries`, object).then(res => res.data)
   );
-
-  return data;
 };
 
 export default {
