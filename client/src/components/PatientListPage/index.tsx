@@ -1,18 +1,24 @@
-import { useState } from "react";
-import { Box, Table, Button, TableHead, Typography, TableCell, TableRow, TableBody } from '@mui/material';
+import { useState, useMemo } from "react";
+import { 
+  Box, 
+  Button, 
+  Typography,
+  InputAdornment,
+  TextField
+} from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import axios from 'axios';
 
 import { PatientFormValues, Patient, HealthCheckEntry, Entry } from "../../types";
 import AddPatientModal from "../AddPatientModal";
-
 import HealthRatingBar from "../HealthRatingBar";
-
 import patientService from "../../services/patients";
 import { Link } from "react-router-dom";
 
 interface Props {
-  patients : Patient[]
-  setPatients: React.Dispatch<React.SetStateAction<Patient[]>>
+  patients: Patient[];
+  setPatients: React.Dispatch<React.SetStateAction<Patient[]>>;
 }
 
 // Helper to get latest health rating from entries
@@ -32,10 +38,10 @@ const getLatestHealthRating = (patient: Patient): number | null => {
   return sortedEntries[0].healthCheckRating;
 };
 
-const PatientListPage = ({ patients, setPatients } : Props ) => {
-
+const PatientListPage = ({ patients, setPatients }: Props) => {
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [error, setError] = useState<string>();
+  const [searchText, setSearchText] = useState<string>('');
 
   const openModal = (): void => setModalOpen(true);
 
@@ -68,60 +74,120 @@ const PatientListPage = ({ patients, setPatients } : Props ) => {
     }
   };
 
-  // Sort patients by date of birth (oldest first)
-  const sortedPatients = [...patients].sort((a, b) => {
-    const dateA = a.dateOfBirth ? new Date(a.dateOfBirth).getTime() : 0;
-    const dateB = b.dateOfBirth ? new Date(b.dateOfBirth).getTime() : 0;
-    return dateA - dateB;
-  });
+  // Filter patients based on search text
+  const filteredPatients = useMemo(() => {
+    if (!searchText) return patients;
+    const lowerSearch = searchText.toLowerCase();
+    return patients.filter(patient => 
+      patient.name.toLowerCase().includes(lowerSearch) ||
+      patient.occupation.toLowerCase().includes(lowerSearch) ||
+      patient.gender.toLowerCase().includes(lowerSearch)
+    );
+  }, [patients, searchText]);
+
+  // Define columns for DataGrid
+  const columns: GridColDef[] = [
+    { 
+      field: 'name', 
+      headerName: 'Patient Name', 
+      flex: 1,
+      minWidth: 200,
+      renderCell: (params) => (
+        <Link to={params.row.id} style={{ color: '#1976d2', fontWeight: 600 }}>
+          {params.value}
+        </Link>
+      )
+    },
+    { 
+      field: 'gender', 
+      headerName: 'Gender', 
+      width: 120,
+      valueGetter: (params) => 
+        params.value.charAt(0).toUpperCase() + params.value.slice(1)
+    },
+    { 
+      field: 'occupation', 
+      headerName: 'Occupation', 
+      flex: 1,
+      minWidth: 200 
+    },
+    { 
+      field: 'healthRating', 
+      headerName: 'Health Status', 
+      width: 180,
+      renderCell: (params) => (
+        <div data-testid="health-rating-bar">
+          <HealthRatingBar rating={params.value} showText={false} />
+        </div>
+      )
+    }
+  ];
+
+  // Prepare data for DataGrid
+  const rows = filteredPatients.map(patient => ({
+    id: patient.id,
+    name: patient.name,
+    gender: patient.gender,
+    occupation: patient.occupation,
+    healthRating: getLatestHealthRating(patient)
+  }));
 
   return (
     <div className="App">
-      <Box>
-        <Typography align="center" variant="h6">
-          Patient list
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h5" component="h2">
+          Patient List
         </Typography>
+        <Button 
+          variant="contained" 
+          onClick={openModal}
+          sx={{ minWidth: 180 }}
+        >
+          Add New Patient
+        </Button>
       </Box>
-      <Table style={{ marginBottom: "1em" }}>
-        <TableHead>
-          <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Gender</TableCell>
-            <TableCell>Occupation</TableCell>
-            <TableCell>Health Rating</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {sortedPatients.map((patient: Patient) => (
-            <TableRow key={patient.id}>
-              <TableCell>
-                <Link to={patient.id} data-testid="patient-name">
-                  {patient.name}
-                </Link>
-              </TableCell>
-              <TableCell>{patient.gender}</TableCell>
-              <TableCell>{patient.occupation}</TableCell>
-              <TableCell>
-                <div data-testid="health-rating-bar">
-                  <HealthRatingBar 
-                    showText={false} 
-                    rating={getLatestHealthRating(patient)} 
-                  />
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+
+      <TextField
+        fullWidth
+        variant="outlined"
+        placeholder="Search patients..."
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+        sx={{ mb: 2 }}
+      />
+
+      <div style={{ height: 500, width: '100%' }}>
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          pageSize={7}
+          rowsPerPageOptions={[7, 15, 30]}
+          disableSelectionOnClick
+          sx={{
+            '& .MuiDataGrid-columnHeaders': {
+              backgroundColor: '#f5f5f5',
+              fontWeight: 'bold'
+            },
+            '& .MuiDataGrid-row:hover': {
+              backgroundColor: 'rgba(25, 118, 210, 0.04)'
+            }
+          }}
+        />
+      </div>
+
       <AddPatientModal
         modalOpen={modalOpen}
         onSubmit={submitNewPatient}
         error={error}
         onClose={closeModal}
       />
-      <Button variant="contained" onClick={() => openModal()}>
-        Add New Patient
-      </Button>
     </div>
   );
 };
