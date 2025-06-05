@@ -44,11 +44,11 @@ describe('App', () => {
     vi.restoreAllMocks();
   });
 
-  test('renders Patientor title', async () => {
+  test('renders CareVault title', async () => {
     render(<App />);
     
     await waitFor(() => {
-      expect(screen.getByText('Patientor')).toBeInTheDocument();
+      expect(screen.getByText('CareVault')).toBeInTheDocument();
     });
   });
 

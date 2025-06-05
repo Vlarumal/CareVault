@@ -1,25 +1,30 @@
-import { useState, useMemo } from "react";
-import { 
-  Box, 
-  Button, 
+import { useState, useMemo } from 'react';
+import {
+  Box,
+  Button,
   Typography,
   InputAdornment,
-  TextField
+  TextField,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import { 
-  DataGrid, 
-  GridColDef, 
+import {
+  DataGrid,
+  GridColDef,
   GridToolbarContainer,
-  GridToolbarExport
+  GridToolbarExport,
 } from '@mui/x-data-grid';
 import axios from 'axios';
 
-import { PatientFormValues, Patient, HealthCheckEntry, Entry } from "../../types";
-import AddPatientModal from "../AddPatientModal";
-import HealthRatingBar from "../HealthRatingBar";
-import patientService from "../../services/patients";
-import { Link } from "react-router-dom";
+import {
+  PatientFormValues,
+  Patient,
+  HealthCheckEntry,
+  Entry,
+} from '../../types';
+import AddPatientModal from '../AddPatientModal';
+import HealthRatingBar from '../HealthRatingBar';
+import patientService from '../../services/patients';
+import { Link } from 'react-router-dom';
 
 interface Props {
   patients: Patient[];
@@ -29,40 +34,47 @@ interface Props {
 // Helper to get latest health rating from entries
 const getLatestHealthRating = (patient: Patient): number | null => {
   if (!patient.entries) return null;
-  
+
   const healthCheckEntries = patient.entries.filter(
-    (entry: Entry): entry is HealthCheckEntry => entry.type === 'HealthCheck'
+    (entry: Entry): entry is HealthCheckEntry =>
+      entry.type === 'HealthCheck'
   );
-  
+
   if (healthCheckEntries.length === 0) return null;
-  
-  const sortedEntries = [...healthCheckEntries].sort(
-    (a, b) => b.date.localeCompare(a.date)
+
+  const sortedEntries = [...healthCheckEntries].sort((a, b) =>
+    b.date.localeCompare(a.date)
   );
-  
+
   return sortedEntries[0].healthCheckRating;
 };
 
 // Custom toolbar with search and export
-function CustomToolbar({ searchText, setSearchText }: { 
-  searchText: string; 
+function CustomToolbar({
+  searchText,
+  setSearchText,
+}: {
+  searchText: string;
   setSearchText: React.Dispatch<React.SetStateAction<string>>;
 }) {
   return (
-    <GridToolbarContainer sx={{ justifyContent: 'space-between', py: 1 }}>
+    <GridToolbarContainer
+      sx={{ justifyContent: 'space-between', py: 1 }}
+    >
       <TextField
-        variant="standard"
-        placeholder="Search patients..."
+        variant='standard'
+        placeholder='Search patients...'
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
         InputProps={{
           startAdornment: (
-            <InputAdornment position="start">
+            <InputAdornment position='start'>
               <SearchIcon />
             </InputAdornment>
           ),
         }}
         sx={{ width: 300 }}
+        aria-label='Search patients'
       />
       <GridToolbarExport />
     </GridToolbarContainer>
@@ -88,19 +100,25 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
       setModalOpen(false);
     } catch (e: unknown) {
       if (axios.isAxiosError(e)) {
-        if (e?.response?.data && typeof e?.response?.data === "string") {
-          const message = e.response.data.replace('Something went wrong. Error: ', '');
+        if (
+          e?.response?.data &&
+          typeof e?.response?.data === 'string'
+        ) {
+          const message = e.response.data.replace(
+            'Something went wrong. Error: ',
+            ''
+          );
           console.error(message);
           setError(message);
         } else {
-          setError("Unrecognized axios error");
+          setError('Unrecognized axios error');
         }
       } else if (e instanceof Error) {
         console.error(e.message);
         setError(e.message);
       } else {
-        console.error("Unknown error", e);
-        setError("Unknown error");
+        console.error('Unknown error', e);
+        setError('Unknown error');
       }
     }
   };
@@ -109,75 +127,90 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
   const filteredPatients = useMemo(() => {
     if (!searchText) return patients;
     const lowerSearch = searchText.toLowerCase();
-    return patients.filter(patient => 
-      patient.name.toLowerCase().includes(lowerSearch) ||
-      patient.occupation.toLowerCase().includes(lowerSearch) ||
-      patient.gender.toLowerCase().includes(lowerSearch)
+    return patients.filter(
+      (patient) =>
+        patient.name.toLowerCase().includes(lowerSearch) ||
+        patient.occupation.toLowerCase().includes(lowerSearch) ||
+        patient.gender.toLowerCase().includes(lowerSearch)
     );
   }, [patients, searchText]);
 
   // Define columns for DataGrid
   const columns: GridColDef[] = [
-    { 
-      field: 'name', 
-      headerName: 'Patient Name', 
+    {
+      field: 'name',
+      headerName: 'Patient Name',
       flex: 1,
       minWidth: 150,
       renderCell: (params) => (
-        <Link 
-          to={params.row.id} 
+        <Link
+          to={params.row.id}
           style={{ color: '#1976d2', fontWeight: 600 }}
           aria-label={`View details for ${params.value}`}
         >
           {params.value}
         </Link>
-      )
+      ),
     },
-    { 
-      field: 'gender', 
-      headerName: 'Gender', 
+    {
+      field: 'gender',
+      headerName: 'Gender',
       width: 120,
-      valueGetter: (params) => 
-        params.value.charAt(0).toUpperCase() + params.value.slice(1)
+      valueGetter: (params) =>
+        params.value.charAt(0).toUpperCase() + params.value.slice(1),
     },
-    { 
-      field: 'occupation', 
-      headerName: 'Occupation', 
+    {
+      field: 'occupation',
+      headerName: 'Occupation',
       flex: 1,
-      minWidth: 150 
+      minWidth: 150,
     },
-    { 
-      field: 'healthRating', 
-      headerName: 'Health Status', 
+    {
+      field: 'healthRating',
+      headerName: 'Health Status',
       width: 180,
       renderCell: (params) => (
-        <div data-testid="health-rating-bar">
-          <HealthRatingBar rating={params.value} showText={false} />
+        <div data-testid='health-rating-bar'>
+          <HealthRatingBar
+            rating={params.value}
+            showText={false}
+          />
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   // Prepare data for DataGrid
-  const rows = filteredPatients.map(patient => ({
+  const rows = filteredPatients.map((patient) => ({
     id: patient.id,
     name: patient.name,
     gender: patient.gender,
     occupation: patient.occupation,
-    healthRating: getLatestHealthRating(patient)
+    healthRating: getLatestHealthRating(patient),
   }));
 
   return (
-    <div className="App">
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" component="h1" aria-label="Patient list header">
+    <div className='App'>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 2,
+        }}
+      >
+        <Typography
+          variant='h5'
+          component='h1'
+          aria-label='Patient list header'
+        >
           Patient List
         </Typography>
-        <Button 
-          variant="contained" 
+        <Button
+          variant='contained'
           onClick={openModal}
           sx={{ minWidth: 180 }}
-          aria-label="Add new patient"
+          aria-label='Add new patient'
         >
           Add New Patient
         </Button>
@@ -187,6 +220,7 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
         <DataGrid
           rows={rows}
           columns={columns}
+          getRowId={(row) => row.id}
           initialState={{
             pagination: {
               paginationModel: {
@@ -195,24 +229,35 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
               },
             },
           }}
-          rowsPerPageOptions={[7, 15, 30]}
-          disableSelectionOnClick
+          pageSizeOptions={[7, 15, 30]}
+          disableRowSelectionOnClick
           sx={{
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: '#f5f5f5',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
             },
             '& .MuiDataGrid-row:hover': {
-              backgroundColor: 'rgba(25, 118, 210, 0.04)'
-            }
+              backgroundColor: 'rgba(25, 118, 210, 0.04)',
+            },
           }}
-          components={{
-            Toolbar: () => <CustomToolbar searchText={searchText} setSearchText={setSearchText} />,
+          slots={{
+            toolbar: () => (
+              <CustomToolbar
+                searchText={searchText}
+                setSearchText={setSearchText}
+              />
+            ),
+            noRowsOverlay: () => (
+              <div style={{ textAlign: 'center', padding: 20 }}>
+                No patients found
+              </div>
+            ),
           }}
-          componentsProps={{
+          slotProps={{
             filterPanel: { columnsSort: 'asc' },
           }}
-          aria-label="Patient list with search and export"
+          aria-label='Patient list with search and export'
+          getRowClassName={(params) => `row-${params.row.id}`} // Add class-based identifier
         />
       </div>
 

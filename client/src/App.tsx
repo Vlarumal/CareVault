@@ -45,7 +45,7 @@ const App = () => {
             variant='h3'
             style={{ marginBottom: '0.5em' }}
           >
-            Patientor
+            CareVault
           </Typography>
           <Button
             component={Link}
