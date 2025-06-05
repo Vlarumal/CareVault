@@ -4,10 +4,10 @@ import { getIcon } from '../../utils';
 import patientService from '../../services/patients';
 import diagnosisService from '../../services/diagnoses';
 import { useEffect, useState } from 'react';
-import { Alert, Box, Card, CircularProgress } from '@mui/material';
-import EntryDetails from './EntryDetails';
+import { Alert, Box, CircularProgress } from '@mui/material';
 import AddEntryForm from './AddEntryForm';
 import HealthRatingBar from '../HealthRatingBar';
+import TimelineView from './TimelineView';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -127,41 +127,10 @@ const PatientPage = () => {
       {patient.entries && patient.entries.length > 0 && (
         <Box>
           <h2>entries</h2>
-          {patient.entries.map((entry) => (
-            <Box
-              mb={1}
-              key={entry.id}
-            >
-              <Card
-                variant='outlined'
-                sx={{
-                  mb: 1,
-                  borderColor: 'black',
-                  p: 1,
-                }}
-              >
-                <EntryDetails entry={entry} />
-              </Card>
-
-              {entry.diagnosisCodes && (
-                <Box
-                  ml={2}
-                  mb={1}
-                >
-                  <fieldset style={{}}>
-                    <legend>Diagnoses</legend>
-                    <ul>
-                      {entry.diagnosisCodes.map((code: string) => (
-                        <li key={code}>
-                          {code} {getDiagnosisByCode(code)}
-                        </li>
-                      ))}
-                    </ul>
-                  </fieldset>
-                </Box>
-              )}
-            </Box>
-          ))}
+          <TimelineView 
+            entries={patient.entries} 
+            getDiagnosisByCode={getDiagnosisByCode} 
+          />
         </Box>
       )}
     </div>

@@ -156,8 +156,10 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
       field: 'gender',
       headerName: 'Gender',
       width: 120,
-      valueGetter: (params) =>
-        params.value.charAt(0).toUpperCase() + params.value.slice(1),
+      valueGetter: (params: { value: unknown }) => {
+        if (typeof params.value !== 'string') return '';
+        return params.value.charAt(0).toUpperCase() + params.value.slice(1);
+      },
     },
     {
       field: 'occupation',
@@ -180,8 +182,16 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
     },
   ];
 
-  // Prepare data for DataGrid
-  const rows = filteredPatients.map((patient) => ({
+  // Prepare data for DataGrid with proper typing
+  interface PatientRow {
+    id: string;
+    name: string;
+    gender: string;
+    occupation: string;
+    healthRating: number | null;
+  }
+
+  const rows: PatientRow[] = filteredPatients.map((patient) => ({
     id: patient.id,
     name: patient.name,
     gender: patient.gender,
