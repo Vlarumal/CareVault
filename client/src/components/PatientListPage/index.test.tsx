@@ -11,6 +11,17 @@ import { Patient, Gender } from '../../../src/types';
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 
+/**
+ * @context7
+ * @type test-suite
+ * @target PatientListPage
+ * @description Comprehensive test suite for PatientListPage component
+ * @tags frontend, components, data-grid
+ * @coverage-required 100%
+ * @last-updated 2025-06-05
+ * @test-cases CRUD operations, sorting, filtering, pagination, accessibility
+ */
+
 // Mock GridToolbarExport for export functionality tests
 vi.mock('@mui/x-data-grid', async (importOriginal) => {
   const mod = await importOriginal<

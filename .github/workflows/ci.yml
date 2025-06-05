@@ -116,3 +116,25 @@ jobs:
       - name: Run documentation verification
         run: node ../../__tests__/verify_docs.test.js
         working-directory: server
+
+  context7-docs:
+    runs-on: ubuntu-latest
+    needs: [client-job, server-job]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - name: Install Context7
+        run: npm install -g context7
+      - name: Generate Context7 Documentation
+        run: context7 generate --output ./docs
+      - name: Verify Context7 annotations
+        run: context7 verify
+      - name: Deploy Documentation
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          keep_files: true
