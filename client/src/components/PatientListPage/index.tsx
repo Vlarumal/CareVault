@@ -7,7 +7,12 @@ import {
   TextField
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { 
+  DataGrid, 
+  GridColDef, 
+  GridToolbarContainer,
+  GridToolbarExport
+} from '@mui/x-data-grid';
 import axios from 'axios';
 
 import { PatientFormValues, Patient, HealthCheckEntry, Entry } from "../../types";
@@ -37,6 +42,32 @@ const getLatestHealthRating = (patient: Patient): number | null => {
   
   return sortedEntries[0].healthCheckRating;
 };
+
+// Custom toolbar with search and export
+function CustomToolbar({ searchText, setSearchText }: { 
+  searchText: string; 
+  setSearchText: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  return (
+    <GridToolbarContainer sx={{ justifyContent: 'space-between', py: 1 }}>
+      <TextField
+        variant="standard"
+        placeholder="Search patients..."
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+        sx={{ width: 300 }}
+      />
+      <GridToolbarExport />
+    </GridToolbarContainer>
+  );
+}
 
 const PatientListPage = ({ patients, setPatients }: Props) => {
   const [modalOpen, setModalOpen] = useState<boolean>(false);
@@ -91,9 +122,13 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
       field: 'name', 
       headerName: 'Patient Name', 
       flex: 1,
-      minWidth: 200,
+      minWidth: 150,
       renderCell: (params) => (
-        <Link to={params.row.id} style={{ color: '#1976d2', fontWeight: 600 }}>
+        <Link 
+          to={params.row.id} 
+          style={{ color: '#1976d2', fontWeight: 600 }}
+          aria-label={`View details for ${params.value}`}
+        >
           {params.value}
         </Link>
       )
@@ -109,7 +144,7 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
       field: 'occupation', 
       headerName: 'Occupation', 
       flex: 1,
-      minWidth: 200 
+      minWidth: 150 
     },
     { 
       field: 'healthRating', 
@@ -135,39 +170,28 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
   return (
     <div className="App">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" component="h2">
+        <Typography variant="h5" component="h1" aria-label="Patient list header">
           Patient List
         </Typography>
         <Button 
           variant="contained" 
           onClick={openModal}
           sx={{ minWidth: 180 }}
+          aria-label="Add new patient"
         >
           Add New Patient
         </Button>
       </Box>
 
-      <TextField
-        fullWidth
-        variant="outlined"
-        placeholder="Search patients..."
-        value={searchText}
-        onChange={(e) => setSearchText(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-        sx={{ mb: 2 }}
-      />
-
       <div style={{ height: 500, width: '100%' }}>
         <DataGrid
           rows={rows}
           columns={columns}
-          pageSize={7}
+          initialState={{
+            pagination: {
+              pageSize: 7,
+            },
+          }}
           rowsPerPageOptions={[7, 15, 30]}
           disableSelectionOnClick
           sx={{
@@ -179,6 +203,13 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
               backgroundColor: 'rgba(25, 118, 210, 0.04)'
             }
           }}
+          components={{
+            Toolbar: () => <CustomToolbar searchText={searchText} setSearchText={setSearchText} />,
+          }}
+          componentsProps={{
+            filterPanel: { columnsSort: 'asc' },
+          }}
+          aria-label="Patient list with search and export"
         />
       </div>
 

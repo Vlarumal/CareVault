@@ -1,3 +1,4 @@
+import React from 'react';
 import { Tooltip } from '@mui/material';
 import { Favorite } from '@mui/icons-material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
@@ -22,40 +23,52 @@ const HEALTHBAR_COLORS = [
   '#f44336', // Red (error) - rating 3
 ];
 
-const HealthRatingBar = ({ rating, showText }: BarProps) => {
-  if (rating === null) {
+const HealthRatingBar = React.forwardRef<HTMLDivElement, BarProps>(
+  ({ rating, showText }, ref) => {
+    if (rating === null) {
+      return (
+        <Tooltip 
+          title="Health rating is only available for patients with HealthCheck entries" 
+          arrow
+        >
+          <span style={{ display: 'flex', alignItems: 'center' }}>
+            N/A <HelpOutlineIcon fontSize="small" style={{ marginLeft: 4 }} />
+          </span>
+        </Tooltip>
+      );
+    }
+    
+    const heartCount = 4 - rating;
+    const heartColor = rating < 4 ? HEALTHBAR_COLORS[rating] : '#ff6d75';
+    
+    const hearts = Array.from({ length: 4 }, (_, i) => (
+      <Favorite
+        key={i}
+        fontSize="inherit"
+        style={{ 
+          color: i < heartCount ? heartColor : 'transparent',
+          marginRight: 2 
+        }}
+      />
+    ));
+
     return (
-      <Tooltip 
-        title="Health rating is only available for patients with HealthCheck entries" 
-        arrow
+      <div 
+        ref={ref}
+        className="health-bar" 
+        style={{ display: 'flex', alignItems: 'center' }}
       >
-        <span style={{ display: 'flex', alignItems: 'center' }}>
-          N/A <HelpOutlineIcon fontSize="small" style={{ marginLeft: 4 }} />
-        </span>
-      </Tooltip>
+        {hearts}
+        {showText && (
+          <p style={{ marginLeft: 8 }} data-testid="health-rating-text">
+            {HEALTHBAR_TEXTS[rating]}
+          </p>
+        )}
+      </div>
     );
   }
-  
-  const heartCount = 4 - rating;
-  const heartColor = rating < 4 ? HEALTHBAR_COLORS[rating] : '#ff6d75';
-  
-  const hearts = Array.from({ length: 4 }, (_, i) => (
-    <Favorite
-      key={i}
-      fontSize="inherit"
-      style={{ 
-        color: i < heartCount ? heartColor : 'transparent',
-        marginRight: 2 
-      }}
-    />
-  ));
+);
 
-  return (
-    <div className="health-bar" style={{ display: 'flex', alignItems: 'center' }}>
-      {hearts}
-      {showText && <p style={{ marginLeft: 8 }} data-testid="health-rating-text">{HEALTHBAR_TEXTS[rating]}</p>}
-    </div>
-  );
-};
+HealthRatingBar.displayName = 'HealthRatingBar';
 
 export default HealthRatingBar;
