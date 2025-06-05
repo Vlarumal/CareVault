@@ -189,7 +189,10 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
           columns={columns}
           initialState={{
             pagination: {
-              pageSize: 7,
+              paginationModel: {
+                pageSize: 7,
+                page: 0,
+              },
             },
           }}
           rowsPerPageOptions={[7, 15, 30]}
