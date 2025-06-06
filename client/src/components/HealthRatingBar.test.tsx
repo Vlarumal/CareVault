@@ -62,3 +62,34 @@ describe('HealthRatingBar Component', () => {
     expect(screen.queryByText('The patient is in great shape')).not.toBeInTheDocument();
   });
 });
+
+// Snapshot tests
+test('matches snapshot for rating 0 without text', () => {
+  const { container } = render(<HealthRatingBar rating={0} showText={false} />);
+  expect(container).toMatchSnapshot();
+});
+
+test('matches snapshot for rating 0 with text', () => {
+  const { container } = render(<HealthRatingBar rating={0} showText={true} />);
+  expect(container).toMatchSnapshot();
+});
+
+test('matches snapshot for rating 1', () => {
+  const { container } = render(<HealthRatingBar rating={1} showText={false} />);
+  expect(container).toMatchSnapshot();
+});
+
+test('matches snapshot for rating 2', () => {
+  const { container } = render(<HealthRatingBar rating={2} showText={false} />);
+  expect(container).toMatchSnapshot();
+});
+
+test('matches snapshot for rating 3', () => {
+  const { container } = render(<HealthRatingBar rating={3} showText={false} />);
+  expect(container).toMatchSnapshot();
+});
+
+test('matches snapshot for rating null', () => {
+  const { container } = render(<HealthRatingBar rating={null} showText={false} />);
+  expect(container).toMatchSnapshot();
+});

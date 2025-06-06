@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: dev.Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - DEBUG=backend_carevault:*
+      - PORT=3001
+    volumes:
+      - ./server:/usr/src/app
+      - /usr/src/app/node_modules
+
+  client:
+    build:
+      context: ./client
+      dockerfile: dev.Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://server:3001/api
+    volumes:
+      - ./client:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - server

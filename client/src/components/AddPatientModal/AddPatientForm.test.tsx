@@ -171,3 +171,58 @@ describe('AddPatientForm', () => {
     });
   });
 });
+
+// Gender selection test
+it('allows changing gender selection', async () => {
+  render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+  
+  const genderSelect = screen.getByTestId('gender-select');
+  await userEvent.click(genderSelect);
+  
+  const maleOption = screen.getByRole('option', { name: 'Male' });
+  await userEvent.click(maleOption);
+  
+  expect(genderSelect).toHaveTextContent('Male');
+});
+
+// Form submission with invalid data test
+it('shows multiple errors when submitting empty form', async () => {
+  render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+  
+  const submitButton = screen.getByText('Add');
+  await userEvent.click(submitButton);
+  
+  await waitFor(() => {
+    expect(screen.getByText('Name is required')).toBeInTheDocument();
+    expect(screen.getByText('SSN is required')).toBeInTheDocument();
+    expect(screen.getByText('Date of birth is required')).toBeInTheDocument();
+    expect(screen.getByText('Occupation is required')).toBeInTheDocument();
+  });
+});
+
+// Snapshot tests
+it('matches initial form snapshot', () => {
+  const { container } = render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+  expect(container).toMatchSnapshot();
+});
+
+it('matches form with errors snapshot', async () => {
+  const { container } = render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+  
+  const nameInput = screen.getByLabelText('Name');
+  await userEvent.type(nameInput, 'ab');
+  await userEvent.tab();
+  
+  expect(container).toMatchSnapshot();
+});
+
+it('matches filled form snapshot', async () => {
+  const { container } = render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+  
+  await userEvent.type(screen.getByLabelText('Name'), 'John Doe');
+  await userEvent.type(screen.getByLabelText('Social security number'), '123456-7890');
+  await userEvent.type(screen.getByLabelText('Date of birth'), '1990-01-01');
+  await userEvent.type(screen.getByLabelText('Occupation'), 'Developer');
+  
+  expect(container).toMatchSnapshot();
+});

@@ -4,44 +4,44 @@ import { createTheme } from '@mui/material/styles';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#2d6ea8',  // Trustworthy blue
-      light: '#5f9bd5',
-      dark: '#00457d',
+      main: '#0a2b4d',
+      light: '#0e3a6a',
+      dark: '#061d36',
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#4caf50',  // Healthcare green
-      light: '#80e27e',
-      dark: '#087f23',
+      main: '#09390b',
+      light: '#0d5c10',
+      dark: '#052907',
       contrastText: '#ffffff',
     },
     ...({
       tertiary: {
-        main: '#6a5acd',  // Soft purple for accents
+        main: '#6a5acd',
         light: '#9370db',
         dark: '#483d8b',
         contrastText: '#ffffff',
       },
     } as { tertiary: { main: string; light: string; dark: string; contrastText: string } }),
     background: {
-      default: '#f8f9fa',  // Slightly lighter background
+      default: '#f8f9fa',
       paper: '#ffffff',
     },
     text: {
-      primary: '#121212',  // Increased contrast for better readability
-      secondary: '#37474f', // Enhanced secondary text contrast
+      primary: '#121212',
+      secondary: '#1a2329',
     },
     error: {
-      main: '#e53935',  // More vibrant red
+      main: '#e53935',
     },
     warning: {
-      main: '#ffb300',  // More vibrant orange
+      main: '#ffb300',
     },
     info: {
-      main: '#1e88e5',  // More vibrant blue
+      main: '#1e88e5',
     },
     success: {
-      main: '#43a047',  // More vibrant green
+      main: '#43a047',
     },
   },
   typography: {
@@ -119,9 +119,9 @@ const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 12,  // Slightly larger border radius
+    borderRadius: 12,
   },
-  spacing: 8,  // 8px spacing unit for consistent margins/padding
+  spacing: 8,
   transitions: {
     duration: {
       short: 250,
