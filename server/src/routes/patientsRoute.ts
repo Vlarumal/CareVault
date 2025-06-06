@@ -24,8 +24,13 @@ patientsRouter.get(
   }
 );
 
+import { validate } from '../utils/validation';
+import { CreatePatientSchema } from '../schemas/patient.schema';
+import { EntrySchema } from '../schemas/entry.schema';
+
 patientsRouter.post(
   '/',
+  validate(CreatePatientSchema),
   (
     req: Request<unknown, unknown, NewPatientEntryWithoutEntries>,
     res: Response<PatientEntry>
@@ -37,6 +42,7 @@ patientsRouter.post(
 
 patientsRouter.post(
   '/:id/entries',
+  validate(EntrySchema),
   (
     req: Request<{ id: string }, unknown, NewEntryWithoutId>,
     res: Response

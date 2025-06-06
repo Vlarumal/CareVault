@@ -142,7 +142,7 @@ const addPatient = (event: SyntheticEvent) => {
       <form onSubmit={addPatient}>
         <TextField
           label="Name"
-          fullWidth 
+          fullWidth
           value={name}
           onChange={({ target }) => {
             setName(target.value);
@@ -151,6 +151,14 @@ const addPatient = (event: SyntheticEvent) => {
           onBlur={validateName}
           error={!!errors.name}
           helperText={errors.name}
+          sx={{ mb: 3 }}
+          InputProps={{
+            sx: {
+              '&.Mui-focused fieldset': {
+                borderColor: 'primary.main',
+              },
+            },
+          }}
         />
         <TextField
           label="Social security number"
@@ -163,6 +171,14 @@ const addPatient = (event: SyntheticEvent) => {
           onBlur={validateSsn}
           error={!!errors.ssn}
           helperText={errors.ssn}
+          sx={{ mb: 3 }}
+          InputProps={{
+            sx: {
+              '&.Mui-focused fieldset': {
+                borderColor: 'primary.main',
+              },
+            },
+          }}
         />
         <TextField
           label="Date of birth"
@@ -178,6 +194,14 @@ const addPatient = (event: SyntheticEvent) => {
           InputLabelProps={{ shrink: true }}
           error={!!errors.dateOfBirth}
           helperText={errors.dateOfBirth}
+          sx={{ mb: 3 }}
+          InputProps={{
+            sx: {
+              '&.Mui-focused fieldset': {
+                borderColor: 'primary.main',
+              },
+            },
+          }}
         />
         <TextField
           label="Occupation"
@@ -190,6 +214,14 @@ const addPatient = (event: SyntheticEvent) => {
           onBlur={validateOccupation}
           error={!!errors.occupation}
           helperText={errors.occupation}
+          sx={{ mb: 3 }}
+          InputProps={{
+            sx: {
+              '&.Mui-focused fieldset': {
+                borderColor: 'primary.main',
+              },
+            },
+          }}
         />
 
 <InputLabel 
@@ -216,29 +248,37 @@ const addPatient = (event: SyntheticEvent) => {
         )}
         </Select>
 
-        <Grid>
-          <Grid item>
-            <Button
-              color="secondary"
-              variant="contained"
-              style={{ float: "left" }}
-              type="button"
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
-          </Grid>
-          <Grid item>
-            <Button
-              style={{
-                float: "right",
-              }}
-              type="submit"
-              variant="contained"
-            >
-              Add
-            </Button>
-          </Grid>
+        <Grid container justifyContent="space-between" sx={{ mt: 2, gap: 2 }}>
+          <Button
+            color="secondary"
+            variant="contained"
+            type="button"
+            onClick={onCancel}
+            sx={{
+              minWidth: 100,
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: 3,
+              },
+              transition: 'all 0.3s ease',
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            sx={{
+              minWidth: 100,
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: 3,
+              },
+              transition: 'all 0.3s ease',
+            }}
+          >
+            Add
+          </Button>
         </Grid>
       </form>
     </div>

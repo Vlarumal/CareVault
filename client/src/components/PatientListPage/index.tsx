@@ -1,19 +1,25 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Button,
   Typography,
   InputAdornment,
   TextField,
+  Paper,
+  useTheme,
+  Card,
+  CardContent,
+  CardActionArea,
+  Fade,
+  Slide,
+  Avatar
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import {
-  DataGrid,
-  GridColDef,
-  GridToolbarContainer,
-  GridToolbarExport,
-} from '@mui/x-data-grid';
-import axios from 'axios';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import Skeleton from '@mui/material/Skeleton';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   PatientFormValues,
@@ -25,11 +31,6 @@ import AddPatientModal from '../AddPatientModal';
 import HealthRatingBar from '../HealthRatingBar';
 import patientService from '../../services/patients';
 import { Link } from 'react-router-dom';
-
-interface Props {
-  patients: Patient[];
-  setPatients: React.Dispatch<React.SetStateAction<Patient[]>>;
-}
 
 // Helper to get latest health rating from entries
 const getLatestHealthRating = (patient: Patient): number | null => {
@@ -49,42 +50,30 @@ const getLatestHealthRating = (patient: Patient): number | null => {
   return sortedEntries[0].healthCheckRating;
 };
 
-// Custom toolbar with search and export
-function CustomToolbar({
-  searchText,
-  setSearchText,
-}: {
-  searchText: string;
-  setSearchText: React.Dispatch<React.SetStateAction<string>>;
-}) {
-  return (
-    <GridToolbarContainer
-      sx={{ justifyContent: 'space-between', py: 1 }}
-    >
-      <TextField
-        variant='standard'
-        placeholder='Search patients...'
-        value={searchText}
-        onChange={(e) => setSearchText(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position='start'>
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-        sx={{ width: 300 }}
-        aria-label='Search patients'
-      />
-      <GridToolbarExport />
-    </GridToolbarContainer>
-  );
-}
-
-const PatientListPage = ({ patients, setPatients }: Props) => {
+const PatientListPage = () => {
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [error, setError] = useState<string>();
   const [searchText, setSearchText] = useState<string>('');
+  const [searchInput, setSearchInput] = useState<string>('');
+  const [initialLoad, setInitialLoad] = useState<boolean>(true);
+  const theme = useTheme();
+  const queryClient = useQueryClient();
+
+  const { data: patients = [], isLoading } = useQuery<Patient[], Error>({
+    queryKey: ['patients'],
+    queryFn: patientService.getAll,
+    staleTime: 300000, // 5 minutes
+  });
+
+  const mutation = useMutation({
+    mutationFn: patientService.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
+    },
+    onError: (error: Error) => {
+      setError(error.message);
+    }
+  });
 
   const openModal = (): void => setModalOpen(true);
 
@@ -93,33 +82,18 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
     setError(undefined);
   };
 
+  // Simulate initial data loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoad(false);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, []);
+
   const submitNewPatient = async (values: PatientFormValues) => {
-    try {
-      const patient = await patientService.create(values);
-      setPatients(patients.concat(patient));
+    mutation.mutate(values);
+    if (!mutation.isError) {
       setModalOpen(false);
-    } catch (e: unknown) {
-      if (axios.isAxiosError(e)) {
-        if (
-          e?.response?.data &&
-          typeof e?.response?.data === 'string'
-        ) {
-          const message = e.response.data.replace(
-            'Something went wrong. Error: ',
-            ''
-          );
-          console.error(message);
-          setError(message);
-        } else {
-          setError('Unrecognized axios error');
-        }
-      } else if (e instanceof Error) {
-        console.error(e.message);
-        setError(e.message);
-      } else {
-        console.error('Unknown error', e);
-        setError('Unknown error');
-      }
     }
   };
 
@@ -135,149 +109,323 @@ const PatientListPage = ({ patients, setPatients }: Props) => {
     );
   }, [patients, searchText]);
 
-  // Define columns for DataGrid
-  const columns: GridColDef[] = [
-    {
-      field: 'name',
-      headerName: 'Patient Name',
-      flex: 1,
-      minWidth: 150,
-      renderCell: (params) => (
-        <Link
-          to={params.row.id}
-          style={{ color: '#1976d2', fontWeight: 600 }}
-          aria-label={`View details for ${params.value}`}
-        >
-          {params.value}
-        </Link>
-      ),
-    },
-    {
-      field: 'gender',
-      headerName: 'Gender',
-      width: 120,
-      valueGetter: (params: { value: unknown }) => {
-        if (typeof params.value !== 'string') return '';
-        return params.value.charAt(0).toUpperCase() + params.value.slice(1);
-      },
-    },
-    {
-      field: 'occupation',
-      headerName: 'Occupation',
-      flex: 1,
-      minWidth: 150,
-    },
-    {
-      field: 'healthRating',
-      headerName: 'Health Status',
-      width: 180,
-      renderCell: (params) => (
-        <div data-testid='health-rating-bar'>
-          <HealthRatingBar
-            rating={params.value}
-            showText={false}
-          />
-        </div>
-      ),
-    },
-  ];
-
-  // Prepare data for DataGrid with proper typing
-  interface PatientRow {
-    id: string;
-    name: string;
-    gender: string;
-    occupation: string;
-    healthRating: number | null;
-  }
-
-  const rows: PatientRow[] = filteredPatients.map((patient) => ({
-    id: patient.id,
-    name: patient.name,
-    gender: patient.gender,
-    occupation: patient.occupation,
-    healthRating: getLatestHealthRating(patient),
-  }));
+  // Get gender icon color
+  const getGenderColor = (gender: string) => {
+    switch (gender.toLowerCase()) {
+      case 'male':
+        return theme.palette.primary.main;
+      case 'female':
+        return theme.palette.secondary.main;
+      default:
+        return (theme.palette as { tertiary?: { main: string } }).tertiary?.main || theme.palette.primary.main;
+    }
+  };
 
   return (
-    <div className='App'>
+    <Paper
+      elevation={0}
+      sx={{
+        p: 3,
+        borderRadius: 4,
+        backgroundColor: theme.palette.background.paper,
+        boxShadow: theme.shadows[1],
+        transition: 'all 0.3s ease',
+        '&:hover': {
+          boxShadow: theme.shadows[3]
+        }
+      }}
+    >
       <Box
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: 2,
+          mb: 3,
         }}
       >
-        <Typography
-          variant='h5'
-          component='h1'
-          aria-label='Patient list header'
-        >
-          Patient List
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <MedicalServicesIcon
+            sx={{
+              fontSize: 40,
+              color: theme.palette.primary.main
+            }}
+          />
+          <Typography
+            variant='h3'
+            component='h1'
+            aria-label='Patient list header'
+            color='primary'
+            sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}
+          >
+            Patient Directory
+          </Typography>
+        </Box>
         <Button
           variant='contained'
           onClick={openModal}
-          sx={{ minWidth: 180 }}
+          startIcon={<PersonAddIcon />}
+          sx={{
+            minWidth: 200,
+            py: 1.5,
+            fontWeight: 600,
+            boxShadow: theme.shadows[1],
+            '&:hover': {
+              boxShadow: theme.shadows[3],
+              transform: 'translateY(-2px)'
+            },
+            transition: 'all 0.3s ease'
+          }}
           aria-label='Add new patient'
         >
           Add New Patient
         </Button>
       </Box>
 
-      <div style={{ height: 500, width: '100%' }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          getRowId={(row) => row.id}
-          initialState={{
-            pagination: {
-              paginationModel: {
-                pageSize: 7,
-                page: 0,
-              },
-            },
-          }}
-          pageSizeOptions={[7, 15, 30]}
-          disableRowSelectionOnClick
-          sx={{
-            '& .MuiDataGrid-columnHeaders': {
-              backgroundColor: '#f5f5f5',
-              fontWeight: 'bold',
-            },
-            '& .MuiDataGrid-row:hover': {
-              backgroundColor: 'rgba(25, 118, 210, 0.04)',
-            },
-          }}
-          slots={{
-            toolbar: () => (
-              <CustomToolbar
-                searchText={searchText}
-                setSearchText={setSearchText}
-              />
-            ),
-            noRowsOverlay: () => (
-              <div style={{ textAlign: 'center', padding: 20 }}>
-                No patients found
-              </div>
-            ),
-          }}
-          slotProps={{
-            filterPanel: { columnsSort: 'asc' },
-          }}
-          aria-label='Patient list with search and export'
-          getRowClassName={(params) => `row-${params.row.id}`} // Add class-based identifier
-        />
-      </div>
+      {isLoading || initialLoad ? (
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gap: 3.45,
+          [theme.breakpoints.up(320)]: {
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))'
+          },
+          [theme.breakpoints.up(768)]: {
+            gridTemplateColumns: 'repeat(2, 1fr)'
+          },
+          [theme.breakpoints.up(1024)]: {
+            gridTemplateColumns: 'repeat(3, 1fr)'
+          }
+        }}>
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index} sx={{
+              height: 200,
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: 3,
+              overflow: 'hidden',
+              boxShadow: theme.shadows[1],
+            }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Skeleton variant="circular" width={40} height={40} />
+                  <Box sx={{ ml: 2, flexGrow: 1 }}>
+                    <Skeleton variant="text" width="60%" height={28} />
+                    <Skeleton variant="text" width="40%" height={24} />
+                  </Box>
+                </Box>
+                <Skeleton variant="text" width="80%" height={24} />
+                <Box sx={{ mt: 2 }}>
+                  <Skeleton variant="text" width="40%" height={20} />
+                  <Skeleton variant="rectangular" width="100%" height={36} sx={{ mt: 1, borderRadius: 1 }} />
+                </Box>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      ) : (
+        <>
+          <TextField
+            variant='outlined'
+            placeholder='Search patients by name, occupation or gender...'
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              // Debounce search to improve performance
+              setTimeout(() => setSearchText(e.target.value), 300);
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position='start'>
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+              sx: {
+                borderRadius: 20,
+                backgroundColor: theme.palette.background.default
+              }
+            }}
+            sx={{
+              width: '100%',
+              maxWidth: 500,
+              mb: 4,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 20,
+              }
+            }}
+            aria-label='Search patients'
+            size='medium'
+          />
+
+          <Box sx={{ minHeight: 400 }}>
+            {filteredPatients.length === 0 ? (
+              <Fade in={true}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    p: 8,
+                    borderRadius: 4,
+                    backgroundColor: theme.palette.grey[50],
+                    border: `1px dashed ${theme.palette.divider}`
+                  }}
+                >
+                  <PeopleAltIcon
+                    sx={{
+                      fontSize: 80,
+                      color: theme.palette.grey[400],
+                      mb: 2
+                    }}
+                  />
+                  <Typography variant='h5' sx={{ mb: 1 }}>
+                    No patients found
+                  </Typography>
+                  <Typography variant='body1' sx={{ color: theme.palette.text.secondary }}>
+                    {searchText ?
+                      'Try adjusting your search or add a new patient' :
+                      'Add your first patient to get started'
+                    }
+                  </Typography>
+                  {!searchText && (
+                    <Button
+                      variant='outlined'
+                      onClick={openModal}
+                      startIcon={<PersonAddIcon />}
+                      sx={{
+                        mt: 3,
+                        borderRadius: 20,
+                        px: 4,
+                        py: 1
+                      }}
+                    >
+                      Add First Patient
+                    </Button>
+                  )}
+                </Box>
+              </Fade>
+            ) : (
+              <Box sx={{
+                display: 'grid',
+                gridTemplateColumns: '1fr',
+                gap: 3.45,
+                [theme.breakpoints.up(320)]: {
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))'
+                },
+                [theme.breakpoints.up(768)]: {
+                  gridTemplateColumns: 'repeat(2, 1fr)'
+                },
+                [theme.breakpoints.up(1024)]: {
+                  gridTemplateColumns: 'repeat(3, 1fr)'
+                }
+              }}>
+                {filteredPatients.map((patient) => (
+                  <Slide key={patient.id} direction='up' in={true} timeout={300}>
+                    <Card
+                      sx={{
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        boxShadow: theme.shadows[1],
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          transform: 'translateY(-5px)',
+                          boxShadow: theme.shadows[4]
+                        }
+                      }}
+                    >
+                      <CardActionArea
+                        component={Link}
+                        to={patient.id}
+                        sx={{
+                          height: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          justifyContent: 'flex-start'
+                        }}
+                      >
+                        <CardContent sx={{ width: '100%' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <Avatar
+                              sx={{
+                                bgcolor: getGenderColor(patient.gender),
+                                mr: 2,
+                                width: 40,
+                                height: 40
+                              }}
+                            >
+                              {patient.name.charAt(0)}
+                            </Avatar>
+                            <Box>
+                              <Typography
+                                variant='h6'
+                                component='div'
+                                sx={{
+                                  fontWeight: 700,
+                                  lineHeight: 1.2
+                                }}
+                              >
+                                {patient.name}
+                              </Typography>
+                              <Typography
+                                variant='body2'
+                                sx={{
+                                  color: theme.palette.text.secondary,
+                                  textTransform: 'capitalize'
+                                }}
+                              >
+                                {patient.gender}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          
+                          <Typography
+                            variant='body2'
+                            color='text.secondary'
+                            sx={{ mb: 1.5 }}
+                          >
+                            {patient.occupation}
+                          </Typography>
+                          
+                          <Box sx={{ mt: 2 }}>
+                            <Typography
+                              variant='caption'
+                              sx={{
+                                display: 'block',
+                                color: theme.palette.text.secondary,
+                                mb: 0.5
+                              }}
+                            >
+                              Latest Health Status
+                            </Typography>
+                            <HealthRatingBar
+                              rating={getLatestHealthRating(patient)}
+                              showText={true}
+                            />
+                          </Box>
+                        </CardContent>
+                      </CardActionArea>
+                    </Card>
+                  </Slide>
+                ))}
+              </Box>
+            )}
+          </Box>
+        </>
+      )}
 
       <AddPatientModal
         modalOpen={modalOpen}
         onSubmit={submitNewPatient}
         error={error}
         onClose={closeModal}
+        loading={mutation.isPending}
       />
-    </div>
+    </Paper>
   );
 };
 

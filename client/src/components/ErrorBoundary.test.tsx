@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import ErrorBoundary from './ErrorBoundary';
 
 // Component that throws an error
@@ -12,6 +12,7 @@ const ProblematicComponent = () => {
 describe('ErrorBoundary', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -38,6 +39,8 @@ describe('ErrorBoundary', () => {
     expect(alert).toBeInTheDocument();
     expect(alert).toHaveTextContent('Something went wrong');
     expect(alert).toHaveTextContent('Test error');
+    expect(screen.getByText('Retry')).toBeInTheDocument();
+    expect(screen.getByText('Report Error')).toBeInTheDocument();
   });
 
   test('displays custom fallback when provided', async () => {
@@ -50,6 +53,66 @@ describe('ErrorBoundary', () => {
     
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Custom error message');
+  });
+
+  test('calls onError callback when error occurs', async () => {
+    const onError = vi.fn();
+    render(
+      <ErrorBoundary onError={onError}>
+        <ProblematicComponent />
+      </ErrorBoundary>
+    );
+    
+    await screen.findByRole('alert');
+    expect(onError).toHaveBeenCalled();
+    expect(onError.mock.calls[0][0].message).toBe('Test error');
+  });
+
+  test('shows error details in development mode', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    
+    render(
+      <ErrorBoundary>
+        <ProblematicComponent />
+      </ErrorBoundary>
+    );
+    
+    const details = await screen.findByText('Error details');
+    expect(details).toBeInTheDocument();
+    
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  test('hides error details in production mode', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    
+    render(
+      <ErrorBoundary>
+        <ProblematicComponent />
+      </ErrorBoundary>
+    );
+    
+    await screen.findByRole('alert');
+    expect(screen.queryByText('Error details')).not.toBeInTheDocument();
+    
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  test('report error button shows alert', async () => {
+    render(
+      <ErrorBoundary>
+        <ProblematicComponent />
+      </ErrorBoundary>
+    );
+    
+    const reportButton = await screen.findByText('Report Error');
+    fireEvent.click(reportButton);
+    
+    expect(window.alert).toHaveBeenCalled();
+    const alertMessage = (window.alert as Mock).mock.calls[0][0];
+    expect(alertMessage).toContain('Test error');
   });
 
 test('recovers after retry button click', async () => {

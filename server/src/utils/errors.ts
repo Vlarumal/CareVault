@@ -10,6 +10,13 @@ export class ValidationError extends Error {
   }
 }
 
+export class BadRequestError extends ValidationError {
+  constructor(message: string, details: object) {
+    super(message, details);
+    this.name = 'BadRequestError';
+  }
+}
+
 export class NotFoundError extends Error {
   status: number;
 

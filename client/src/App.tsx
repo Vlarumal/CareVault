@@ -1,19 +1,21 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import {
   BrowserRouter as Router,
   Route,
-  Link,
   Routes,
 } from 'react-router-dom';
 import {
-  Button,
-  Divider,
-  Container,
+  AppBar,
+  Toolbar,
   Typography,
+  Container,
+  CssBaseline,
+  Alert,
+  Box,
+  LinearProgress,
 } from '@mui/material';
+import HomeIcon from '@mui/icons-material/Home';
 
-import { apiBaseUrl } from './constants';
 import { Patient } from './types';
 
 import patientService from './services/patients';
@@ -21,80 +23,54 @@ import PatientListPage from './components/PatientListPage';
 import PatientPage from './components/PatientPage';
 
 const App = () => {
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    axios.get<void>(`${apiBaseUrl}/ping`)
-      .catch(() => {
-        setError('Error connecting to backend');
-      });
-
-    const fetchPatientList = async () => {
-      const patients = await patientService.getAll();
-      setPatients(patients);
-    };
-    void fetchPatientList();
-  }, []);
+  const {
+    isLoading,
+    isError,
+    error
+  } = useQuery<Patient[], Error>({
+    queryKey: ['patients'],
+    queryFn: patientService.getAll,
+    staleTime: 300000, // 5 minutes
+  });
 
   return (
     <div className='App'>
+      <CssBaseline />
       <Router>
-        <Container>
-          <Typography
-            variant='h3'
-            style={{ marginBottom: '0.5em' }}
-          >
-            CareVault
-          </Typography>
-          <Button
-            component={Link}
-            to='/'
-            variant='contained'
-            color='primary'
-          >
-            Home
-          </Button>
-          <Divider hidden />
-          <Routes>
-            <Route
-              path='/'
-              element={
-                <PatientListPage
-                  patients={patients}
-                  setPatients={setPatients}
-                />
-              }
-            />
-            <Route
-              path='/:id'
-              element={<PatientPage />}
-            />
-          </Routes>
+        <AppBar position="static" color="primary">
+          <Toolbar>
+            <HomeIcon sx={{ mr: 1 }} />
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+              CareVault
+            </Typography>
+          </Toolbar>
+        </AppBar>
+        
+        <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+          {isLoading ? (
+            <Box sx={{ width: '100%', mt: 4 }}>
+              <LinearProgress />
+            </Box>
+          ) : isError ? (
+            <Alert severity="error">
+              {error?.message || 'Failed to fetch patients'}
+            </Alert>
+          ) : (
+            <Routes>
+              <Route
+                path='/'
+                element={
+                  <PatientListPage />
+                }
+              />
+              <Route
+                path='/:id'
+                element={<PatientPage />}
+              />
+            </Routes>
+          )}
         </Container>
       </Router>
-      {patients.length === 0 && !error && (
-        <div style={{ 
-          textAlign: 'center', 
-          marginTop: '20px',
-          fontWeight: 'bold'
-        }}>
-          No patients found
-        </div>
-      )}
-      {error && (
-        <div style={{ 
-          position: 'fixed', 
-          bottom: 20, 
-          right: 20, 
-          backgroundColor: 'red', 
-          color: 'white', 
-          padding: '10px',
-          borderRadius: '5px'
-        }}>
-          {error}
-        </div>
-      )}
     </div>
   );
 };

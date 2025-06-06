@@ -4,7 +4,6 @@ import {
   Button,
   FormControl,
   FormHelperText,
-  Grid,
   InputLabel,
   MenuItem,
   OutlinedInput,
@@ -14,21 +13,22 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
-import patientService from '../../services/patients';
-import { useParams } from 'react-router-dom';
 import {
   Entry,
   NewEntryFormValues,
-  Patient,
   BaseEntry,
   DiagnosisEntry,
 } from '../../types';
 import { isDateValid, validateDateRange, validateHealthRating, validateRequired } from '../../utils';
 
-const AddEntryForm: React.FC<{
-  setPatient: React.Dispatch<React.SetStateAction<Patient | null>>;
+interface Props {
+  onAddEntry: (values: NewEntryFormValues) => void;
+  error: string | undefined;
+  loading: boolean;
   diagnosisCodesAll: DiagnosisEntry['code'][];
-}> = ({ setPatient, diagnosisCodesAll }) => {
+}
+
+const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCodesAll }) => {
   const initialFormState = {
     description: '',
     date: '',
@@ -47,11 +47,8 @@ const AddEntryForm: React.FC<{
 
   const [formData, setFormData] = useState(initialFormState);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<string | null>(null);
   const [entryType, setEntryType] =
     useState<Entry['type']>('HealthCheck');
-
-  const { id } = useParams<{ id: string }>();
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -124,7 +121,6 @@ const AddEntryForm: React.FC<{
 
   const clearFields = () => {
     setFormData(initialFormState);
-    setMessage(null);
   };
 
   const handleDiagnosisCodesChange = (
@@ -140,10 +136,6 @@ const AddEntryForm: React.FC<{
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
-    if (!id) {
-      setMessage('No patient id found');
-      return;
-    }
 
     // Form-wide validation before submission
     const formErrors: Record<string, string> = {};
@@ -174,7 +166,6 @@ const AddEntryForm: React.FC<{
     
     if (Object.keys(filteredErrors).length > 0) {
       setErrors(filteredErrors);
-      setMessage('Please fix the validation errors');
       return;
     }
 
@@ -192,55 +183,46 @@ const AddEntryForm: React.FC<{
 
     let newEntry: NewEntryFormValues;
 
-    try {
-      switch (entryType) {
-        case 'Hospital':
-          newEntry = {
-            ...baseEntryObj,
-            type: 'Hospital',
-            discharge: {
-              date: formData.dischargeDate,
-              criteria: formData.dischargeCriteria,
-            },
-          };
-          break;
+    switch (entryType) {
+      case 'Hospital':
+        newEntry = {
+          ...baseEntryObj,
+          type: 'Hospital',
+          discharge: {
+            date: formData.dischargeDate,
+            criteria: formData.dischargeCriteria,
+          },
+        };
+        break;
 
-        case 'OccupationalHealthcare':
-          newEntry = {
-            ...baseEntryObj,
-            type: 'OccupationalHealthcare',
-            employerName: formData.employerName,
-            sickLeave:
-              formData.sickLeaveStartDate && formData.sickLeaveEndDate
-                ? {
-                    startDate: formData.sickLeaveStartDate,
-                    endDate: formData.sickLeaveEndDate,
-                  }
-                : undefined,
-          };
-          break;
-        case 'HealthCheck':
-          newEntry = {
-            ...baseEntryObj,
-            type: 'HealthCheck',
-            healthCheckRating: Number(formData.healthCheckRating),
-          };
-          break;
+      case 'OccupationalHealthcare':
+        newEntry = {
+          ...baseEntryObj,
+          type: 'OccupationalHealthcare',
+          employerName: formData.employerName,
+          sickLeave:
+            formData.sickLeaveStartDate && formData.sickLeaveEndDate
+              ? {
+                  startDate: formData.sickLeaveStartDate,
+                  endDate: formData.sickLeaveEndDate,
+                }
+              : undefined,
+        };
+        break;
+      case 'HealthCheck':
+        newEntry = {
+          ...baseEntryObj,
+          type: 'HealthCheck',
+          healthCheckRating: Number(formData.healthCheckRating),
+        };
+        break;
 
-        default:
-          setMessage(`Invalid entry type: ${entryType}`);
-          return;
-      }
-
-      await patientService.createNewEntry(id, newEntry);
-      const updatedPatient = await patientService.getById(id);
-      setPatient(updatedPatient);
-      clearFields();
-      setMessage('Entry added successfully');
-    } catch (error) {
-      setMessage('Failed to add entry. Check your input information');
-      console.error('Error: ', error);
+      default:
+        throw new Error(`Invalid entry type: ${entryType}`);
     }
+
+    onAddEntry(newEntry);
+    clearFields();
   };
 
   const renderEntryTypeFields = () => {
@@ -262,19 +244,17 @@ const AddEntryForm: React.FC<{
               helperText='Date when the patient was discharged from the hospital.'
             />
 
-          <TextField
-            name='specialist'
-            label='Specialist'
-            value={formData.specialist}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={Boolean(errors.specialist)}
-            helperText={errors.specialist || 'Name of the specialist responsible.'}
-            fullWidth
-            margin='normal'
-            required
-            data-name='Specialist'
-          />
+            <TextField
+              name='dischargeCriteria'
+              label='Discharge criteria'
+              value={formData.dischargeCriteria}
+              onChange={handleChange}
+              fullWidth
+              margin='normal'
+              required
+              data-name='Discharge criteria'
+              helperText='Criteria for discharge.'
+            />
           </>
         );
       case 'OccupationalHealthcare':
@@ -354,19 +334,9 @@ const AddEntryForm: React.FC<{
       component='form'
       onSubmit={handleSubmit}
     >
-      {message && (
-        <Alert
-          severity={
-            message.includes('Failed') ||
-            message.includes('Invalid') ||
-            message.includes('Wrong') ||
-            message.includes('Error') ||
-            message.includes('Incorrect')
-              ? 'error'
-              : 'success'
-          }
-        >
-          {message}
+      {error && (
+        <Alert severity='error'>
+          {error}
         </Alert>
       )}
 
@@ -445,11 +415,13 @@ const AddEntryForm: React.FC<{
             label='Specialist'
             value={formData.specialist}
             onChange={handleChange}
+            onBlur={handleBlur}
+            error={Boolean(errors.specialist)}
+            helperText={errors.specialist || 'Name of the specialist responsible.'}
             fullWidth
             margin='normal'
             required
             data-name='Specialist'
-            helperText='Name of the specialist responsible.'
           />
 
           <FormControl
@@ -483,30 +455,24 @@ const AddEntryForm: React.FC<{
         </Box>
       </div>
 
-      <Grid
-        container
-        justifyContent='space-between'
-      >
-        <Grid item>
-          <Button
-            color='error'
-            variant='contained'
-            type='button'
-            onClick={clearFields}
-          >
-            Cancel
-          </Button>
-        </Grid>
-        <Grid item>
-          <Button
-            variant='contained'
-            sx={{ backgroundColor: 'lightgray', color: 'black' }}
-            type='submit'
-          >
-            Add
-          </Button>
-        </Grid>
-      </Grid>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+        <Button
+          color='error'
+          variant='contained'
+          type='button'
+          onClick={clearFields}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant='contained'
+          sx={{ backgroundColor: 'lightgray', color: 'black' }}
+          type='submit'
+          disabled={loading}
+        >
+          {loading ? 'Adding...' : 'Add'}
+        </Button>
+      </Box>
     </Box>
   );
 };

@@ -128,19 +128,30 @@ describe('patientsService', () => {
       expect(result.name).toBe('Test Patient');
     });
 
-  test('validates required fields', () => {
-    const invalidName = { ...testPatient, name: '' };
-    expect(() => patientService.addPatient(invalidName)).toThrow(ValidationError);
-    
-    const invalidOccupation = { ...testPatient, occupation: '' };
-    expect(() => patientService.addPatient(invalidOccupation)).toThrow(ValidationError);
-  });
+    test('validates required fields', () => {
+      const invalidName = { ...testPatient, name: '' };
+      expect(() => patientService.addPatient(invalidName)).toThrow(ValidationError);
+      
+      const invalidOccupation = { ...testPatient, occupation: '' };
+      expect(() => patientService.addPatient(invalidOccupation)).toThrow(ValidationError);
+    });
 
-  test('validates date format', () => {
-    const invalidDatePatient = { ...testPatient, dateOfBirth: 'invalid-date' };
-    expect(() => patientService.addPatient(invalidDatePatient))
-      .toThrow('Invalid date format: YYYY-MM-DD');
-  });
+    test('validates date format', () => {
+      const invalidDatePatient = { ...testPatient, dateOfBirth: 'invalid-date' };
+      expect(() => patientService.addPatient(invalidDatePatient))
+        .toThrow('Invalid date format: YYYY-MM-DD');
+    });
+
+    test('sanitizes input against XSS attacks and validates required fields', () => {
+      const maliciousPatient = {
+        ...testPatient,
+        name: '<script>alert("XSS")</script>John',
+        occupation: '<img src=x onerror=alert(1)>'
+      };
+
+      expect(() => patientService.addPatient(maliciousPatient))
+        .toThrow(ValidationError);
+    });
   });
 
   describe('addEntry', () => {
@@ -149,6 +160,18 @@ describe('patientsService', () => {
       const result = patientService.addEntry(patient, testEntry);
       expect(patient.entries?.length).toBe(1);
       expect(result.description).toBe('Test entry');
+    });
+
+    test('sanitizes entry input against XSS attacks and validates required fields', () => {
+      const patient = patients[0];
+      const maliciousEntry = {
+        ...testEntry,
+        description: '<script>alert("XSS")</script>Checkup',
+        specialist: '<img src=x onerror=alert(1)>'
+      };
+
+      expect(() => patientService.addEntry(patient, maliciousEntry))
+        .toThrow(ValidationError);
     });
 
     test('initializes entries array when undefined', () => {

@@ -11,6 +11,7 @@ import {
   HealthCheckRating
 } from '../types';
 import { ValidationError, NotFoundError } from '../utils/errors';
+import { sanitizeObject } from '../utils/sanitize';
 
 
 const getPatientEntries = (): PatientEntry[] => {
@@ -39,10 +40,12 @@ const findById = (id: string): PatientEntry => {
 const addPatient = (
   entry: NewPatientEntryWithoutEntries
 ): PatientEntry => {
+  // Sanitize input first
+  const sanitizedEntry = sanitizeObject(entry);
 
   // Validate required fields
   const requiredFields: Array<keyof NewPatientEntryWithoutEntries> = ['name', 'occupation', 'gender'];
-  const missingFields = requiredFields.filter(field => !entry[field]);
+  const missingFields = requiredFields.filter(field => !sanitizedEntry[field]);
   
   if (missingFields.length > 0) {
     throw new ValidationError(
@@ -52,9 +55,9 @@ const addPatient = (
   }
 
   // Validate date format if provided
-  if (entry.dateOfBirth) {
+  if (sanitizedEntry.dateOfBirth) {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(entry.dateOfBirth)) {
+    if (!dateRegex.test(sanitizedEntry.dateOfBirth)) {
       throw new ValidationError(
         'Invalid date format: YYYY-MM-DD',
         { invalidField: 'dateOfBirth' }
@@ -65,10 +68,10 @@ const addPatient = (
   const id: string = uuid();
 const newPatientEntry: PatientEntry = {
   id,
-  name: entry.name,
-  occupation: entry.occupation,
-  gender: entry.gender,
-  dateOfBirth: entry.dateOfBirth,
+  name: sanitizedEntry.name,
+  occupation: sanitizedEntry.occupation,
+  gender: sanitizedEntry.gender,
+  dateOfBirth: sanitizedEntry.dateOfBirth,
   entries: [] as Entry[],  // Explicit type for immutability
 };
 
@@ -80,9 +83,12 @@ const addEntry = (
   patient: PatientEntry,
   entry: NewEntryWithoutId
 ): Entry => {
+  // Sanitize input first
+  const sanitizedEntry = sanitizeObject(entry);
+
   // Validate base entry fields
   const baseFields: Array<keyof BaseEntry> = ['description', 'date', 'specialist'];
-  const missingBaseFields = baseFields.filter(field => !entry[field as keyof NewEntryWithoutId]);
+  const missingBaseFields = baseFields.filter(field => !sanitizedEntry[field as keyof NewEntryWithoutId]);
   
   if (missingBaseFields.length > 0) {
     throw new ValidationError(
@@ -92,22 +98,22 @@ const addEntry = (
   }
 
   // Validate entry type
-  if (!['Hospital', 'OccupationalHealthcare', 'HealthCheck'].includes(entry.type)) {
+  if (!['Hospital', 'OccupationalHealthcare', 'HealthCheck'].includes(sanitizedEntry.type)) {
     throw new ValidationError(
-      `Invalid entry type: ${entry.type}`,
-      { invalidType: entry.type }
+      `Invalid entry type: ${sanitizedEntry.type}`,
+      { invalidType: sanitizedEntry.type }
     );
   }
   
   // HealthCheck-specific validation
-  if (entry.type === 'HealthCheck') {
-    if (entry.healthCheckRating === undefined) {
+  if (sanitizedEntry.type === 'HealthCheck') {
+    if (sanitizedEntry.healthCheckRating === undefined) {
       throw new ValidationError(
         'Missing healthCheckRating for HealthCheck entry',
         { missingField: 'healthCheckRating' }
       );
     }
-  if (entry.healthCheckRating < HealthCheckRating.Healthy || entry.healthCheckRating > HealthCheckRating.CriticalRisk) {
+  if (sanitizedEntry.healthCheckRating < HealthCheckRating.Healthy || sanitizedEntry.healthCheckRating > HealthCheckRating.CriticalRisk) {
     throw new ValidationError(
       'Invalid healthCheckRating: must be 0-3',
       { invalidField: 'healthCheckRating' }
@@ -118,7 +124,7 @@ const addEntry = (
   const id: string = uuid();
 const newEntry: Entry = {
   id,
-  ...entry,
+  ...sanitizedEntry,
 } as const;  // Ensure immutability
 
   // Ensure entries is an array

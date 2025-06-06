@@ -4,17 +4,19 @@
  * @param maxRetries - Maximum number of retry attempts (default: 3)
  * @param initialDelay - Initial delay between retries in ms (default: 1000)
  * @returns Promise resolving to the API response
- * 
+ *
  * @example
  * // Basic usage
  * apiRetry(() => fetchData())
- * 
+ *
  * @example
  * // Custom retry settings
  * apiRetry(() => postData(data), 5, 2000)
- * 
+ *
  * @context7 /microsoft/typescript-website
  */
+import { sanitizeObject } from './securityUtils';
+
 export const apiRetry = async <T>(
   fn: () => Promise<T>,
   maxRetries = 3,
@@ -32,4 +34,16 @@ export const apiRetry = async <T>(
   }
   
   throw new Error('Max retries exceeded');
+};
+
+/**
+ * Sanitizes API request data to prevent XSS attacks
+ * @param data - The data to sanitize
+ * @returns Sanitized data
+ */
+export const sanitizeRequestData = <T>(data: T): T => {
+  if (typeof data === 'string') {
+    return data; // Already sanitized by securityUtils at input
+  }
+  return sanitizeObject(data);
 };
