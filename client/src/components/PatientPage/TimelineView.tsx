@@ -2,6 +2,7 @@ import React from 'react';
 import { Timeline, TimelineItem, TimelineSeparator, TimelineDot, TimelineConnector, TimelineContent, TimelineOppositeContent } from '@mui/lab';
 import { Entry } from '../../types';
 import EntryDetails from './EntryDetails';
+import EntryErrorBoundary from './EntryErrorBoundary';
 
 interface TimelineViewProps {
   entries: Entry[];
@@ -15,9 +16,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
   );
 
   return (
-    <Timeline position="alternate" sx={{ padding: 0 }}>
+    <Timeline position="alternate" sx={{ padding: 0 }} aria-label="Patient health entries timeline">
       {sortedEntries.map((entry) => (
-        <TimelineItem key={entry.id}>
+        <TimelineItem
+          key={entry.id}
+          aria-label={`Entry from ${new Date(entry.date).toLocaleDateString()}`}
+        >
           <TimelineOppositeContent
             color="text.secondary"
             sx={{ padding: '6px 16px', maxWidth: '120px' }}
@@ -29,19 +33,21 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
             <TimelineConnector />
           </TimelineSeparator>
           <TimelineContent sx={{ py: '12px', px: 2 }}>
-            <EntryDetails entry={entry} />
-            {entry.diagnosisCodes && entry.diagnosisCodes.length > 0 && (
-              <div style={{ marginTop: '8px' }}>
-                <strong>Diagnoses:</strong>
-                <ul style={{ marginTop: '4px', paddingLeft: '20px' }}>
-                  {entry.diagnosisCodes.map((code) => (
-                    <li key={code}>
-                      {code} {getDiagnosisByCode(code)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <EntryErrorBoundary entry={entry}>
+              <EntryDetails entry={entry} />
+              {entry.diagnosisCodes && entry.diagnosisCodes.length > 0 && (
+                <div style={{ marginTop: '8px' }}>
+                  <strong>Diagnoses:</strong>
+                  <ul style={{ marginTop: '4px', paddingLeft: '20px' }}>
+                    {entry.diagnosisCodes.map((code) => (
+                      <li key={code}>
+                        {code} {getDiagnosisByCode(code)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </EntryErrorBoundary>
           </TimelineContent>
         </TimelineItem>
       ))}

@@ -1,5 +1,10 @@
 import { useParams } from 'react-router-dom';
-import { DiagnosisEntry, HealthCheckEntry, NewEntryFormValues, Patient } from '../../types';
+import {
+  DiagnosisEntry,
+  NewEntryFormValues,
+  Patient,
+  Entry
+} from '../../types';
 import { getIcon } from '../../utils';
 import patientService from '../../services/patients';
 import diagnosisService from '../../services/diagnoses';
@@ -9,31 +14,50 @@ import AddEntryForm from './AddEntryForm';
 import HealthRatingBar from '../HealthRatingBar';
 import TimelineView from './TimelineView';
 import PatientDetailsSkeleton from './PatientDetailsSkeleton';
+import { getLatestHealthRating } from '../../services/healthRatingService';
+import { createDeduplicatedQuery } from '../../utils/apiUtils';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
 
+  // Validate patient ID exists before query
+  const validatedId = id || '';
+  
   const { data: patient, isLoading, isError, error, refetch } = useQuery<Patient, Error>({
-    queryKey: ['patient', id],
-    queryFn: () => patientService.getById(id!),
-    enabled: !!id,
+    queryKey: ['patient', validatedId],
+    queryFn: () => {
+      if (!validatedId) {
+        throw new Error('Patient ID is required');
+      }
+      return patientService.getById(validatedId);
+    },
+    enabled: !!validatedId,
   });
 
+  // Use deduplicated query for diagnoses
   const { data: diagnoses } = useQuery<DiagnosisEntry[], Error>({
     queryKey: ['diagnoses'],
-    queryFn: diagnosisService.getAllDiagnoses,
+    queryFn: createDeduplicatedQuery(['diagnoses'], diagnosisService.getAllDiagnoses),
   });
 
   const mutation = useMutation({
-    mutationFn: (object: NewEntryFormValues) =>
-      patientService.createNewEntry(id!, object),
+    mutationFn: (object: NewEntryFormValues) => {
+      if (!validatedId) {
+        throw new Error('Patient ID is required');
+      }
+      // Validate entry payload
+      if (!object.type || !object.description || !object.date || !object.specialist) {
+        throw new Error('Missing required entry fields');
+      }
+      return patientService.createNewEntry(validatedId, object);
+    },
     onMutate: async (newEntry) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['patient', id], exact: true });
+      await queryClient.cancelQueries({ queryKey: ['patient', validatedId], exact: true });
       
       // Snapshot the previous value
-      const previousPatient = queryClient.getQueryData<Patient>(['patient', id]);
+      const previousPatient = queryClient.getQueryData<Patient>(['patient', validatedId]);
       
       if (previousPatient) {
         // Create optimistic entry with temporary ID
@@ -41,11 +65,11 @@ const PatientPage = () => {
         const optimisticEntry = {
           ...newEntry,
           id: tempId,
-          date: new Date().toISOString().split('T')[0] // Default to today
-        };
+          isOptimistic: true,
+        } as Entry;
         
         // Update the query cache with optimistic entry
-        queryClient.setQueryData<Patient>(['patient', id], {
+        queryClient.setQueryData<Patient>(['patient', validatedId], {
           ...previousPatient,
           entries: [...(previousPatient.entries || []), optimisticEntry]
         });
@@ -56,13 +80,13 @@ const PatientPage = () => {
     onError: (err, newEntry, context) => {
       // Rollback to previous state on error
       if (context?.previousPatient) {
-        queryClient.setQueryData<Patient>(['patient', id], context.previousPatient);
+        queryClient.setQueryData<Patient>(['patient', validatedId], context.previousPatient);
       }
       alert(`Failed to add entry: ${err instanceof Error ? err.message : 'Unknown error'}`);
     },
     onSettled: () => {
       // Always refetch after error or success
-      queryClient.invalidateQueries({ queryKey: ['patient', id], exact: true });
+      queryClient.invalidateQueries({ queryKey: ['patient', validatedId], exact: true });
     }
   });
 
@@ -75,25 +99,9 @@ const PatientPage = () => {
   };
 
   const diagnosisCodesAll = diagnoses?.map((d) => d.code) || [];
-
-  // Get latest health rating from entries
-  const getLatestHealthRating = (): number | null => {
-    if (!patient?.entries) return null;
-    
-    const healthCheckEntries = patient.entries.filter(
-      entry => entry.type === 'HealthCheck'
-    ) as HealthCheckEntry[];
-    
-    if (healthCheckEntries.length === 0) return null;
-    
-    const sortedEntries = [...healthCheckEntries].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    
-    return sortedEntries[0].healthCheckRating;
-  };
   
-  const latestHealthRating = getLatestHealthRating();
+  // Use health rating service
+  const latestHealthRating = patient ? getLatestHealthRating(patient.entries || []) : null;
 
   if (isLoading) {
     return <PatientDetailsSkeleton />;
@@ -102,11 +110,14 @@ const PatientPage = () => {
   if (isError) {
     return (
       <div>
-        <Alert severity='error'>{error?.message || 'Failed to load patient data'}</Alert>
+        <Alert severity='error' role="alert" data-testid="error-alert">
+          {error?.message || 'Failed to load patient data'}
+        </Alert>
         <Button
           variant="contained"
           onClick={() => refetch()}
           style={{ marginTop: '10px' }}
+          data-testid="retry-button"
         >
           Retry
         </Button>
@@ -115,13 +126,16 @@ const PatientPage = () => {
   }
 
   if (!patient) {
-    return <Alert severity='warning'>No patient found</Alert>;
+    return <Alert severity='warning' role="alert" data-testid="warning-alert">No patient found</Alert>;
   }
 
   return (
     <div>
       <h2 data-testid="patient-name">
-        {patient.name} {getIcon(patient.gender)}
+        {patient.name}
+        <span aria-label={`Gender: ${patient.gender}`} role="img">
+          {getIcon(patient.gender)}
+        </span>
       </h2>
       <div>ssn: {patient.ssn}</div>
       <div>occupation: {patient.occupation}</div>

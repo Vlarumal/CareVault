@@ -28,6 +28,7 @@ export interface BaseEntry {
   date: string;
   specialist: string;
   diagnosisCodes?: Array<DiagnosisEntry['code']>;
+  isOptimistic?: boolean;
 }
 
 export enum HealthCheckRating {

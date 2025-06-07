@@ -433,10 +433,17 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             required
             data-name='Description'
+            inputProps={{
+              'aria-describedby': 'description-helper description-error',
+              'aria-invalid': errors.description ? 'true' : 'false'
+            }}
             FormHelperTextProps={{
-              id: 'description-error',
+              id: 'description-helper',
               ref: errorRef,
               tabIndex: -1
+            }}
+            InputProps={{
+              id: 'description-input',
             }}
           />
 
@@ -454,9 +461,16 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             required
             InputLabelProps={{ shrink: true }}
             data-name='Date'
+            inputProps={{
+              'aria-describedby': 'date-helper date-error',
+              'aria-invalid': errors.date ? 'true' : 'false'
+            }}
             FormHelperTextProps={{
-              id: 'date-error',
+              id: 'date-helper',
               tabIndex: -1
+            }}
+            InputProps={{
+              id: 'date-input',
             }}
           />
 
@@ -472,9 +486,16 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             required
             data-name='Specialist'
+            inputProps={{
+              'aria-describedby': 'specialist-helper specialist-error',
+              'aria-invalid': errors.specialist ? 'true' : 'false'
+            }}
             FormHelperTextProps={{
-              id: 'specialist-error',
+              id: 'specialist-helper',
               tabIndex: -1
+            }}
+            InputProps={{
+              id: 'specialist-input',
             }}
           />
 

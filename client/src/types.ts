@@ -15,5 +15,6 @@ export type {
   HospitalEntry,
   Entry,
   UnionOmit,
-  NewEntryWithoutId as NewEntryFormValues
+  NewEntryWithoutId as NewEntryFormValues,
+  OptimisticEntry
 } from '@shared/src/types/medicalTypes';

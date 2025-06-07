@@ -17,6 +17,20 @@
  */
 import { sanitizeObject } from './securityUtils';
 
+import { QueryClient } from '@tanstack/react-query';
+
+/**
+ * Global query client instance for query deduplication
+ */
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 10, // 10 minutes
+    },
+  },
+});
+
 export const apiRetry = async <T>(
   fn: () => Promise<T>,
   maxRetries = 3,
@@ -46,4 +60,20 @@ export const sanitizeRequestData = <T>(data: T): T => {
     return data; // Already sanitized by securityUtils at input
   }
   return sanitizeObject(data);
+};
+
+/**
+ * Creates a deduplicated query function for API calls
+ * @param queryKey - Unique key for query deduplication
+ * @param queryFn - The actual query function
+ * @returns Deduplicated query function
+ */
+export const createDeduplicatedQuery = <T>(queryKey: string[], queryFn: () => Promise<T>) => {
+  return async () => {
+    return queryClient.fetchQuery({
+      queryKey,
+      queryFn,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    });
+  };
 };
