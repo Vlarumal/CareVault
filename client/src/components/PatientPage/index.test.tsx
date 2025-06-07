@@ -1,13 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import PatientPage from './index';
-import { vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { Patient, Gender, DiagnosisEntry } from '../../types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock react-router-dom's useParams to provide id param
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: '1' }),
 }));
+
+// Create a QueryClient instance
+const queryClient = new QueryClient();
 
 // Create hoisted mocks for patientService and diagnosisService methods
 const { mockGetPatientById, mockGetAllDiagnoses } = vi.hoisted(() => ({
@@ -53,7 +57,11 @@ test('shows loading spinner while fetching data', async () => {
   mockGetPatientById.mockResolvedValue(mockPatient);
   mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
 
-  render(<PatientPage />);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <PatientPage />
+    </QueryClientProvider>
+  );
 
   // Spinner should be visible initially
   expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
@@ -68,7 +76,11 @@ test('shows loading spinner while fetching data', async () => {
     mockGetPatientById.mockRejectedValue(new Error('Network error'));
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
 
-    render(<PatientPage />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PatientPage />
+      </QueryClientProvider>
+    );
     
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Network error');
@@ -78,7 +90,11 @@ test('shows loading spinner while fetching data', async () => {
     mockGetPatientById.mockResolvedValue(null);
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
 
-    render(<PatientPage />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PatientPage />
+      </QueryClientProvider>
+    );
     
     await waitFor(() => {
       const alert = screen.getByRole('alert');
@@ -106,7 +122,11 @@ test('shows loading spinner while fetching data', async () => {
     mockGetPatientById.mockResolvedValue(patientWithEntries);
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
 
-    render(<PatientPage />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PatientPage />
+      </QueryClientProvider>
+    );
 
     // Wait for loading to finish
     await waitFor(() => {
@@ -151,7 +171,11 @@ test('shows loading spinner while fetching data', async () => {
     mockGetPatientById.mockResolvedValue(patientWithEntries);
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
 
-    render(<PatientPage />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PatientPage />
+      </QueryClientProvider>
+    );
 
     await waitFor(() => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
@@ -170,7 +194,11 @@ test('shows loading spinner while fetching data', async () => {
                      .mockResolvedValueOnce(mockPatient);
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
 
-    render(<PatientPage />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PatientPage />
+      </QueryClientProvider>
+    );
     
     // Verify error message (async)
     const alert = await screen.findByRole('alert');

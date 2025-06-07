@@ -8,6 +8,7 @@ import { Alert, Box, Button } from '@mui/material';
 import AddEntryForm from './AddEntryForm';
 import HealthRatingBar from '../HealthRatingBar';
 import TimelineView from './TimelineView';
+import PatientDetailsSkeleton from './PatientDetailsSkeleton';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -27,8 +28,41 @@ const PatientPage = () => {
   const mutation = useMutation({
     mutationFn: (object: NewEntryFormValues) =>
       patientService.createNewEntry(id!, object),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patient', id] });
+    onMutate: async (newEntry) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['patient', id], exact: true });
+      
+      // Snapshot the previous value
+      const previousPatient = queryClient.getQueryData<Patient>(['patient', id]);
+      
+      if (previousPatient) {
+        // Create optimistic entry with temporary ID
+        const tempId = `temp-${Date.now()}`;
+        const optimisticEntry = {
+          ...newEntry,
+          id: tempId,
+          date: new Date().toISOString().split('T')[0] // Default to today
+        };
+        
+        // Update the query cache with optimistic entry
+        queryClient.setQueryData<Patient>(['patient', id], {
+          ...previousPatient,
+          entries: [...(previousPatient.entries || []), optimisticEntry]
+        });
+      }
+      
+      return { previousPatient };
+    },
+    onError: (err, newEntry, context) => {
+      // Rollback to previous state on error
+      if (context?.previousPatient) {
+        queryClient.setQueryData<Patient>(['patient', id], context.previousPatient);
+      }
+      alert(`Failed to add entry: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: ['patient', id], exact: true });
     }
   });
 
@@ -62,15 +96,7 @@ const PatientPage = () => {
   const latestHealthRating = getLatestHealthRating();
 
   if (isLoading) {
-    return (
-      <Box
-        display='flex'
-        justifyContent='center'
-        data-testid='loading-spinner'
-      >
-        <div>Loading...</div>
-      </Box>
-    );
+    return <PatientDetailsSkeleton />;
   }
 
   if (isError) {

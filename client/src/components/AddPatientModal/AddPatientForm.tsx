@@ -1,13 +1,14 @@
-import { useState, SyntheticEvent } from "react";  
-import { TextField, InputLabel, MenuItem, Select, Grid, Button, SelectChangeEvent } from '@mui/material';  
-import { isDateValid, validateSSN } from '../../utils';  
+import { useState, SyntheticEvent, useRef, useEffect } from "react";
+import { TextField, InputLabel, MenuItem, Select, Grid, Button, SelectChangeEvent, CircularProgress } from '@mui/material';
+import { isDateValid, validateSSN } from '../../utils';
 
-import { PatientFormValues, Gender } from "../../types";  
+import { PatientFormValues, Gender } from "../../types";
 
-interface Props {  
-  onCancel: () => void;  
-  onSubmit: (values: PatientFormValues) => void;  
-}  
+interface Props {
+  onCancel: () => void;
+  onSubmit: (values: PatientFormValues) => void;
+  loading?: boolean;
+}
 
 interface GenderOption{  
   value: Gender;  
@@ -18,13 +19,20 @@ const genderOptions: GenderOption[] = Object.values(Gender).map(v => ({
   value: v, label: v.toString()  
 }));  
 
-const AddPatientForm = ({ onCancel, onSubmit }: Props) => {  
+const AddPatientForm = ({ onCancel, onSubmit, loading }: Props) => {
   const [name, setName] = useState('');  
   const [occupation, setOccupation] = useState('');  
   const [ssn, setSsn] = useState('');  
   const [dateOfBirth, setDateOfBirth] = useState('');  
   const [gender, setGender] = useState(Gender.Other);  
-  const [errors, setErrors] = useState<Record<string, string>>({});  
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (errorRef.current && Object.values(errors).some(e => e)) {
+      errorRef.current.focus();
+    }
+  }, [errors]);
 
   // Real-time validation handlers  
   const validateName = () => {  
@@ -164,71 +172,102 @@ const addPatient = (event: SyntheticEvent) => {
               },
             },
           }}
-          FormHelperTextProps={{ id: 'name-error' }}
+          FormHelperTextProps={{
+            id: 'name-error',
+            ref: errorRef,
+            tabIndex: -1
+          }}
         />  
-        <TextField  
-          label="Social security number"  
-          fullWidth  
-          value={ssn}  
-          onChange={({ target }) => {  
-            setSsn(target.value);  
-            validateSsn();  
-          }}  
-          onBlur={validateSsn}  
-          error={!!errors.ssn}  
-          helperText={errors.ssn}  
-          sx={{ mb: 3 }}  
-          InputProps={{  
-            sx: {  
-              '&.Mui-focused fieldset': {  
-                borderColor: 'primary.main',  
-              },  
-            },  
-          }}  
-        />  
-        <TextField  
-          label="Date of birth"  
-          placeholder="YYYY-MM-DD"  
-          fullWidth  
-          value={dateOfBirth}  
-          onChange={({ target }) => {  
-            setDateOfBirth(target.value);  
-            validateDateOfBirth();  
-          }}  
-          onBlur={validateDateOfBirth}  
-          type='date'  
-          InputLabelProps={{ shrink: true }}  
-          error={!!errors.dateOfBirth}  
-          helperText={errors.dateOfBirth}  
-          sx={{ mb: 3 }}  
-          InputProps={{  
-            sx: {  
-              '&.Mui-focused fieldset': {  
-                borderColor: 'primary.main',  
-              },  
-            },  
-          }}  
-        />  
-        <TextField  
-          label="Occupation"  
-          fullWidth  
-          value={occupation}  
-          onChange={({ target }) => {  
-            setOccupation(target.value);  
-            validateOccupation();  
-          }}  
-          onBlur={validateOccupation}  
-          error={!!errors.occupation}  
-          helperText={errors.occupation}  
-          sx={{ mb: 3 }}  
-          InputProps={{  
-            sx: {  
-              '&.Mui-focused fieldset': {  
-                borderColor: 'primary.main',  
-              },  
-            },  
-          }}  
-        />  
+        <TextField
+          label="Social security number"
+          fullWidth
+          value={ssn}
+          onChange={({ target }) => {
+            setSsn(target.value);
+            validateSsn();
+          }}
+          onBlur={validateSsn}
+          error={!!errors.ssn}
+          helperText={errors.ssn}
+          sx={{ mb: 3 }}
+          inputProps={{
+            'aria-required': 'true',
+            'aria-describedby': errors.ssn ? 'ssn-error' : undefined,
+            'aria-invalid': !!errors.ssn || undefined
+          }}
+          FormHelperTextProps={{
+            id: 'ssn-error',
+            tabIndex: -1
+          }}
+          InputProps={{
+            sx: {
+              '&.Mui-focused fieldset': {
+                borderColor: 'primary.main',
+              },
+            },
+          }}
+        />
+        <TextField
+          label="Date of birth"
+          placeholder="YYYY-MM-DD"
+          fullWidth
+          value={dateOfBirth}
+          onChange={({ target }) => {
+            setDateOfBirth(target.value);
+            validateDateOfBirth();
+          }}
+          onBlur={validateDateOfBirth}
+          type='date'
+          InputLabelProps={{ shrink: true }}
+          error={!!errors.dateOfBirth}
+          helperText={errors.dateOfBirth}
+          sx={{ mb: 3 }}
+          inputProps={{
+            'aria-required': 'true',
+            'aria-describedby': errors.dateOfBirth ? 'dob-error' : undefined,
+            'aria-invalid': !!errors.dateOfBirth || undefined
+          }}
+          FormHelperTextProps={{
+            id: 'dob-error',
+            tabIndex: -1
+          }}
+          InputProps={{
+            sx: {
+              '&.Mui-focused fieldset': {
+                borderColor: 'primary.main',
+              },
+            },
+          }}
+        />
+        <TextField
+          label="Occupation"
+          fullWidth
+          value={occupation}
+          onChange={({ target }) => {
+            setOccupation(target.value);
+            validateOccupation();
+          }}
+          onBlur={validateOccupation}
+          error={!!errors.occupation}
+          helperText={errors.occupation}
+          sx={{ mb: 3 }}
+          inputProps={{
+            'aria-required': 'true',
+            'aria-describedby': errors.occupation ? 'occupation-error' : undefined,
+            'aria-invalid': !!errors.occupation || undefined
+          }}
+          FormHelperTextProps={{
+            id: 'occupation-error',
+            tabIndex: -1
+          }}
+          InputProps={{
+            sx: {
+              '&.Mui-focused fieldset': {
+                borderColor: 'primary.main',
+              },
+            },
+          }}
+        />
 
 <InputLabel   
   id="gender-label"   
@@ -236,23 +275,28 @@ const addPatient = (event: SyntheticEvent) => {
 >  
   Gender  
 </InputLabel>  
-<Select  
-  labelId="gender-label"  
-  label="Gender"  
-  fullWidth  
-  value={gender}  
-  onChange={onGenderChange}  
-  inputProps={{ "data-testid": "gender-select" }}  
->  
-        {genderOptions.map(option =>  
-          <MenuItem  
-            key={option.label}  
-            value={option.value}  
-          >  
-            {option.label  
-          }</MenuItem>  
-        )}  
-        </Select>  
+<Select
+  labelId="gender-label"
+  label="Gender"
+  fullWidth
+  value={gender}
+  onChange={onGenderChange}
+  inputProps={{
+    "data-testid": "gender-select",
+    'aria-required': 'true',
+    'role': 'combobox'
+  }}
+>
+  {genderOptions.map(option =>
+    <MenuItem
+      key={option.label}
+      value={option.value}
+      role="option"
+    >
+      {option.label
+    }</MenuItem>
+  )}
+</Select>
 
         <Grid container justifyContent="space-between" sx={{ mt: 2, gap: 2 }}>  
           <Button  
@@ -271,20 +315,21 @@ const addPatient = (event: SyntheticEvent) => {
           >  
             Cancel  
           </Button>  
-          <Button  
-            type="submit"  
-            variant="contained"  
-            sx={{  
-              minWidth: 100,  
-              '&:hover': {  
-                transform: 'translateY(-2px)',  
-                boxShadow: 3,  
-              },  
-              transition: 'all 0.3s ease',  
-            }}  
-          >  
-            Add  
-          </Button>  
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={loading}
+            sx={{
+              minWidth: 100,
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: 3,
+              },
+              transition: 'all 0.3s ease',
+            }}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Add'}
+          </Button>
         </Grid>  
       </form>  
     </div>  

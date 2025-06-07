@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import AddPatientForm from './AddPatientForm';
 import { Gender } from '../../types';
-import { vi } from 'vitest';
+import { describe, it, vi } from 'vitest';
+import { beforeEach } from 'vitest';
+import { expect } from 'vitest';
+import ErrorBoundary from '../ErrorBoundary';
 
 // Mock callbacks
 const mockOnSubmit = vi.fn();
@@ -92,11 +95,11 @@ describe('AddPatientForm', () => {
     render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
     
     const ssnInput = screen.getByLabelText('Social security number');
-    await userEvent.type(ssnInput, '123-45-6789');
+    await userEvent.type(ssnInput, '123456-7890');
     await userEvent.tab();
     
     expect(screen.queryByText('SSN is required')).not.toBeInTheDocument();
-    expect(screen.queryByText('SSN must be in format XXX-XX-XXXX')).not.toBeInTheDocument();
+    expect(screen.queryByText('SSN must be in format XXXXXX-XXXX')).not.toBeInTheDocument();
   });
 
   // Date of birth validation tests
@@ -108,6 +111,50 @@ describe('AddPatientForm', () => {
     await userEvent.tab();
     
     expect(await screen.findByText('Date of birth is required')).toBeInTheDocument();
+    // Focus management tests
+    it('moves focus to first error when form is invalid', async () => {
+      render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+      
+      const submitButton = screen.getByText('Add');
+      await userEvent.click(submitButton);
+      
+      await waitFor(() => {
+        const firstError = screen.getByText('Name is required');
+        expect(document.activeElement).toBe(firstError.closest('div'));
+      });
+    });
+  
+    it('moves focus to error container when multiple errors exist', async () => {
+      render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+      
+      const submitButton = screen.getByText('Add');
+      await userEvent.click(submitButton);
+      
+      await waitFor(() => {
+        const errorContainer = screen.getByRole('alert');
+        expect(document.activeElement).toBe(errorContainer);
+      });
+    });
+  });
+  
+  // Focus management test for ErrorBoundary
+  describe('ErrorBoundary focus management', () => {
+    it('moves focus to error message when boundary catches error', async () => {
+      const ThrowingComponent = () => {
+        throw new Error('Test error');
+      };
+  
+      render(
+        <ErrorBoundary>
+          <ThrowingComponent />
+        </ErrorBoundary>
+      );
+  
+      await waitFor(() => {
+        const errorMessage = screen.getByRole('alert');
+        expect(document.activeElement).toBe(errorMessage);
+      });
+    });
   });
 
   it('shows error when date of birth is in future', async () => {
@@ -162,12 +209,14 @@ describe('AddPatientForm', () => {
     await waitFor(() => expect(submitButton).toBeEnabled());
     await userEvent.click(submitButton);
     
-    expect(mockOnSubmit).toHaveBeenCalledWith({
-      name: 'John Doe',
-      ssn: '123456-7890',
-      dateOfBirth: '1990-01-01',
-      occupation: 'Developer',
-      gender: Gender.Other
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledWith({
+        name: 'John Doe',
+        ssn: '123456-7890',
+        dateOfBirth: '1990-01-01',
+        occupation: 'Developer',
+        gender: Gender.Other
+      });
     });
   });
 });
@@ -176,13 +225,14 @@ describe('AddPatientForm', () => {
 it('allows changing gender selection', async () => {
   render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
   
-  const genderSelect = screen.getByTestId('gender-select');
-  await userEvent.click(genderSelect);
+  // Open select
+  const genderCombobox = screen.getByRole('combobox', { name: /gender/i });
+  await userEvent.click(genderCombobox);
   
   const maleOption = screen.getByRole('option', { name: 'Male' });
   await userEvent.click(maleOption);
   
-  expect(genderSelect).toHaveTextContent('Male');
+  expect(await screen.findByText('Male')).toBeInTheDocument();
 });
 
 // Form submission with invalid data test

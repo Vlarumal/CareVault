@@ -67,9 +67,6 @@ const PatientListPage = () => {
 
   const mutation = useMutation({
     mutationFn: patientService.create,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-    },
     onError: (error: Error) => {
       setError(error.message);
     }
@@ -91,10 +88,38 @@ const PatientListPage = () => {
   }, []);
 
   const submitNewPatient = async (values: PatientFormValues) => {
-    mutation.mutate(values);
-    if (!mutation.isError) {
-      setModalOpen(false);
-    }
+    // Optimistic update with temporary ID
+    const tempId = `temp-${Date.now()}`;
+    const optimisticPatient: Patient = {
+      ...values,
+      id: tempId,
+      entries: []
+    };
+    
+    // Update cache immediately
+    queryClient.setQueryData(['patients'], (oldPatients: Patient[] = []) => [
+      ...oldPatients,
+      optimisticPatient
+    ]);
+    
+    // Close modal immediately
+    setModalOpen(false);
+    
+    // Send mutation to server
+    mutation.mutate(values, {
+      onSuccess: (createdPatient) => {
+        // Replace optimistic patient with server response
+        queryClient.setQueryData(['patients'], (oldPatients: Patient[] = []) =>
+          oldPatients.map(p => p.id === tempId ? createdPatient : p)
+        );
+      },
+      onError: () => {
+        // Rollback on error
+        queryClient.setQueryData(['patients'], (oldPatients: Patient[] = []) =>
+          oldPatients.filter(p => p.id !== tempId)
+        );
+      }
+    });
   };
 
   // Filter patients based on search text

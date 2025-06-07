@@ -1,4 +1,4 @@
-import React, { Component, ReactNode } from 'react';
+import React, { Component, ReactNode, createRef } from 'react';
 
 /**
  * ErrorBoundary component - Catches JavaScript errors in child components
@@ -28,7 +28,14 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  private errorRef = createRef<HTMLDivElement>();
   state: ErrorBoundaryState = { hasError: false };
+
+  componentDidUpdate(prevProps: ErrorBoundaryProps, prevState: ErrorBoundaryState) {
+    if (this.state.hasError && !prevState.hasError && this.errorRef.current) {
+      this.errorRef.current.focus();
+    }
+  }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -63,7 +70,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render(): ReactNode {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div role="alert" style={{ padding: '20px', border: '1px solid #f0c0c0', background: '#fff0f0' }}>
+        <div
+          ref={this.errorRef}
+          tabIndex={-1}
+          role="alert"
+          style={{ padding: '20px', border: '1px solid #f0c0c0', background: '#fff0f0', outline: 'none' }}
+        >
           <h3>Something went wrong</h3>
           <p><strong>Error:</strong> {this.state.error?.message}</p>
           

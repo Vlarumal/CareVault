@@ -1,10 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
+import { Mock, afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import axios from 'axios';
 import App from './App';
 import patientService from './services/patients';
 import { Gender, Patient } from './types';
 import { apiBaseUrl } from './constants';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock API calls
 vi.mock('./services/patients');
@@ -31,13 +32,15 @@ const mockPatients: Patient[] = [
   }
 ];
 
+const queryClient = new QueryClient();
+
 describe('App', () => {
   beforeEach(() => {
     // Mock axios ping check
-    (axios.get as jest.Mock).mockResolvedValue({});
+    (axios.get as Mock).mockResolvedValue({});
     
     // Mock patient service
-    (patientService.getAll as jest.Mock).mockResolvedValue(mockPatients);
+    (patientService.getAll as Mock).mockResolvedValue(mockPatients);
   });
 
   afterEach(() => {
@@ -45,7 +48,11 @@ describe('App', () => {
   });
 
   test('renders CareVault title', async () => {
-    render(<App />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
     
     await waitFor(() => {
       expect(screen.getByText('CareVault')).toBeInTheDocument();
@@ -53,7 +60,11 @@ describe('App', () => {
   });
 
   test('renders Home button', async () => {
-    render(<App />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
     
     await waitFor(() => {
       const homeButton = screen.getByText('Home');
@@ -63,7 +74,11 @@ describe('App', () => {
   });
 
   test('fetches and displays patient list', async () => {
-    render(<App />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
     
     await waitFor(() => {
       expect(patientService.getAll).toHaveBeenCalledTimes(1);
@@ -75,7 +90,11 @@ describe('App', () => {
   });
 
 test('renders patient links with correct hrefs', async () => {
-    render(<App />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
     
     await waitFor(() => {
       expect(patientService.getAll).toHaveBeenCalledTimes(1);
@@ -90,8 +109,12 @@ test('renders patient links with correct hrefs', async () => {
   });
 
   test('handles API ping failure', async () => {
-    (axios.get as jest.Mock).mockRejectedValue(new Error('Network error'));
-    render(<App />);
+    (axios.get as Mock).mockRejectedValue(new Error('Network error'));
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
     
     await waitFor(() => {
       expect(axios.get).toHaveBeenCalledWith(`${apiBaseUrl}/ping`);
@@ -100,8 +123,12 @@ test('renders patient links with correct hrefs', async () => {
   });
 
   test('displays empty state when no patients', async () => {
-    (patientService.getAll as jest.Mock).mockResolvedValue([]);
-    render(<App />);
+    (patientService.getAll as Mock).mockResolvedValue([]);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
     
     await waitFor(() => {
       expect(screen.getByText('No patients found')).toBeInTheDocument();

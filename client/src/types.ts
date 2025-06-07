@@ -1,77 +1,19 @@
-export interface DiagnosisEntry {
-  code: string;
-  name: string;
-  latin?: string;
-}
+import * as medicalTypes from '@shared/src/types/medicalTypes';
 
-export interface Patient {
-  id: string;
-  name: string;
-  occupation: string;
-  gender: Gender;
-  ssn?: string;
-  dateOfBirth?: string;
-  entries?: Entry[];
-}
+export const Gender = medicalTypes.Gender;
+export const HealthCheckRating = medicalTypes.HealthCheckRating;
 
-export type PatientFormValues = Omit<Patient, 'id' | 'entries'>;
-
-export enum Gender {
-  Female = 'female',
-  Male = 'male',
-  Other = 'other',
-}
-
-export interface BaseEntry {
-  id: string;
-  description: string;
-  date: string;
-  specialist: string;
-  diagnosisCodes?: Array<DiagnosisEntry['code']>;
-}
-
-export enum HealthCheckRating {
-  'Healthy' = 0,
-  'LowRisk' = 1,
-  'HighRisk' = 2,
-  'CriticalRisk' = 3,
-}
-
-export interface HealthCheckEntry extends BaseEntry {
-  type: 'HealthCheck';
-  healthCheckRating: HealthCheckRating;
-}
-
-type Discharge = {
-  date: string;
-  criteria: string;
-};
-
-type SickLeave = {
-  startDate: string;
-  endDate: string;
-};
-
-export interface OccupationalHealthcareEntry extends BaseEntry {
-  type: 'OccupationalHealthcare';
-  employerName: string;
-  sickLeave?: SickLeave;
-}
-
-export interface HospitalEntry extends BaseEntry {
-  type: 'Hospital';
-  discharge: Discharge;
-}
-
-export type Entry =
-  | HospitalEntry
-  | OccupationalHealthcareEntry
-  | HealthCheckEntry;
-
-// Define special omit for unions
-type UnionOmit<
-  T,
-  K extends string | number | symbol
-> = T extends unknown ? Omit<T, K> : never;
-
-export type NewEntryFormValues = UnionOmit<Entry, 'id'>;
+export type {
+  DiagnosisEntry,
+  Patient,
+  PatientFormValues,
+  BaseEntry,
+  HealthCheckEntry,
+  Discharge,
+  SickLeave,
+  OccupationalHealthcareEntry,
+  HospitalEntry,
+  Entry,
+  UnionOmit,
+  NewEntryWithoutId as NewEntryFormValues
+} from '@shared/src/types/medicalTypes';

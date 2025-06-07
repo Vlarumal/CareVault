@@ -12,7 +12,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Entry,
   NewEntryFormValues,
@@ -49,6 +49,13 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [entryType, setEntryType] =
     useState<Entry['type']>('HealthCheck');
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (errorRef.current && Object.values(errors).some(e => e)) {
+      errorRef.current.focus();
+    }
+  }, [errors]);
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -235,13 +242,19 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               label='Discharge date'
               value={formData.dischargeDate}
               onChange={handleChange}
+              onBlur={handleBlur}
+              error={Boolean(errors.dischargeDate)}
+              helperText={errors.dischargeDate || 'Date when the patient was discharged from the hospital.'}
               fullWidth
               margin='normal'
               type='date'
               InputLabelProps={{ shrink: true }}
               required
               data-name='Discharge date'
-              helperText='Date when the patient was discharged from the hospital.'
+              FormHelperTextProps={{
+                id: 'dischargeDate-error',
+                tabIndex: -1
+              }}
             />
 
             <TextField
@@ -249,11 +262,17 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               label='Discharge criteria'
               value={formData.dischargeCriteria}
               onChange={handleChange}
+              onBlur={handleBlur}
+              error={Boolean(errors.dischargeCriteria)}
+              helperText={errors.dischargeCriteria || 'Criteria for discharge.'}
               fullWidth
               margin='normal'
               required
               data-name='Discharge criteria'
-              helperText='Criteria for discharge.'
+              FormHelperTextProps={{
+                id: 'dischargeCriteria-error',
+                tabIndex: -1
+              }}
             />
           </>
         );
@@ -265,11 +284,17 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               label='Employer Name'
               value={formData.employerName}
               onChange={handleChange}
+              onBlur={handleBlur}
+              error={Boolean(errors.employerName)}
+              helperText={errors.employerName || 'Name of the employer related to this healthcare entry.'}
               fullWidth
               margin='normal'
               required
               data-name='Employer Name'
-              helperText='Name of the employer related to this healthcare entry.'
+              FormHelperTextProps={{
+                id: 'employerName-error',
+                tabIndex: -1
+              }}
             />
 
             <TextField
@@ -277,12 +302,18 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               label='Sick leave start date'
               value={formData.sickLeaveStartDate}
               onChange={handleChange}
+              onBlur={handleBlur}
+              error={Boolean(errors.sickLeaveStartDate)}
+              helperText={errors.sickLeaveStartDate || 'Start date of the sick leave period (optional).'}
               fullWidth
               margin='normal'
               type='date'
               InputLabelProps={{ shrink: true }}
               data-name='Sick leave start date'
-              helperText='Start date of the sick leave period (optional).'
+              FormHelperTextProps={{
+                id: 'sickLeaveStartDate-error',
+                tabIndex: -1
+              }}
             />
 
             <TextField
@@ -298,6 +329,10 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               type='date'
               InputLabelProps={{ shrink: true }}
               data-name='Sick leave end date'
+              FormHelperTextProps={{
+                id: 'sickLeaveEndDate-error',
+                tabIndex: -1
+              }}
             />
           </>
         );
@@ -308,13 +343,19 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             label='Healthcheck rating'
             value={formData.healthCheckRating}
             onChange={handleChange}
+            onBlur={handleBlur}
+            error={Boolean(errors.healthCheckRating)}
+            helperText={errors.healthCheckRating || 'Rating from 0 (healthy) to 3 (critical risk).'}
             fullWidth
             margin='normal'
             type='number'
             required
             inputProps={{ min: 0, max: 3 }}
             data-name='Healthcheck rating'
-            helperText='Rating from 0 (healthy) to 3 (critical risk).'
+            FormHelperTextProps={{
+              id: 'healthCheckRating-error',
+              tabIndex: -1
+            }}
           />
         );
       default:
@@ -392,6 +433,11 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             required
             data-name='Description'
+            FormHelperTextProps={{
+              id: 'description-error',
+              ref: errorRef,
+              tabIndex: -1
+            }}
           />
 
           <TextField
@@ -408,6 +454,10 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             required
             InputLabelProps={{ shrink: true }}
             data-name='Date'
+            FormHelperTextProps={{
+              id: 'date-error',
+              tabIndex: -1
+            }}
           />
 
           <TextField
@@ -422,6 +472,10 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             required
             data-name='Specialist'
+            FormHelperTextProps={{
+              id: 'specialist-error',
+              tabIndex: -1
+            }}
           />
 
           <FormControl

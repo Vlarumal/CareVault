@@ -53,12 +53,16 @@ const HealthRatingBar = React.forwardRef<HTMLDivElement, BarProps>(
     ));
 
     return (
-      <div 
+      <div
         ref={ref}
-        className="health-bar" 
+        className="health-bar"
         style={{ display: 'flex', alignItems: 'center' }}
+        role="img"
+        aria-label={`Health rating: ${HEALTHBAR_TEXTS[rating]}`}
       >
-        {hearts}
+        <span aria-hidden="true">
+          {hearts}
+        </span>
         {showText && (
           <p style={{ marginLeft: 8 }} data-testid="health-rating-text">
             {HEALTHBAR_TEXTS[rating]}
