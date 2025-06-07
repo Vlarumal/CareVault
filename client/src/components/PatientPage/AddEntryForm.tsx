@@ -49,11 +49,26 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [entryType, setEntryType] =
     useState<Entry['type']>('HealthCheck');
-  const errorRef = useRef<HTMLParagraphElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    if (errorRef.current && Object.values(errors).some(e => e)) {
-      errorRef.current.focus();
+    if (Object.values(errors).some(e => e)) {
+      // Announce errors to screen readers
+      const errorMessages = Object.values(errors).filter(e => e).join('. ');
+      const liveRegion = document.getElementById('a11y-announcements');
+      if (liveRegion) {
+        liveRegion.textContent = `Form errors: ${errorMessages}`;
+      }
+      
+      // Focus first error field
+      const firstErrorField = Object.keys(errors)[0];
+      if (firstErrorField) {
+        const input = document.getElementById(`${firstErrorField}-input`);
+        if (input) {
+          input.focus();
+        }
+      }
     }
   }, [errors]);
 
@@ -444,6 +459,8 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             }}
             InputProps={{
               id: 'description-input',
+              'aria-required': true,
+              'aria-describedby': errors.description ? 'description-error' : 'description-helper'
             }}
           />
 
@@ -471,6 +488,8 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             }}
             InputProps={{
               id: 'date-input',
+              'aria-required': true,
+              'aria-describedby': errors.date ? 'date-error' : 'date-helper'
             }}
           />
 
@@ -496,6 +515,8 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             }}
             InputProps={{
               id: 'specialist-input',
+              'aria-required': true,
+              'aria-describedby': errors.specialist ? 'specialist-error' : 'specialist-helper'
             }}
           />
 
@@ -503,30 +524,59 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             fullWidth
             margin='normal'
           >
-            <InputLabel id='diagnosis-codes-label'>
+            <InputLabel id='diagnosis-codes-label' aria-required={false}>
               Diagnoses codes
             </InputLabel>
             <Select
               multiple
               value={formData.diagnosisCodes}
               onChange={handleDiagnosisCodesChange}
-              input={<OutlinedInput label='Diagnoses codes' />}
+              input={<OutlinedInput
+                label='Diagnoses codes'
+                inputProps={{
+                  'aria-label': 'Select diagnosis codes',
+                  'aria-describedby': 'diagnosis-codes-helper'
+                }}
+              />}
+              MenuProps={{
+                autoFocus: false,
+                disableAutoFocusItem: true,
+                disableEnforceFocus: true,
+              }}
             >
               {diagnosisCodesAll.map((code) => (
                 <MenuItem
                   key={code}
                   value={code}
+                  aria-label={code}
                 >
                   {code}
                 </MenuItem>
               ))}
             </Select>
-            <FormHelperText>
+            <FormHelperText id="diagnosis-codes-helper">
               Select one or more diagnosis codes
             </FormHelperText>
           </FormControl>
 
           {renderEntryTypeFields()}
+          
+          {/* Hidden region for screen reader announcements */}
+          <div
+            id="a11y-announcements"
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              position: 'absolute',
+              width: '1px',
+              height: '1px',
+              padding: 0,
+              margin: '-1px',
+              overflow: 'hidden',
+              clip: 'rect(0,0,0,0)',
+              border: 0
+            }}
+          />
         </Box>
       </div>
 
@@ -544,12 +594,18 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           sx={{ backgroundColor: 'lightgray', color: 'black' }}
           type='submit'
           disabled={loading}
+          aria-label={loading ? 'Adding entry' : 'Add entry'}
+          onKeyDown={(e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+              formRef.current?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+            }
+          }}
         >
-          {loading ? 'Adding...' : 'Add'}
+          {loading ? 'Adding...' : 'Add (Ctrl+Enter)'}
         </Button>
       </Box>
     </Box>
   );
 };
 
-export default AddEntryForm;
+export default React.memo(AddEntryForm);

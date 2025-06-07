@@ -40,70 +40,99 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
     }
   };
 
+  // New breakpoint for timeline items
+  const isXSmallScreen = useMediaQuery(theme.breakpoints.down('xs'));
+  
   return (
-    <Timeline
-      position={isSmallScreen ? 'left' : 'alternate'}
-      sx={{
-        padding: 0,
-        '& .MuiTimelineItem-root': {
-          marginBottom: theme.spacing(2)
-        }
+    <div
+      style={{
+        overflowX: isXSmallScreen ? 'auto' : 'visible',
+        minWidth: isXSmallScreen ? '600px' : 'auto'
       }}
-      aria-label="Patient health entries timeline"
+      aria-label="Timeline container"
     >
-      {sortedEntries.map((entry) => (
-        <TimelineItem
-          key={entry.id}
-          aria-label={`Entry from ${new Date(entry.date).toLocaleDateString()}`}
-          sx={{
-            '&:hover': {
-              backgroundColor: theme.palette.action.hover,
-              transform: 'scale(1.02)',
-              transition: 'all 0.3s ease',
-            }
-          }}
-        >
-          <TimelineOppositeContent
-            color="text.secondary"
-            sx={{ padding: '6px 16px', maxWidth: '120px' }}
+      <Timeline
+        position={isSmallScreen ? 'left' : 'alternate'}
+        sx={{
+          padding: 0,
+          '& .MuiTimelineItem-root': {
+            marginBottom: theme.spacing(2)
+          }
+        }}
+        aria-label="Patient health entries timeline"
+      >
+        {sortedEntries.map((entry) => (
+          <TimelineItem
+            key={entry.id}
+            aria-label={`Entry from ${new Date(entry.date).toLocaleDateString()}`}
+            sx={{
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                transform: 'scale(1.02)',
+                transition: 'all 0.3s ease',
+              }
+            }}
           >
-            {new Date(entry.date).toLocaleDateString()}
-          </TimelineOppositeContent>
-          <TimelineSeparator>
-            <TimelineDot
-              color={getDotColor(entry.type)}
-              aria-label={`${entry.type} entry`}
-            />
-            <TimelineConnector />
-          </TimelineSeparator>
-          <TimelineContent sx={{ py: theme.spacing(2), px: 2 }}>
-            <EntryErrorBoundary entry={entry}>
-              <EntryDetails entry={entry} />
-              {entry.diagnosisCodes && entry.diagnosisCodes.length > 0 && (
-                <div style={{ marginTop: '8px' }}>
-                  <strong>Diagnoses:</strong>
-                  <ul
-                    style={{
-                      marginTop: theme.spacing(0.5),
-                      paddingLeft: theme.spacing(2.5),
-                      listStyleType: 'none'
-                    }}
-                  >
-                    {entry.diagnosisCodes.map((code) => (
-                      <li key={code}>
-                        <Typography variant="body2">
-                          • {code} {getDiagnosisByCode(code)}
-                        </Typography>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </EntryErrorBoundary>
-          </TimelineContent>
-        </TimelineItem>
-      ))}
-    </Timeline>
+            <TimelineOppositeContent
+              color="text.secondary"
+              sx={{
+                padding: '6px 16px',
+                maxWidth: '120px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              {new Date(entry.date).toLocaleDateString()}
+            </TimelineOppositeContent>
+            <TimelineSeparator>
+              <TimelineDot
+                color={getDotColor(entry.type)}
+                aria-label={`${entry.type} entry`}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              />
+              <TimelineConnector />
+            </TimelineSeparator>
+            <TimelineContent
+              sx={{
+                py: theme.spacing(2),
+                px: 2,
+                minHeight: isXSmallScreen ? '120px' : 'auto'
+              }}
+            >
+              <EntryErrorBoundary entry={entry}>
+                <EntryDetails entry={entry} />
+                {entry.diagnosisCodes && entry.diagnosisCodes.length > 0 && (
+                  <div style={{ marginTop: '8px' }}>
+                    <strong>Diagnoses:</strong>
+                    <ul
+                      style={{
+                        marginTop: theme.spacing(0.5),
+                        paddingLeft: theme.spacing(2.5),
+                        listStyleType: 'none'
+                      }}
+                    >
+                      {entry.diagnosisCodes.map((code) => (
+                        <li key={code}>
+                          <Typography variant="body2">
+                            • {code} {getDiagnosisByCode(code)}
+                          </Typography>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </EntryErrorBoundary>
+            </TimelineContent>
+          </TimelineItem>
+        ))}
+      </Timeline>
+    </div>
   );
 };
 
