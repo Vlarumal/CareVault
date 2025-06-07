@@ -1,5 +1,14 @@
 import React from 'react';
-import { Timeline, TimelineItem, TimelineSeparator, TimelineDot, TimelineConnector, TimelineContent, TimelineOppositeContent } from '@mui/lab';
+import {
+  Timeline,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineDot,
+  TimelineConnector,
+  TimelineContent,
+  TimelineOppositeContent
+} from '@mui/lab';
+import { useTheme, useMediaQuery, Typography } from '@mui/material';
 import { Entry } from '../../types';
 import EntryDetails from './EntryDetails';
 import EntryErrorBoundary from './EntryErrorBoundary';
@@ -10,17 +19,43 @@ interface TimelineViewProps {
 }
 
 const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode }) => {
+  const theme = useTheme();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  
   // Sort entries by date (newest first)
   const sortedEntries = [...entries].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
+  
+  const getDotColor = (type: string) => {
+    switch(type) {
+      case 'HealthCheck':
+        return 'primary';
+      case 'Hospital':
+        return 'error';
+      case 'OccupationalHealthcare':
+        return 'warning';
+      default:
+        return 'primary';
+    }
+  };
 
   return (
-    <Timeline position="alternate" sx={{ padding: 0 }} aria-label="Patient health entries timeline">
+    <Timeline
+      position={isSmallScreen ? 'left' : 'alternate'}
+      sx={{ padding: 0 }}
+      aria-label="Patient health entries timeline"
+    >
       {sortedEntries.map((entry) => (
         <TimelineItem
           key={entry.id}
           aria-label={`Entry from ${new Date(entry.date).toLocaleDateString()}`}
+          sx={{
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+              transition: 'background-color 0.3s',
+            }
+          }}
         >
           <TimelineOppositeContent
             color="text.secondary"
@@ -29,19 +64,27 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
             {new Date(entry.date).toLocaleDateString()}
           </TimelineOppositeContent>
           <TimelineSeparator>
-            <TimelineDot color="primary" />
+            <TimelineDot color={getDotColor(entry.type)} />
             <TimelineConnector />
           </TimelineSeparator>
-          <TimelineContent sx={{ py: '12px', px: 2 }}>
+          <TimelineContent sx={{ py: theme.spacing(2), px: 2 }}>
             <EntryErrorBoundary entry={entry}>
               <EntryDetails entry={entry} />
               {entry.diagnosisCodes && entry.diagnosisCodes.length > 0 && (
                 <div style={{ marginTop: '8px' }}>
                   <strong>Diagnoses:</strong>
-                  <ul style={{ marginTop: '4px', paddingLeft: '20px' }}>
+                  <ul
+                    style={{
+                      marginTop: theme.spacing(0.5),
+                      paddingLeft: theme.spacing(2.5),
+                      listStyleType: 'none'
+                    }}
+                  >
                     {entry.diagnosisCodes.map((code) => (
                       <li key={code}>
-                        {code} {getDiagnosisByCode(code)}
+                        <Typography variant="body2">
+                          • {code} {getDiagnosisByCode(code)}
+                        </Typography>
                       </li>
                     ))}
                   </ul>
