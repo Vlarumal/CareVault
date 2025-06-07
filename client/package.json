@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:file": "vitest run",
+    "test:accessibility": "vitest run src/utils/accessibility.test.tsx",
     "docs": "mkdir -p docs && cp src/components/*.docs.md docs/ && echo '# Documentation\n\n- [ErrorBoundary](./ErrorBoundary.docs.md)' > docs/README.md"
   },
   "dependencies": {
@@ -29,7 +30,6 @@
     "@playwright/test": "^1.52.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
-    "@types/axe-core": "^2.0.2",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@typescript-eslint/eslint-plugin": "^6.0.0",

@@ -37,24 +37,24 @@ const App = () => {
     <div className='App'>
       <CssBaseline />
       <Router>
-        <AppBar position="static" color="primary">
-          <Toolbar>
-            <HomeIcon sx={{ mr: 1 }} />
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              CareVault
-            </Typography>
-          </Toolbar>
-        </AppBar>
+        <AppBar position="static" color="primary" aria-label="CareVault navigation">
+                  <Toolbar>
+                    <HomeIcon sx={{ mr: 1 }} aria-label="Home" />
+                    <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                      CareVault
+                    </Typography>
+                  </Toolbar>
+                </AppBar>
         
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
           {isLoading ? (
             <Box sx={{ width: '100%', mt: 4 }}>
-              <LinearProgress />
-            </Box>
+                          <LinearProgress aria-label="Loading patients" />
+                        </Box>
           ) : isError ? (
-            <Alert severity="error">
-              {error?.message || 'Failed to fetch patients'}
-            </Alert>
+            <Alert severity="error" aria-label="Error fetching patients">
+                          {error?.message || 'Failed to fetch patients'}
+                        </Alert>
           ) : (
             <Routes>
               <Route

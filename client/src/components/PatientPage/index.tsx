@@ -110,17 +110,18 @@ const PatientPage = () => {
   if (isError) {
     return (
       <div>
-        <Alert severity='error' role="alert" data-testid="error-alert">
-          {error?.message || 'Failed to load patient data'}
-        </Alert>
-        <Button
-          variant="contained"
-          onClick={() => refetch()}
-          style={{ marginTop: '10px' }}
-          data-testid="retry-button"
-        >
-          Retry
-        </Button>
+        <Alert severity='error' role="alert" data-testid="error-alert" aria-live="polite">
+                  {error?.message || 'Failed to load patient data'}
+                </Alert>
+                <Button
+                  variant="contained"
+                  onClick={() => refetch()}
+                  style={{ marginTop: '10px' }}
+                  data-testid="retry-button"
+                  aria-label="Retry loading patient data"
+                >
+                  Retry
+                </Button>
       </div>
     );
   }
@@ -139,13 +140,13 @@ const PatientPage = () => {
       </h2>
       <div>ssn: {patient.ssn}</div>
       <div>occupation: {patient.occupation}</div>
-      <div style={{ margin: '10px 0' }}>
-        Latest Health Rating:
-        <HealthRatingBar
-          rating={latestHealthRating}
-          showText={true}
-        />
-      </div>
+      <div style={{ margin: '10px 0' }} aria-label="Latest health rating">
+              Latest Health Rating:
+              <HealthRatingBar
+                rating={latestHealthRating}
+                showText={true}
+              />
+            </div>
 
       <section>
         <AddEntryForm
@@ -158,11 +159,11 @@ const PatientPage = () => {
 
       {patient.entries && patient.entries.length > 0 && (
         <Box>
-          <h2>entries</h2>
-          <TimelineView
-            entries={patient.entries}
-            getDiagnosisByCode={getDiagnosisByCode}
-          />
+          <h2 aria-label="Patient entries">entries</h2>
+                    <TimelineView
+                      entries={patient.entries}
+                      getDiagnosisByCode={getDiagnosisByCode}
+                    />
         </Box>
       )}
     </div>

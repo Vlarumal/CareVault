@@ -2,11 +2,11 @@ import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
 import { test, expect, vi } from 'vitest';
-import * as axe from 'axe-core';
+import axe from 'axe-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PatientPage from '../components/PatientPage';
-import * as patientService from '../services/patients';
-import * as diagnosisService from '../services/diagnoses';
+import patientService from '../services/patients';
+import diagnosisService from '../services/diagnoses';
 import { Patient } from '../types';
 import { Gender } from '@shared/src/types/medicalTypes';
 
