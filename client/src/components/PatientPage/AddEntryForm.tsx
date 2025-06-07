@@ -263,15 +263,16 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               fullWidth
               margin='normal'
               type='date'
-              InputLabelProps={{ shrink: true }}
               required
               data-name='Discharge date'
-              FormHelperTextProps={{
-                id: 'dischargeDate-error',
-                tabIndex: -1
-              }}
-            />
+              slotProps={{
+                inputLabel: { shrink: true },
 
+                formHelperText: {
+                  id: 'dischargeDate-error',
+                  tabIndex: -1
+                }
+              }} />
             <TextField
               name='dischargeCriteria'
               label='Discharge criteria'
@@ -284,9 +285,11 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               margin='normal'
               required
               data-name='Discharge criteria'
-              FormHelperTextProps={{
-                id: 'dischargeCriteria-error',
-                tabIndex: -1
+              slotProps={{
+                formHelperText: {
+                  id: 'dischargeCriteria-error',
+                  tabIndex: -1
+                }
               }}
             />
           </>
@@ -306,12 +309,13 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               margin='normal'
               required
               data-name='Employer Name'
-              FormHelperTextProps={{
-                id: 'employerName-error',
-                tabIndex: -1
+              slotProps={{
+                formHelperText: {
+                  id: 'employerName-error',
+                  tabIndex: -1
+                }
               }}
             />
-
             <TextField
               name='sickLeaveStartDate'
               label='Sick leave start date'
@@ -323,14 +327,15 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               fullWidth
               margin='normal'
               type='date'
-              InputLabelProps={{ shrink: true }}
               data-name='Sick leave start date'
-              FormHelperTextProps={{
-                id: 'sickLeaveStartDate-error',
-                tabIndex: -1
-              }}
-            />
+              slotProps={{
+                inputLabel: { shrink: true },
 
+                formHelperText: {
+                  id: 'sickLeaveStartDate-error',
+                  tabIndex: -1
+                }
+              }} />
             <TextField
               name='sickLeaveEndDate'
               label='Sick leave end date'
@@ -342,13 +347,15 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               fullWidth
               margin='normal'
               type='date'
-              InputLabelProps={{ shrink: true }}
               data-name='Sick leave end date'
-              FormHelperTextProps={{
-                id: 'sickLeaveEndDate-error',
-                tabIndex: -1
-              }}
-            />
+              slotProps={{
+                inputLabel: { shrink: true },
+
+                formHelperText: {
+                  id: 'sickLeaveEndDate-error',
+                  tabIndex: -1
+                }
+              }} />
           </>
         );
       case 'HealthCheck':
@@ -365,13 +372,15 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             type='number'
             required
-            inputProps={{ min: 0, max: 3 }}
             data-name='Healthcheck rating'
-            FormHelperTextProps={{
-              id: 'healthCheckRating-error',
-              tabIndex: -1
-            }}
-          />
+            slotProps={{
+              htmlInput: { min: 0, max: 3 },
+
+              formHelperText: {
+                id: 'healthCheckRating-error',
+                tabIndex: -1
+              }
+            }} />
         );
       default:
         return;
@@ -395,7 +404,6 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           {error}
         </Alert>
       )}
-
       <div>
         <Typography
           variant='h5'
@@ -448,21 +456,24 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             required
             data-name='Description'
-            inputProps={{
-              'aria-describedby': 'description-helper description-error',
-              'aria-invalid': errors.description ? 'true' : 'false'
-            }}
-            FormHelperTextProps={{
-              id: 'description-helper',
-              ref: errorRef,
-              tabIndex: -1
-            }}
-            InputProps={{
-              id: 'description-input',
-              'aria-required': true,
-              'aria-describedby': errors.description ? 'description-error' : 'description-helper'
-            }}
-          />
+            slotProps={{
+              input: {
+                id: 'description-input',
+                'aria-required': true,
+                'aria-describedby': errors.description ? 'description-error' : 'description-helper'
+              },
+
+              htmlInput: {
+                'aria-describedby': 'description-helper description-error',
+                'aria-invalid': errors.description ? 'true' : 'false'
+              },
+
+              formHelperText: {
+                id: 'description-helper',
+                ref: errorRef,
+                tabIndex: -1
+              }
+            }} />
 
           <TextField
             name='date'
@@ -476,22 +487,26 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             type='date'
             required
-            InputLabelProps={{ shrink: true }}
             data-name='Date'
-            inputProps={{
-              'aria-describedby': 'date-helper date-error',
-              'aria-invalid': errors.date ? 'true' : 'false'
-            }}
-            FormHelperTextProps={{
-              id: 'date-helper',
-              tabIndex: -1
-            }}
-            InputProps={{
-              id: 'date-input',
-              'aria-required': true,
-              'aria-describedby': errors.date ? 'date-error' : 'date-helper'
-            }}
-          />
+            slotProps={{
+              input: {
+                id: 'date-input',
+                'aria-required': true,
+                'aria-describedby': errors.date ? 'date-error' : 'date-helper'
+              },
+
+              htmlInput: {
+                'aria-describedby': 'date-helper date-error',
+                'aria-invalid': errors.date ? 'true' : 'false'
+              },
+
+              inputLabel: { shrink: true },
+
+              formHelperText: {
+                id: 'date-helper',
+                tabIndex: -1
+              }
+            }} />
 
           <TextField
             name='specialist'
@@ -505,20 +520,23 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             margin='normal'
             required
             data-name='Specialist'
-            inputProps={{
-              'aria-describedby': 'specialist-helper specialist-error',
-              'aria-invalid': errors.specialist ? 'true' : 'false'
-            }}
-            FormHelperTextProps={{
-              id: 'specialist-helper',
-              tabIndex: -1
-            }}
-            InputProps={{
-              id: 'specialist-input',
-              'aria-required': true,
-              'aria-describedby': errors.specialist ? 'specialist-error' : 'specialist-helper'
-            }}
-          />
+            slotProps={{
+              input: {
+                id: 'specialist-input',
+                'aria-required': true,
+                'aria-describedby': errors.specialist ? 'specialist-error' : 'specialist-helper'
+              },
+
+              htmlInput: {
+                'aria-describedby': 'specialist-helper specialist-error',
+                'aria-invalid': errors.specialist ? 'true' : 'false'
+              },
+
+              formHelperText: {
+                id: 'specialist-helper',
+                tabIndex: -1
+              }
+            }} />
 
           <FormControl
             fullWidth
@@ -579,7 +597,6 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           />
         </Box>
       </div>
-
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
         <Button
           color='secondary'

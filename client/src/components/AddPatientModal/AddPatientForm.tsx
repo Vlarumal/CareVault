@@ -160,24 +160,27 @@ const addPatient = (event: SyntheticEvent) => {
           error={!!errors.name}
           helperText={errors.name}
           sx={{ mb: 3 }}
-          inputProps={{
-            'aria-required': 'true',
-            'aria-describedby': errors.name ? 'name-error' : undefined,
-            'aria-invalid': !!errors.name || undefined
-          }}
-          InputProps={{
-            sx: {
-              '&.Mui-focused fieldset': {
-                borderColor: 'primary.main',
+          slotProps={{
+            input: {
+              sx: {
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
               },
             },
-          }}
-          FormHelperTextProps={{
-            id: 'name-error',
-            ref: errorRef,
-            tabIndex: -1
-          }}
-        />  
+
+            htmlInput: {
+              'aria-required': 'true',
+              'aria-describedby': errors.name ? 'name-error' : undefined,
+              'aria-invalid': !!errors.name || undefined
+            },
+
+            formHelperText: {
+              id: 'name-error',
+              ref: errorRef,
+              tabIndex: -1
+            }
+          }} />  
         <TextField
           label="Social security number"
           fullWidth
@@ -190,23 +193,26 @@ const addPatient = (event: SyntheticEvent) => {
           error={!!errors.ssn}
           helperText={errors.ssn}
           sx={{ mb: 3 }}
-          inputProps={{
-            'aria-required': 'true',
-            'aria-describedby': errors.ssn ? 'ssn-error' : undefined,
-            'aria-invalid': !!errors.ssn || undefined
-          }}
-          FormHelperTextProps={{
-            id: 'ssn-error',
-            tabIndex: -1
-          }}
-          InputProps={{
-            sx: {
-              '&.Mui-focused fieldset': {
-                borderColor: 'primary.main',
+          slotProps={{
+            input: {
+              sx: {
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
               },
             },
-          }}
-        />
+
+            htmlInput: {
+              'aria-required': 'true',
+              'aria-describedby': errors.ssn ? 'ssn-error' : undefined,
+              'aria-invalid': !!errors.ssn || undefined
+            },
+
+            formHelperText: {
+              id: 'ssn-error',
+              tabIndex: -1
+            }
+          }} />
         <TextField
           label="Date of birth"
           placeholder="YYYY-MM-DD"
@@ -218,27 +224,31 @@ const addPatient = (event: SyntheticEvent) => {
           }}
           onBlur={validateDateOfBirth}
           type='date'
-          InputLabelProps={{ shrink: true }}
           error={!!errors.dateOfBirth}
           helperText={errors.dateOfBirth}
           sx={{ mb: 3 }}
-          inputProps={{
-            'aria-required': 'true',
-            'aria-describedby': errors.dateOfBirth ? 'dob-error' : undefined,
-            'aria-invalid': !!errors.dateOfBirth || undefined
-          }}
-          FormHelperTextProps={{
-            id: 'dob-error',
-            tabIndex: -1
-          }}
-          InputProps={{
-            sx: {
-              '&.Mui-focused fieldset': {
-                borderColor: 'primary.main',
+          slotProps={{
+            input: {
+              sx: {
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
               },
             },
-          }}
-        />
+
+            htmlInput: {
+              'aria-required': 'true',
+              'aria-describedby': errors.dateOfBirth ? 'dob-error' : undefined,
+              'aria-invalid': !!errors.dateOfBirth || undefined
+            },
+
+            inputLabel: { shrink: true },
+
+            formHelperText: {
+              id: 'dob-error',
+              tabIndex: -1
+            }
+          }} />
         <TextField
           label="Occupation"
           fullWidth
@@ -251,23 +261,26 @@ const addPatient = (event: SyntheticEvent) => {
           error={!!errors.occupation}
           helperText={errors.occupation}
           sx={{ mb: 3 }}
-          inputProps={{
-            'aria-required': 'true',
-            'aria-describedby': errors.occupation ? 'occupation-error' : undefined,
-            'aria-invalid': !!errors.occupation || undefined
-          }}
-          FormHelperTextProps={{
-            id: 'occupation-error',
-            tabIndex: -1
-          }}
-          InputProps={{
-            sx: {
-              '&.Mui-focused fieldset': {
-                borderColor: 'primary.main',
+          slotProps={{
+            input: {
+              sx: {
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
               },
             },
-          }}
-        />
+
+            htmlInput: {
+              'aria-required': 'true',
+              'aria-describedby': errors.occupation ? 'occupation-error' : undefined,
+              'aria-invalid': !!errors.occupation || undefined
+            },
+
+            formHelperText: {
+              id: 'occupation-error',
+              tabIndex: -1
+            }
+          }} />
 
 <InputLabel   
   id="gender-label"   
@@ -331,8 +344,8 @@ const addPatient = (event: SyntheticEvent) => {
             {loading ? <CircularProgress size={24} /> : 'Add'}
           </Button>
         </Grid>  
-      </form>  
-    </div>  
+      </form>
+    </div>
   );  
 };  
 

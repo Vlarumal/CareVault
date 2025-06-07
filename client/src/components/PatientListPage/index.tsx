@@ -205,7 +205,6 @@ const PatientListPage = () => {
           Add New Patient
         </Button>
       </Box>
-
       {isLoading || initialLoad ? (
         <Box sx={{
           display: 'grid',
@@ -258,17 +257,6 @@ const PatientListPage = () => {
               // Debounce search to improve performance
               setTimeout(() => setSearchText(e.target.value), 300);
             }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position='start'>
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-              sx: {
-                borderRadius: 20,
-                backgroundColor: theme.palette.background.default
-              }
-            }}
             sx={{
               width: '100%',
               maxWidth: 500,
@@ -279,6 +267,19 @@ const PatientListPage = () => {
             }}
             aria-label='Search patients'
             size='medium'
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position='start'>
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+                sx: {
+                  borderRadius: 20,
+                  backgroundColor: theme.palette.background.default
+                }
+              }
+            }}
           />
 
           <Box sx={{ minHeight: 400 }}>
@@ -442,7 +443,6 @@ const PatientListPage = () => {
           </Box>
         </>
       )}
-
       <AddPatientModal
         modalOpen={modalOpen}
         onSubmit={submitNewPatient}
