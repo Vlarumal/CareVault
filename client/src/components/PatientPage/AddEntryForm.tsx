@@ -20,6 +20,7 @@ import {
   DiagnosisEntry,
 } from '../../types';
 import { isDateValid, validateDateRange, validateHealthRating, validateRequired } from '../../utils';
+import { useTheme } from '@mui/material/styles';
 
 interface Props {
   onAddEntry: (values: NewEntryFormValues) => void;
@@ -29,6 +30,7 @@ interface Props {
 }
 
 const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCodesAll }) => {
+  const theme = useTheme();
   const initialFormState = {
     description: '',
     date: '',
@@ -266,8 +268,11 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               required
               data-name='Discharge date'
               slotProps={{
+                input: {
+                  style: { color: theme.palette.text.primary }
+                },
                 inputLabel: { shrink: true },
-
+            
                 formHelperText: {
                   id: 'dischargeDate-error',
                   tabIndex: -1
@@ -286,6 +291,9 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               required
               data-name='Discharge criteria'
               slotProps={{
+                input: {
+                  style: { color: theme.palette.text.primary }
+                },
                 formHelperText: {
                   id: 'dischargeCriteria-error',
                   tabIndex: -1
@@ -310,6 +318,9 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               required
               data-name='Employer Name'
               slotProps={{
+                input: {
+                  style: { color: theme.palette.text.primary }
+                },
                 formHelperText: {
                   id: 'employerName-error',
                   tabIndex: -1
@@ -329,8 +340,11 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               type='date'
               data-name='Sick leave start date'
               slotProps={{
+                input: {
+                  style: { color: theme.palette.text.primary }
+                },
                 inputLabel: { shrink: true },
-
+            
                 formHelperText: {
                   id: 'sickLeaveStartDate-error',
                   tabIndex: -1
@@ -349,8 +363,11 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               type='date'
               data-name='Sick leave end date'
               slotProps={{
+                input: {
+                  style: { color: theme.palette.text.primary }
+                },
                 inputLabel: { shrink: true },
-
+            
                 formHelperText: {
                   id: 'sickLeaveEndDate-error',
                   tabIndex: -1
@@ -374,8 +391,11 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
             required
             data-name='Healthcheck rating'
             slotProps={{
+              input: {
+                style: { color: theme.palette.text.primary }
+              },
               htmlInput: { min: 0, max: 3 },
-
+          
               formHelperText: {
                 id: 'healthCheckRating-error',
                 tabIndex: -1
@@ -390,11 +410,11 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
   return (
     <Box
       sx={{
-        border: '1px dashed',
+        border: `1px dashed ${theme.palette.divider}`,
         p: 1,
         mt: 1,
         borderRadius: 3,
-        backgroundColor: '#fafafa',
+        backgroundColor: theme.palette.background.paper,
       }}
       component='form'
       onSubmit={handleSubmit}
@@ -409,6 +429,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           variant='h5'
           component='h2'
           gutterBottom
+          color={theme.palette.text.primary}
         >
           New entry
         </Typography>
@@ -460,21 +481,22 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               input: {
                 id: 'description-input',
                 'aria-required': true,
-                'aria-describedby': errors.description ? 'description-error' : 'description-helper'
+                'aria-describedby': errors.description ? 'description-error' : 'description-helper',
+                style: { color: theme.palette.text.primary }
               },
-
+        
               htmlInput: {
                 'aria-describedby': 'description-helper description-error',
                 'aria-invalid': errors.description ? 'true' : 'false'
               },
-
+        
               formHelperText: {
                 id: 'description-helper',
                 ref: errorRef,
                 tabIndex: -1
               }
             }} />
-
+        
           <TextField
             name='date'
             label='Date'
@@ -492,22 +514,23 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               input: {
                 id: 'date-input',
                 'aria-required': true,
-                'aria-describedby': errors.date ? 'date-error' : 'date-helper'
+                'aria-describedby': errors.date ? 'date-error' : 'date-helper',
+                style: { color: theme.palette.text.primary }
               },
-
+        
               htmlInput: {
                 'aria-describedby': 'date-helper date-error',
                 'aria-invalid': errors.date ? 'true' : 'false'
               },
-
+        
               inputLabel: { shrink: true },
-
+        
               formHelperText: {
                 id: 'date-helper',
                 tabIndex: -1
               }
             }} />
-
+        
           <TextField
             name='specialist'
             label='Specialist'
@@ -524,14 +547,15 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
               input: {
                 id: 'specialist-input',
                 'aria-required': true,
-                'aria-describedby': errors.specialist ? 'specialist-error' : 'specialist-helper'
+                'aria-describedby': errors.specialist ? 'specialist-error' : 'specialist-helper',
+                style: { color: theme.palette.text.primary }
               },
-
+        
               htmlInput: {
                 'aria-describedby': 'specialist-helper specialist-error',
                 'aria-invalid': errors.specialist ? 'true' : 'false'
               },
-
+        
               formHelperText: {
                 id: 'specialist-helper',
                 tabIndex: -1
@@ -608,7 +632,13 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
         </Button>
         <Button
           variant='contained'
-          sx={{ backgroundColor: 'lightgray', color: 'white' }}
+          sx={{
+            backgroundColor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
+            '&:hover': {
+              backgroundColor: theme.palette.primary.dark,
+            }
+          }}
           type='submit'
           disabled={loading}
           aria-label={loading ? 'Adding entry' : 'Add entry'}
