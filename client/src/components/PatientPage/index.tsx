@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   DiagnosisEntry,
   NewEntryFormValues,
@@ -19,11 +19,12 @@ import { createDeduplicatedQuery } from '../../utils/apiUtils';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // Validate patient ID exists before query
   const validatedId = id || '';
-  
+
   const { data: patient, isLoading, isError, error, refetch } = useQuery<Patient, Error>({
     queryKey: ['patient', validatedId],
     queryFn: () => {
@@ -55,10 +56,10 @@ const PatientPage = () => {
     onMutate: async (newEntry) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['patient', validatedId], exact: true });
-      
+
       // Snapshot the previous value
       const previousPatient = queryClient.getQueryData<Patient>(['patient', validatedId]);
-      
+
       if (previousPatient) {
         // Create optimistic entry with temporary ID
         const tempId = `temp-${Date.now()}`;
@@ -67,14 +68,14 @@ const PatientPage = () => {
           id: tempId,
           isOptimistic: true,
         } as Entry;
-        
+
         // Update the query cache with optimistic entry
         queryClient.setQueryData<Patient>(['patient', validatedId], {
           ...previousPatient,
           entries: [...(previousPatient.entries || []), optimisticEntry]
         });
       }
-      
+
       return { previousPatient };
     },
     onError: (err, newEntry, context) => {
@@ -99,7 +100,7 @@ const PatientPage = () => {
   };
 
   const diagnosisCodesAll = diagnoses?.map((d) => d.code) || [];
-  
+
   // Use health rating service
   const latestHealthRating = patient ? getLatestHealthRating(patient.entries || []) : null;
 
@@ -138,6 +139,14 @@ const PatientPage = () => {
           {getIcon(patient.gender)}
         </span>
       </h2>
+      <Button
+        variant="outlined"
+        onClick={() => navigate('/')}
+        aria-label="Back to patient list"
+        style={{ marginBottom: '10px' }}
+      >
+        Back to Patient List
+      </Button>
       <div>ssn: {patient.ssn}</div>
       <div>occupation: {patient.occupation}</div>
       <div style={{ margin: '10px 0' }} aria-label="Latest health rating">
