@@ -582,7 +582,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
         <Button
-          color='error'
+          color='secondary'
           variant='contained'
           type='button'
           onClick={clearFields}
@@ -591,7 +591,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
         </Button>
         <Button
           variant='contained'
-          sx={{ backgroundColor: 'lightgray', color: 'black' }}
+          sx={{ backgroundColor: 'lightgray', color: 'white' }}
           type='submit'
           disabled={loading}
           aria-label={loading ? 'Adding entry' : 'Add entry'}

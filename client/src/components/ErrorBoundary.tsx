@@ -1,4 +1,5 @@
 import React, { Component, ReactNode, createRef } from 'react';
+import { Button } from '@mui/material';
 
 /**
  * ErrorBoundary component - Catches JavaScript errors in child components
@@ -89,8 +90,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
           )}
           
           <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-            <button onClick={this.handleRetry}>Retry</button>
-            <button onClick={this.handleReport}>Report Error</button>
+            <Button variant="contained" color="primary" onClick={this.handleRetry}>Retry</Button>
+            <Button variant="outlined" color="secondary" onClick={this.handleReport}>Report Error</Button>
           </div>
         </div>
       );

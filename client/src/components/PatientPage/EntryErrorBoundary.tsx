@@ -1,5 +1,6 @@
 import { Component, ReactNode, ErrorInfo } from 'react';
 import { Entry } from '../../types';
+import { Button } from '@mui/material';
 
 interface EntryErrorBoundaryProps {
   entry: Entry;
@@ -77,20 +78,23 @@ class EntryErrorBoundary extends Component<EntryErrorBoundaryProps, EntryErrorBo
           <p>Description: {this.props.entry.description}</p>
           
           <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
-            <button
+            <Button
+              variant="contained"
+              color="primary"
               onClick={this.handleRetry}
               aria-label="Retry rendering this entry"
             >
               Retry
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outlined"
+              color="secondary"
               onClick={this.handleUndo}
               aria-label="Undo changes and revert to last known good state"
               disabled={!this.state.lastGoodState}
-              style={{ backgroundColor: this.state.lastGoodState ? '#f0f0f0' : '#e0e0e0' }}
             >
               Undo
-            </button>
+            </Button>
           </div>
           
           {this.state.error && (
