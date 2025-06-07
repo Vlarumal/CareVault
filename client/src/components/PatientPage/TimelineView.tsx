@@ -43,7 +43,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
   return (
     <Timeline
       position={isSmallScreen ? 'left' : 'alternate'}
-      sx={{ padding: 0 }}
+      sx={{
+        padding: 0,
+        '& .MuiTimelineItem-root': {
+          marginBottom: theme.spacing(2)
+        }
+      }}
       aria-label="Patient health entries timeline"
     >
       {sortedEntries.map((entry) => (
@@ -53,7 +58,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
           sx={{
             '&:hover': {
               backgroundColor: theme.palette.action.hover,
-              transition: 'background-color 0.3s',
+              transform: 'scale(1.02)',
+              transition: 'all 0.3s ease',
             }
           }}
         >
@@ -64,7 +70,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
             {new Date(entry.date).toLocaleDateString()}
           </TimelineOppositeContent>
           <TimelineSeparator>
-            <TimelineDot color={getDotColor(entry.type)} />
+            <TimelineDot
+              color={getDotColor(entry.type)}
+              aria-label={`${entry.type} entry`}
+            />
             <TimelineConnector />
           </TimelineSeparator>
           <TimelineContent sx={{ py: theme.spacing(2), px: 2 }}>
