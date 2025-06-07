@@ -14,6 +14,7 @@
     "docs": "mkdir -p docs && cp src/components/*.docs.md docs/ && echo '# Documentation\n\n- [ErrorBoundary](./ErrorBoundary.docs.md)' > docs/README.md"
   },
   "dependencies": {
+    "@base-ui-components/react": "^1.0.0-beta.0",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^7.1.1",

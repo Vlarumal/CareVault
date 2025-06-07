@@ -1,7 +1,38 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, ThemeOptions } from '@mui/material/styles';
+
+// CSS Variables for consistent theming
+const cssVariables = {
+  '--primary-main': '#0a2b4d',
+  '--primary-light': '#0e3a6a',
+  '--primary-dark': '#061d36',
+  '--secondary-main': '#0b420c',
+  '--secondary-light': '#0d5c0f',
+  '--secondary-dark': '#063008',
+  '--tertiary-main': '#6a5acd',
+  '--tertiary-light': '#9370db',
+  '--tertiary-dark': '#483d8b',
+  '--background-default': '#f8f9fa',
+  '--background-paper': '#ffffff',
+  '--text-primary': '#121212',
+  '--text-secondary': '#1a2329',
+  '--error-main': '#e53935',
+  '--warning-main': '#ffb300',
+  '--info-main': '#1e88e5',
+  '--success-main': '#43a047',
+  '--font-family': "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'",
+  '--border-radius': '12px',
+  '--box-shadow': '0 8px 24px rgba(0,0,0,0.05)',
+  '--transition': 'all 0.3s ease',
+  '--button-border-radius': '8px',
+  '--button-padding': '8px 16px',
+  '--button-box-shadow-hover': '0 4px 12px rgba(0,0,0,0.1)',
+  '--button-transform-hover': 'translateY(-2px)',
+  '--card-box-shadow-hover': '0 12px 30px rgba(0,0,0,0.12)',
+  '--card-transform-hover': 'translateY(-5px)',
+};
 
 // Modern healthcare color palette (WCAG AA compliant)
-const theme = createTheme({
+const themeOptions: ThemeOptions = {
   palette: {
     primary: {
       main: '#0a2b4d', // 12.6:1 with white - passes
@@ -170,6 +201,19 @@ const theme = createTheme({
             boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
           },
         },
+      },
+    },
+  },
+};
+
+// Create theme with CSS variables
+const theme = createTheme({
+  ...themeOptions,
+  components: {
+    ...themeOptions.components,
+    MuiCssBaseline: {
+      styleOverrides: {
+        ':root': cssVariables,
       },
     },
   },
