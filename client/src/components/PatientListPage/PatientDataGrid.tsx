@@ -11,7 +11,7 @@ const columns: GridColDef[] = [
     headerName: 'Name',
     width: 200,
     renderCell: (params) => (
-      <Link to={`/patients/${params.row.id}`} style={{ color: 'inherit' }}>
+      <Link to={`/${params.row.id}`} style={{ color: 'inherit' }}>
         {params.value}
       </Link>
     )

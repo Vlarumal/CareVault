@@ -31,7 +31,13 @@ import PatientPage from './components/PatientPage';
 import { useMemo, useState } from 'react';
 
 const App = () => {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const savedMode = localStorage.getItem('darkMode');
+    if (savedMode !== null) {
+      return savedMode === 'true';
+    }
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
 
   const theme = useMemo(() => createTheme({
     palette: {
@@ -83,7 +89,11 @@ const App = () => {
                 control={
                   <Switch
                     checked={darkMode}
-                    onChange={(e) => setDarkMode(e.target.checked)}
+                    onChange={(e) => {
+                      const newMode = e.target.checked;
+                      setDarkMode(newMode);
+                      localStorage.setItem('darkMode', newMode.toString());
+                    }}
                     icon={<Brightness7Icon />}
                     checkedIcon={<Brightness4Icon />}
                     aria-label="Toggle dark mode"

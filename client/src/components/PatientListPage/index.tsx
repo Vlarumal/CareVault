@@ -59,9 +59,26 @@ const PatientListPage = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [searchInput, setSearchInput] = useState<string>('');
   const [initialLoad, setInitialLoad] = useState<boolean>(true);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list' as const);
+
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    const savedViewMode = localStorage.getItem('patientListViewMode');
+    return (savedViewMode === 'grid' ? 'grid' : 'list') as 'list' | 'grid';
+  });
+
   const theme = useTheme();
   const queryClient = useQueryClient();
+
+  
+  useEffect(() => {
+    const savedViewMode = localStorage.getItem('patientListViewMode');
+    if (savedViewMode === 'grid') {
+      setViewMode('grid');
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('patientListViewMode', viewMode);
+  }, [viewMode]);
 
   const { data: patients = [], isLoading } = useQuery<Patient[], Error>({
     queryKey: ['patients'],
@@ -341,7 +358,7 @@ const PatientListPage = () => {
                 </Box>
               </Fade>
             ) : (
-              viewMode === 'list' ? (
+              viewMode === 'grid' ? (
                 <Box sx={{
                   display: 'grid',
                   gridTemplateColumns: '1fr',
