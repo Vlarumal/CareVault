@@ -32,6 +32,8 @@ import HealthRatingBar from '../HealthRatingBar';
 import patientService from '../../services/patients';
 import { Link } from 'react-router-dom';
 import { getIcon } from '../../utils';
+import PatientDataGrid from './PatientDataGrid';
+import ViewToggle from '../ViewToggle';
 
 // Helper to get latest health rating from entries
 const getLatestHealthRating = (patient: Patient): number | null => {
@@ -57,6 +59,7 @@ const PatientListPage = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [searchInput, setSearchInput] = useState<string>('');
   const [initialLoad, setInitialLoad] = useState<boolean>(true);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list' as const);
   const theme = useTheme();
   const queryClient = useQueryClient();
 
@@ -96,16 +99,16 @@ const PatientListPage = () => {
       id: tempId,
       entries: []
     };
-    
+
     // Update cache immediately
     queryClient.setQueryData(['patients'], (oldPatients: Patient[] = []) => [
       ...oldPatients,
       optimisticPatient
     ]);
-    
+
     // Close modal immediately
     setModalOpen(false);
-    
+
     // Send mutation to server
     mutation.mutate(values, {
       onSuccess: (createdPatient) => {
@@ -249,39 +252,44 @@ const PatientListPage = () => {
         </Box>
       ) : (
         <>
-          <TextField
-            variant='outlined'
-            placeholder='Search patients by name, occupation or gender...'
-            value={searchInput}
-            onChange={(e) => {
-              setSearchInput(e.target.value);
-              // Debounce search to improve performance
-              setTimeout(() => setSearchText(e.target.value), 300);
-            }}
-            sx={{
-              width: '100%',
-              maxWidth: 500,
-              mb: 4,
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 20,
-              }
-            }}
-            aria-label='Search patients'
-            size='medium'
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position='start'>
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-                sx: {
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <TextField
+              variant='outlined'
+              placeholder='Search patients by name, occupation or gender...'
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                // Debounce search to improve performance
+                setTimeout(() => setSearchText(e.target.value), 300);
+              }}
+              sx={{
+                width: '100%',
+                maxWidth: 500,
+                '& .MuiOutlinedInput-root': {
                   borderRadius: 20,
-                  backgroundColor: theme.palette.background.default
                 }
-              }
-            }}
-          />
+              }}
+              aria-label='Search patients'
+              size='medium'
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position='start'>
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                  sx: {
+                    borderRadius: 20,
+                    backgroundColor: theme.palette.background.default
+                  }
+                }
+              }}
+            />
+            <ViewToggle
+              value={viewMode}
+              onChange={setViewMode}
+            />
+          </Box>
 
           <Box sx={{ minHeight: 400 }}>
             {filteredPatients.length === 0 ? (
@@ -333,113 +341,117 @@ const PatientListPage = () => {
                 </Box>
               </Fade>
             ) : (
-              <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: '1fr',
-                gap: 3.45,
-                [theme.breakpoints.up(320)]: {
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))'
-                },
-                [theme.breakpoints.up(768)]: {
-                  gridTemplateColumns: 'repeat(2, 1fr)'
-                },
-                [theme.breakpoints.up(1024)]: {
-                  gridTemplateColumns: 'repeat(3, 1fr)'
-                }
-              }}>
-                {filteredPatients.map((patient) => (
-                  <Slide key={patient.id} direction='up' in={true} timeout={300}>
-                    <Card
-                      sx={{
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        borderRadius: 3,
-                        overflow: 'hidden',
-                        boxShadow: theme.shadows[1],
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          transform: 'translateY(-5px)',
-                          boxShadow: theme.shadows[4]
-                        }
-                      }}
-                    >
-                      <CardActionArea
-                        component={Link}
-                        to={patient.id}
+              viewMode === 'list' ? (
+                <Box sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr',
+                  gap: 3.45,
+                  [theme.breakpoints.up(320)]: {
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))'
+                  },
+                  [theme.breakpoints.up(768)]: {
+                    gridTemplateColumns: 'repeat(2, 1fr)'
+                  },
+                  [theme.breakpoints.up(1024)]: {
+                    gridTemplateColumns: 'repeat(3, 1fr)'
+                  }
+                }}>
+                  {filteredPatients.map((patient) => (
+                    <Slide key={patient.id} direction='up' in={true} timeout={300}>
+                      <Card
                         sx={{
                           height: '100%',
                           display: 'flex',
                           flexDirection: 'column',
-                          alignItems: 'flex-start',
-                          justifyContent: 'flex-start'
+                          borderRadius: 3,
+                          overflow: 'hidden',
+                          boxShadow: theme.shadows[1],
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            transform: 'translateY(-5px)',
+                            boxShadow: theme.shadows[4]
+                          }
                         }}
                       >
-                        <CardContent sx={{ width: '100%' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <Avatar
-                              sx={{
-                                bgcolor: getGenderColor(patient.gender),
-                                mr: 2,
-                                width: 40,
-                                height: 40
-                              }}
-                            >
-                              {getIcon(patient.gender)}
-                            </Avatar>
-                            <Box>
-                              <Typography
-                                variant='h6'
-                                component='div'
+                        <CardActionArea
+                          component={Link}
+                          to={patient.id}
+                          sx={{
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            justifyContent: 'flex-start'
+                          }}
+                        >
+                          <CardContent sx={{ width: '100%' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                              <Avatar
                                 sx={{
-                                  fontWeight: 700,
-                                  lineHeight: 1.2
+                                  bgcolor: getGenderColor(patient.gender),
+                                  mr: 2,
+                                  width: 40,
+                                  height: 40
                                 }}
                               >
-                                {patient.name}
-                              </Typography>
-                              <Typography
-                                variant='body2'
-                                sx={{
-                                  color: theme.palette.text.secondary,
-                                  textTransform: 'capitalize'
-                                }}
-                              >
-                                {patient.gender}
-                              </Typography>
+                                {getIcon(patient.gender)}
+                              </Avatar>
+                              <Box>
+                                <Typography
+                                  variant='h6'
+                                  component='div'
+                                  sx={{
+                                    fontWeight: 700,
+                                    lineHeight: 1.2
+                                  }}
+                                >
+                                  {patient.name}
+                                </Typography>
+                                <Typography
+                                  variant='body2'
+                                  sx={{
+                                    color: theme.palette.text.secondary,
+                                    textTransform: 'capitalize'
+                                  }}
+                                >
+                                  {patient.gender}
+                                </Typography>
+                              </Box>
                             </Box>
-                          </Box>
-                          
-                          <Typography
-                            variant='body2'
-                            color='text.secondary'
-                            sx={{ mb: 1.5 }}
-                          >
-                            {patient.occupation}
-                          </Typography>
-                          
-                          <Box sx={{ mt: 2 }}>
+
                             <Typography
-                              variant='caption'
-                              sx={{
-                                display: 'block',
-                                color: theme.palette.text.secondary,
-                                mb: 0.5
-                              }}
+                              variant='body2'
+                              color='text.secondary'
+                              sx={{ mb: 1.5 }}
                             >
-                              Latest Health Status
+                              {patient.occupation}
                             </Typography>
-                            <HealthRatingBar
-                              rating={getLatestHealthRating(patient)}
-                              showText={true}
-                            />
-                          </Box>
-                        </CardContent>
-                      </CardActionArea>
-                    </Card>
-                  </Slide>
-                ))}
-              </Box>
+
+                            <Box sx={{ mt: 2 }}>
+                              <Typography
+                                variant='caption'
+                                sx={{
+                                  display: 'block',
+                                  color: theme.palette.text.secondary,
+                                  mb: 0.5
+                                }}
+                              >
+                                Latest Health Status
+                              </Typography>
+                              <HealthRatingBar
+                                rating={getLatestHealthRating(patient)}
+                                showText={true}
+                              />
+                            </Box>
+                          </CardContent>
+                        </CardActionArea>
+                      </Card>
+                    </Slide>
+                  ))}
+                </Box>
+              ) : (
+                <PatientDataGrid patients={filteredPatients} />
+              )
             )}
           </Box>
         </>

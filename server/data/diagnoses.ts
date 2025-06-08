@@ -76,6 +76,56 @@ const diagnosesEntries: DiagnosisEntry[] = [
     name: 'Other proliferative retinopathy',
     latin: 'Alia retinopathia proliferativa',
   },
+  {
+    code: 'T14.8',
+    name: 'Other injuries of unspecified body region',
+    latin: 'Alia vulnera regionis corporis non specificatae'
+  },
+  {
+    code: 'Z57.1',
+    name: 'Occupational exposure to radiation',
+    latin: 'Expositio occupationalis ad radiationem'
+  },
+  {
+    code: 'F43.1',
+    name: 'Post-traumatic stress disorder',
+    latin: 'Perturbatio post-trauma'
+  },
+  {
+    code: 'T63.4',
+    name: 'Toxic effect of venom of other reptiles',
+    latin: 'Effectus toxicus veneni aliorum reptilium'
+  },
+  {
+    code: 'M70.1',
+    name: 'Bursitis of hand',
+    latin: 'Bursitis manus'
+  },
+  {
+    code: 'I10',
+    name: 'Essential (primary) hypertension',
+    latin: 'Hypertensio essentialis'
+  },
+  {
+    code: 'E11.9',
+    name: 'Type 2 diabetes mellitus without complications',
+    latin: 'Diabetes mellitus typi 2 sine complicationibus'
+  },
+  {
+    code: 'J45.909',
+    name: 'Unspecified asthma without exacerbation',
+    latin: 'Asthma non specificatum sine exacerbatione'
+  },
+  {
+    code: 'K21.9',
+    name: 'Gastro-esophageal reflux disease without esophagitis',
+    latin: 'Morbus refluxus gastrooesophagealis sine oesophagitis'
+  },
+  {
+    code: 'M54.5',
+    name: 'Low back pain',
+    latin: 'Dorsalgia'
+  }
 ];
 
 export default diagnosesEntries;
