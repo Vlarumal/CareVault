@@ -12,7 +12,9 @@ import {
   CardActionArea,
   Fade,
   Slide,
-  Avatar
+  Avatar,
+  Tooltip,
+  IconButton
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -29,13 +31,12 @@ import {
 } from '../../types';
 import AddPatientModal from '../AddPatientModal';
 import HealthRatingBar from '../HealthRatingBar';
-import patientService from '../../services/patients';
+import patientService, { PaginatedResponse } from '../../services/patients';
 import { Link } from 'react-router-dom';
 import { getIcon } from '../../utils';
 import PatientDataGrid from './PatientDataGrid';
 import ViewToggle from '../ViewToggle';
 
-// Helper to get latest health rating from entries
 const getLatestHealthRating = (patient: Patient): number | null => {
   if (!patient.entries) return null;
 
@@ -80,11 +81,32 @@ const PatientListPage = () => {
     localStorage.setItem('patientListViewMode', viewMode);
   }, [viewMode]);
 
-  const { data: patients = [], isLoading } = useQuery<Patient[], Error>({
-    queryKey: ['patients'],
-    queryFn: patientService.getAll,
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100); // Show all patients by default
+
+  const { data: patientsData, isLoading } = useQuery<PaginatedResponse<Patient[]>, Error>({
+    queryKey: ['patients', page, pageSize],
+    queryFn: async () => {
+      const response = await patientService.getAll(page, pageSize);
+      if ('metadata' in response) {
+        return response as PaginatedResponse<Patient[]>;
+      } else {
+        // Convert non-paginated response to paginated format
+        return {
+          data: response as Patient[],
+          metadata: {
+            totalItems: (response as Patient[]).length,
+            totalPages: 1,
+            currentPage: 1,
+            itemsPerPage: (response as Patient[]).length
+          }
+        };
+      }
+    },
     staleTime: 300000, // 5 minutes
   });
+
+  const patients = patientsData?.data || [];
 
   const mutation = useMutation({
     mutationFn: patientService.create,
@@ -118,32 +140,77 @@ const PatientListPage = () => {
     };
 
     // Update cache immediately
-    queryClient.setQueryData(['patients'], (oldPatients: Patient[] = []) => [
-      ...oldPatients,
-      optimisticPatient
-    ]);
+    queryClient.setQueryData(['patients', page, pageSize], (oldData: Patient[] | PaginatedResponse<Patient[]> | undefined) => {
+      if (!oldData) {
+        return {
+          data: [optimisticPatient],
+          metadata: {
+            totalItems: 1,
+            totalPages: 1,
+            currentPage: 1,
+            itemsPerPage: 10
+          }
+        };
+      }
 
-    // Close modal immediately
+      const oldPatients = Array.isArray(oldData) ? oldData : (oldData?.data || []);
+      const newData = [...oldPatients, optimisticPatient];
+
+      return {
+        data: newData,
+        metadata: {
+          totalItems: newData.length,
+          totalPages: Math.ceil(newData.length / pageSize),
+          currentPage: 1,
+          itemsPerPage: pageSize
+        }
+      };
+    });
+
     setModalOpen(false);
 
-    // Send mutation to server
     mutation.mutate(values, {
       onSuccess: (createdPatient) => {
         // Replace optimistic patient with server response
-        queryClient.setQueryData(['patients'], (oldPatients: Patient[] = []) =>
-          oldPatients.map(p => p.id === tempId ? createdPatient : p)
-        );
+        queryClient.setQueryData(['patients', page, pageSize], (oldData: Patient[] | PaginatedResponse<Patient[]> | undefined) => {
+          if (!oldData) return [createdPatient];
+
+          const oldPatients = Array.isArray(oldData) ? oldData : (oldData?.data || []);
+          const updatedPatients = oldPatients.map((p: Patient) => (p.id === tempId ? createdPatient : p));
+
+          return {
+            data: updatedPatients,
+            metadata: {
+              totalItems: updatedPatients.length,
+              totalPages: Math.ceil(updatedPatients.length / pageSize),
+              currentPage: 1,
+              itemsPerPage: pageSize
+            }
+          };
+        });
       },
       onError: () => {
         // Rollback on error
-        queryClient.setQueryData(['patients'], (oldPatients: Patient[] = []) =>
-          oldPatients.filter(p => p.id !== tempId)
-        );
+        queryClient.setQueryData(['patients', page, pageSize], (oldData: Patient[] | PaginatedResponse<Patient[]> | undefined) => {
+          if (!oldData) return [];
+
+          const oldPatients = Array.isArray(oldData) ? oldData : (oldData?.data || []);
+          const filteredPatients = oldPatients.filter((p: Patient) => p.id !== tempId);
+
+          return {
+            data: filteredPatients,
+            metadata: {
+              totalItems: filteredPatients.length,
+              totalPages: Math.ceil(filteredPatients.length / pageSize),
+              currentPage: 1,
+              itemsPerPage: pageSize
+            }
+          };
+        });
       }
     });
   };
 
-  // Filter patients based on search text
   const filteredPatients = useMemo(() => {
     if (!searchText) return patients;
     const lowerSearch = searchText.toLowerCase();
@@ -155,7 +222,6 @@ const PatientListPage = () => {
     );
   }, [patients, searchText]);
 
-  // Get gender icon color
   const getGenderColor = (gender: string) => {
     switch (gender.toLowerCase()) {
       case 'male':
@@ -206,25 +272,60 @@ const PatientListPage = () => {
             Patient Directory
           </Typography>
         </Box>
-        <Button
-          variant='contained'
-          onClick={openModal}
-          startIcon={<PersonAddIcon />}
-          sx={{
-            minWidth: 200,
-            py: 1.5,
-            fontWeight: 600,
-            boxShadow: theme.shadows[1],
-            '&:hover': {
-              boxShadow: theme.shadows[3],
-              transform: 'translateY(-2px)'
-            },
-            transition: 'all 0.3s ease'
-          }}
-          aria-label='Add new patient'
-        >
-          Add New Patient
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {/* Icon button for xs screens only */}
+          <Tooltip title="Add New Patient">
+            <IconButton
+              onClick={openModal}
+              sx={{
+                display: { xs: 'inline-flex', sm: 'none' },
+                ml: 2,
+                backgroundColor: theme.palette.primary.main,
+                color: theme.palette.primary.contrastText,
+                '&:hover': {
+                  backgroundColor: theme.palette.primary.dark
+                },
+                transition: 'all 0.3s ease',
+                borderRadius: '50%',
+                boxShadow: theme.shadows[1],
+                '&:focus': {
+                  outline: 'none',
+                  boxShadow: `0 0 0 3px ${theme.palette.primary.light}`,
+                },
+                '&:active': {
+                  transform: 'translateY(2px)',
+                },
+              }}
+              aria-label='Add new patient'
+            >
+              <PersonAddIcon fontSize="large" />
+            </IconButton>
+          </Tooltip>
+
+          {/* Regular button for sm screens and above */}
+          <Button
+            variant='contained'
+            onClick={openModal}
+            startIcon={<PersonAddIcon />}
+            sx={{
+              display: { xs: 'none', sm: 'inline-flex' },
+              minWidth: { sm: 180, md: 200 },
+              px: { sm: 2 },
+              py: { sm: 1.5 },
+              fontSize: { sm: '1rem' },
+              fontWeight: 600,
+              boxShadow: theme.shadows[1],
+              '&:hover': {
+                boxShadow: theme.shadows[3],
+                transform: 'translateY(-2px)'
+              },
+              transition: 'all 0.3s ease'
+            }}
+            aria-label='Add new patient'
+          >
+            Add New Patient
+          </Button>
+        </Box>
       </Box>
       {isLoading || initialLoad ? (
         <Box sx={{
@@ -346,10 +447,17 @@ const PatientListPage = () => {
                       onClick={openModal}
                       startIcon={<PersonAddIcon />}
                       sx={{
-                        mt: 3,
+                        mt: { xs: 3, md: 4 },
                         borderRadius: 20,
-                        px: 4,
-                        py: 1
+                        px: { xs: 2, sm: 3, md: 4 },
+                        py: { xs: 1, md: 1.5 },
+                        fontSize: { xs: '0.875rem', sm: '1rem' },
+                        width: '100%',
+                        maxWidth: { xs: '100%', sm: 300 },
+                        textAlign: 'center',
+                        '& .MuiButton-startIcon': {
+                          marginRight: { xs: 1, md: 2 }
+                        }
                       }}
                     >
                       Add First Patient
@@ -467,7 +575,17 @@ const PatientListPage = () => {
                   ))}
                 </Box>
               ) : (
-                <PatientDataGrid patients={filteredPatients} />
+                <PatientDataGrid
+                  patients={filteredPatients}
+                  page={page}
+                  pageSize={pageSize}
+                  onPageChange={(newPage) => setPage(newPage)}
+                  onPageSizeChange={(newPageSize) => {
+                    setPageSize(newPageSize);
+                    setPage(1); // Reset to first page when changing page size
+                  }}
+                  pageSizeOptions={[10, 25, 50, 100]}
+                />
               )
             )}
           </Box>

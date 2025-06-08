@@ -202,9 +202,34 @@ export const validateDateRange = (startDate: string, endDate: string): string =>
  */
 export const validateSSN = (ssn: string): string => {
   const regex = /^(\d{6}-\d{4}|\d{6}-\d{3}[A-Za-z])$/;
-  
+
   if (!regex.test(ssn)) {
     return 'Invalid SSN format. Use XXXXXX-XXXX';
   }
   return '';
+};
+
+/**
+ * Renders diagnosis codes with duplicates removed
+ * @param diagnosisCodes - Array of diagnosis codes
+ * @returns JSX element with diagnosis codes or null if no codes
+ */
+export const renderDiagnosisCodes = (diagnosisCodes?: string[]) => {
+  if (!diagnosisCodes || diagnosisCodes.length === 0) {
+    return null;
+  }
+
+  // Filter out duplicate diagnosis codes
+  const uniqueDiagnosisCodes = Array.from(new Set(diagnosisCodes));
+
+  return (
+    <div>
+      <strong>Diagnosis codes:</strong>
+      <ul>
+        {uniqueDiagnosisCodes.map(code => (
+          <li key={code}>{code}</li>
+        ))}
+      </ul>
+    </div>
+  );
 };

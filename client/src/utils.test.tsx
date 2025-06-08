@@ -8,7 +8,7 @@ import {
   getIcon,
   assertNever
 } from './utils';
-import { Favorite, Male, Female, Healing, Work, MedicalServices } from '@mui/icons-material';
+import { Favorite, Male, Female, Healing, Work, MedicalServices, Transgender } from '@mui/icons-material';
 import { Patient, Entry, HealthCheckEntry } from './types';
 
 describe('Validation Utilities', () => {
@@ -106,7 +106,7 @@ describe('getIcon Utility', () => {
   it('returns correct icon for gender types', () => {
     expect(getIcon('male' as Patient['gender'])).toEqual(<Male />);
     expect(getIcon('female' as Patient['gender'])).toEqual(<Female />);
-    expect(getIcon('other' as Patient['gender'])).toBeUndefined();
+    expect(getIcon('other' as Patient['gender'])).toEqual(<Transgender />);
   });
   
   it('returns correct icon for entry types', () => {

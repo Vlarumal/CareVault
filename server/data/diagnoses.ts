@@ -82,11 +82,6 @@ const diagnosesEntries: DiagnosisEntry[] = [
     latin: 'Alia vulnera regionis corporis non specificatae'
   },
   {
-    code: 'Z57.1',
-    name: 'Occupational exposure to radiation',
-    latin: 'Expositio occupationalis ad radiationem'
-  },
-  {
     code: 'F43.1',
     name: 'Post-traumatic stress disorder',
     latin: 'Perturbatio post-trauma'

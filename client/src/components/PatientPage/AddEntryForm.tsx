@@ -28,9 +28,17 @@ interface Props {
   loading: boolean;
   diagnosisCodesAll: DiagnosisEntry['code'][];
   onClose?: () => void;
+  onEntryAdded?: () => void; // Callback when entry is added
 }
 
-const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCodesAll, onClose }) => {
+const AddEntryForm: React.FC<Props> = ({
+  onAddEntry,
+  error,
+  loading,
+  diagnosisCodesAll,
+  onClose,
+  onEntryAdded
+}) => {
   const theme = useTheme();
   const initialFormState = {
     description: '',
@@ -54,6 +62,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
     useState<Entry['type']>('HealthCheck');
   const errorRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const firstInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (Object.values(errors).some(e => e)) {
@@ -63,8 +72,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
       if (liveRegion) {
         liveRegion.textContent = `Form errors: ${errorMessages}`;
       }
-      
-      // Focus first error field
+
       const firstErrorField = Object.keys(errors)[0];
       if (firstErrorField) {
         const input = document.getElementById(`${firstErrorField}-input`);
@@ -95,7 +103,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
 
   const validateField = (fieldName: string, value: string) => {
     let error = '';
-    
+
     switch (fieldName) {
       case 'description':
       case 'date':
@@ -103,15 +111,15 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
       case 'employerName':
         error = validateRequired(value, fieldName.charAt(0).toUpperCase() + fieldName.slice(1));
         break;
-        
+
       case 'specialist':
         error = validateRequired(value, 'Specialist');
         break;
-        
+
       case 'healthCheckRating':
         error = validateHealthRating(Number(value));
         break;
-        
+
       case 'dischargeDate':
         if (!value) {
           error = 'Discharge date is required';
@@ -119,7 +127,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           error = 'Invalid date format (YYYY-MM-DD)';
         }
         break;
-        
+
       case 'sickLeaveStartDate':
         if (value && !isDateValid(value)) {
           error = 'Invalid date format (YYYY-MM-DD)';
@@ -136,9 +144,9 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           error = validateDateRange(formData.sickLeaveStartDate, value);
         }
         break;
-        
+
     }
-    
+
     setErrors(prev => ({...prev, [fieldName]: error}));
     return !error;
   };
@@ -150,9 +158,12 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
   const handleDiagnosisCodesChange = (
     event: SelectChangeEvent<string[]>
   ) => {
+    const selectedCodes = event.target.value as string[];
+    // Filter out duplicates
+    const uniqueCodes = Array.from(new Set(selectedCodes));
     setFormData((prev) => ({
       ...prev,
-      diagnosisCodes: event.target.value as string[],
+      diagnosisCodes: uniqueCodes,
     }));
   };
 
@@ -163,31 +174,31 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
 
     // Form-wide validation before submission
     const formErrors: Record<string, string> = {};
-    
+
     // Validate base fields
     formErrors.description = validateRequired(formData.description, 'Description');
     formErrors.date = validateRequired(formData.date, 'Date');
     formErrors.specialist = validateRequired(formData.specialist, 'Specialist');
-    
+
     // Validate entry-specific fields
     if (entryType === 'HealthCheck') {
       formErrors.healthCheckRating = validateHealthRating(Number(formData.healthCheckRating));
     }
-    
+
     if (entryType === 'Hospital') {
       formErrors.dischargeDate = validateRequired(formData.dischargeDate, 'Discharge date');
       formErrors.dischargeCriteria = validateRequired(formData.dischargeCriteria, 'Discharge criteria');
     }
-    
+
     if (entryType === 'OccupationalHealthcare') {
       formErrors.employerName = validateRequired(formData.employerName, 'Employer name');
     }
-    
+
     // Filter out empty errors
     const filteredErrors = Object.fromEntries(
       Object.entries(formErrors).filter(([_, value]) => value)
     );
-    
+
     if (Object.keys(filteredErrors).length > 0) {
       setErrors(filteredErrors);
       return;
@@ -247,6 +258,12 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
 
     onAddEntry(newEntry);
     clearFields();
+    if (onEntryAdded) {
+      onEntryAdded();
+    }
+    if (onClose) {
+      onClose();
+    }
   };
 
   const renderEntryTypeFields = () => {
@@ -272,7 +289,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                   style: { color: theme.palette.text.primary }
                 },
                 inputLabel: { shrink: true },
-            
+
                 formHelperText: {
                   id: 'dischargeDate-error',
                   tabIndex: -1
@@ -344,7 +361,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                   style: { color: theme.palette.text.primary }
                 },
                 inputLabel: { shrink: true },
-            
+
                 formHelperText: {
                   id: 'sickLeaveStartDate-error',
                   tabIndex: -1
@@ -367,7 +384,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                   style: { color: theme.palette.text.primary }
                 },
                 inputLabel: { shrink: true },
-            
+
                 formHelperText: {
                   id: 'sickLeaveEndDate-error',
                   tabIndex: -1
@@ -395,7 +412,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                 style: { color: theme.palette.text.primary }
               },
               htmlInput: { min: 0, max: 3 },
-          
+
               formHelperText: {
                 id: 'healthCheckRating-error',
                 tabIndex: -1
@@ -495,21 +512,22 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                 id: 'description-input',
                 'aria-required': true,
                 'aria-describedby': errors.description ? 'description-error' : 'description-helper',
-                style: { color: theme.palette.text.primary }
+                style: { color: theme.palette.text.primary },
+                ref: firstInputRef
               },
-        
+
               htmlInput: {
                 'aria-describedby': 'description-helper description-error',
                 'aria-invalid': errors.description ? 'true' : 'false'
               },
-        
+
               formHelperText: {
                 id: 'description-helper',
                 ref: errorRef,
                 tabIndex: -1
               }
             }} />
-        
+
           <TextField
             name='date'
             label='Date'
@@ -530,20 +548,20 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                 'aria-describedby': errors.date ? 'date-error' : 'date-helper',
                 style: { color: theme.palette.text.primary }
               },
-        
+
               htmlInput: {
                 'aria-describedby': 'date-helper date-error',
                 'aria-invalid': errors.date ? 'true' : 'false'
               },
-        
+
               inputLabel: { shrink: true },
-        
+
               formHelperText: {
                 id: 'date-helper',
                 tabIndex: -1
               }
             }} />
-        
+
           <TextField
             name='specialist'
             label='Specialist'
@@ -563,12 +581,12 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                 'aria-describedby': errors.specialist ? 'specialist-error' : 'specialist-helper',
                 style: { color: theme.palette.text.primary }
               },
-        
+
               htmlInput: {
                 'aria-describedby': 'specialist-helper specialist-error',
                 'aria-invalid': errors.specialist ? 'true' : 'false'
               },
-        
+
               formHelperText: {
                 id: 'specialist-helper',
                 tabIndex: -1
@@ -599,15 +617,19 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
                 disableEnforceFocus: true,
               }}
             >
-              {diagnosisCodesAll.map((code) => (
-                <MenuItem
-                  key={code}
-                  value={code}
-                  aria-label={code}
-                >
-                  {code}
-                </MenuItem>
-              ))}
+              {diagnosisCodesAll
+                .filter((code, index, self) => self.indexOf(code) === index) // Filter out duplicates
+                .map(code => {
+                  return (
+                    <MenuItem
+                      key={code}
+                      value={code}
+                      aria-label={code}
+                    >
+                      {code}
+                    </MenuItem>
+                  );
+                })}
             </Select>
             <FormHelperText id="diagnosis-codes-helper">
               Select one or more diagnosis codes
@@ -615,7 +637,7 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           </FormControl>
 
           {renderEntryTypeFields()}
-          
+
           {/* Hidden region for screen reader announcements */}
           <div
             id="a11y-announcements"

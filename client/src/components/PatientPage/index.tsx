@@ -9,7 +9,7 @@ import { getIcon } from '../../utils';
 import patientService from '../../services/patients';
 import diagnosisService from '../../services/diagnoses';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Box, Button, Fab } from '@mui/material';
+import { Alert, Box, Button, Fab, Typography } from '@mui/material';
 import AddEntryForm from './AddEntryForm';
 import AddEntryDrawer from './AddEntryDrawer';
 import HealthRatingBar from '../HealthRatingBar';
@@ -110,7 +110,14 @@ const PatientPage = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const handleDrawerToggle = () => {
-    setIsDrawerOpen(!isDrawerOpen);
+    setIsDrawerOpen(true);
+    // Smooth scroll to form when drawer opens
+    setTimeout(() => {
+      const formElement = document.querySelector('.drawer-content form');
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 300); // Delay to allow drawer to open first
   };
 
   const handleDrawerClose = () => {
@@ -175,20 +182,26 @@ const PatientPage = () => {
           color="primary"
           aria-label="add"
           onClick={handleDrawerToggle}
-          style={{ position: 'fixed', bottom: 16, right: 16 }}
+          style={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            animation: 'pulse 2s infinite', }}
         >
           <AddIcon />
         </Fab>
-        <AddEntryDrawer isOpen={isDrawerOpen} onClose={handleDrawerClose}>
+        <AddEntryDrawer isOpen={isDrawerOpen} onClose={handleDrawerClose} onEntryAdded={() => mutation.reset()}>
           <AddEntryForm
             onAddEntry={(entry) => {
               mutation.mutate(entry);
-              handleDrawerClose();
             }}
             error={mutation.error?.message}
             loading={mutation.isPending}
             diagnosisCodesAll={diagnosisCodesAll}
             onClose={handleDrawerClose}
+            onEntryAdded={() => {
+              handleDrawerClose();
+            }}
           />
         </AddEntryDrawer>
       </section>
@@ -196,10 +209,28 @@ const PatientPage = () => {
       {patient.entries && patient.entries.length > 0 && (
         <Box>
           <h2 aria-label="Patient entries">entries</h2>
-                    <TimelineView
-                      entries={patient.entries}
-                      getDiagnosisByCode={getDiagnosisByCode}
-                    />
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleDrawerToggle}
+            aria-label="Add new entry"
+            style={{
+              position: 'sticky',
+              top: '10px',
+              zIndex: 1,
+              margin: '10px 0',
+            }}
+          >
+            Add New Entry
+          </Button>
+          <Typography variant="body2" color="textSecondary" style={{ marginBottom: '10px' }}>
+            Add new medical entries here
+          </Typography>
+          <TimelineView
+            entries={patient.entries}
+            getDiagnosisByCode={getDiagnosisByCode}
+          />
         </Box>
       )}
     </div>

@@ -2,6 +2,8 @@ export interface DiagnosisEntry {
   code: string;
   name: string;
   latin?: string;
+  // Add unique constraint to code
+  readonly uniqueCode: true;
 }
 
 export enum Gender {

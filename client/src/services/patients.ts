@@ -3,10 +3,37 @@ import { Entry, NewEntryFormValues, Patient, PatientFormValues } from '../types'
 import { apiBaseUrl } from '../constants';
 import { apiRetry } from '../utils/apiUtils';
 
-const getAll = async () => {
-  return apiRetry(() =>
-    axios.get<Patient[]>(`${apiBaseUrl}/patients`).then(res => res.data)
-  );
+type PatientResponse = PaginatedResponse<Patient[]> | Patient[];
+
+export interface PaginatedResponse<T> {
+  data: T;
+  metadata: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    itemsPerPage: number;
+  };
+}
+
+const getAll = async (page = 1, pageSize = 10) => {
+  try {
+    const response = await apiRetry(() =>
+      axios.get(`${apiBaseUrl}/patients`, {
+        params: { page, pageSize }
+      })
+    );
+
+    // Check if response is paginated or non-paginated
+    if ('metadata' in response.data) {
+      // Paginated response
+      return response.data as PaginatedResponse<Patient[]>;
+    } else {
+      // Non-paginated response
+      return { data: response.data as Patient[], metadata: null };
+    }
+  } catch (error) {
+    throw error;
+  }
 };
 
 const getById = async (id: string) => {

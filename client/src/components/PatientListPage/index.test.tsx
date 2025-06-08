@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import PatientListPage from './index';
-import { Patient, Gender } from '../../types';
+import { Gender } from '../../types';
 
 /**
  * @context7
@@ -20,60 +20,24 @@ import { Patient, Gender } from '../../types';
 const mockPatientService = {
   getAll: vi.fn(),
 };
-vi.mock('../../services/patients', () => mockPatientService);
+vi.mock('../../services/patients', () => ({
+  default: mockPatientService,
+  PaginatedResponse: vi.fn(),
+}));
 
-describe('PatientListPage Component', () => {
-  const patients: Patient[] = [
-    {
-      id: '1',
-      name: 'John Doe',
-      dateOfBirth: '1985-01-15',
-      gender: Gender.Male,
-      occupation: 'Engineer',
-      ssn: '123-45-6789',
-      entries: [
-        {
-          id: 'e1',
-          date: '2023-01-01',
-          type: 'HealthCheck',
-          description: 'Annual checkup',
-          healthCheckRating: 0,
-          specialist: 'Dr. Smith',
-        }
-      ],
-    },
-    {
-      id: '2',
-      name: 'Jane Smith',
-      dateOfBirth: '1990-02-20',
-      gender: Gender.Female,
-      occupation: 'Designer',
-      ssn: '987-65-4321',
-      entries: [],
-    },
-    {
-      id: '3',
-      name: 'Alice Johnson',
-      dateOfBirth: '1975-03-25',
-      gender: Gender.Other,
-      occupation: 'Teacher',
-      ssn: '456-78-9012',
-      entries: [
-        {
-          id: 'e2',
-          date: '2023-02-01',
-          type: 'HealthCheck',
-          description: 'Follow-up',
-          healthCheckRating: 2,
-          specialist: 'Dr. Brown',
-        }
-      ],
-    },
-  ];
+
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(mockPatientService.getAll).mockResolvedValue(patients);
+    vi.mocked(mockPatientService.getAll).mockResolvedValue({ data: Array.from({ length: 10 }, (_, i) => ({
+      id: i.toString(),
+      name: `Patient ${i+1}`,
+      dateOfBirth: '1980-01-01',
+      gender: Gender.Male,
+      occupation: 'Occupation',
+      ssn: '123-45-6789',
+      entries: []
+    })), metadata: { totalItems: 10, totalPages: 1, currentPage: 1, itemsPerPage: 10 } });
   });
 
   it('renders loading skeletons during initial load', async () => {
@@ -204,4 +168,74 @@ describe('PatientListPage Component', () => {
     await waitFor(() => expect(screen.getByText('No patients found')).toBeInTheDocument());
     expect(container).toMatchSnapshot();
   });
+
+
+it('handles pagination correctly', async () => {
+  render(
+    <MemoryRouter>
+      <PatientListPage />
+    </MemoryRouter>
+  );
+
+  // Mock paginated response for page 1
+  vi.mocked(mockPatientService.getAll).mockResolvedValueOnce({
+    data: Array.from({ length: 5 }, (_, i) => ({
+      id: i.toString(),
+      name: `Patient ${i+1}`,
+      dateOfBirth: '1980-01-01',
+      gender: Gender.Male,
+      occupation: 'Occupation',
+      ssn: '123-45-6789',
+      entries: []
+    })),
+    metadata: { totalItems: 10, totalPages: 2, currentPage: 1, itemsPerPage: 5 }
+  });
+
+  await waitFor(() => expect(screen.getByText('John Doe')).toBeInTheDocument());
+
+  // Check that only first 5 patients are shown
+  expect(screen.getByText('John Doe')).toBeInTheDocument();
+  expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+  expect(screen.getByText('Alice Johnson')).toBeInTheDocument();
+  expect(screen.queryByText('Patient 6')).not.toBeInTheDocument();
+
+  // Mock paginated response for page 2
+  vi.mocked(mockPatientService.getAll).mockResolvedValueOnce({
+    data: Array.from({ length: 5 }, (_, i) => ({
+      id: (i+5).toString(),
+      name: `Patient ${i+6}`,
+      dateOfBirth: '1980-01-01',
+      gender: Gender.Male,
+      occupation: 'Occupation',
+      ssn: '123-45-6789',
+      entries: []
+    })),
+    metadata: { totalItems: 10, totalPages: 2, currentPage: 2, itemsPerPage: 5 }
+  });
+
+  // Simulate going to next page
+  const nextButton = screen.getByLabelText('Go to next page');
+  await userEvent.click(nextButton);
+
+  // Check that second page is loaded
+  await waitFor(() => expect(mockPatientService.getAll).toHaveBeenCalledWith(2, 5));
+  expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+  expect(screen.getByText('Patient 6')).toBeInTheDocument();
+});
+
+it('resets to first page when changing page size', async () => {
+  render(
+    <MemoryRouter>
+      <PatientListPage />
+    </MemoryRouter>
+  );
+
+  await waitFor(() => expect(screen.getByText('John Doe')).toBeInTheDocument());
+
+  // Change page size
+  const pageSizeSelect = screen.getByLabelText('Rows per page:');
+  await userEvent.selectOptions(pageSizeSelect, ['25']);
+
+  // Check that API is called with page 1 and new page size
+  await waitFor(() => expect(mockPatientService.getAll).toHaveBeenCalledWith(1, 25));
 });

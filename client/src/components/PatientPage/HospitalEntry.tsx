@@ -1,6 +1,6 @@
 import React from 'react';
 import { HospitalEntry } from '../../types';
-import { getIcon } from '../../utils';
+import { getIcon, renderDiagnosisCodes } from '../../utils';
 
 const HospitalEntryComponent: React.FC<{ entry: HospitalEntry }> = ({
   entry,
@@ -15,6 +15,7 @@ const HospitalEntryComponent: React.FC<{ entry: HospitalEntry }> = ({
       </div>
       <div>diagnose by {entry.specialist}</div>
       <div>discharged {entry.discharge.date} {entry.discharge.criteria}</div>
+      {renderDiagnosisCodes(entry.diagnosisCodes)}
     </section>
   );
 };

@@ -34,3 +34,15 @@ export type NewPatientEntryWithoutEntries = UnionOmit<NewPatientEntry, 'entries'
 export type NonSensitivePatientEntry = UnionOmit<PatientEntry, 'ssn' | 'entries'>;
 export type NewEntryWithoutId = UnionOmit<z.infer<typeof EntrySchema>, 'id'>;
 
+/**
+ * Type for paginated API responses
+ */
+export interface PaginatedResponse<T> {
+  data: T;
+  metadata: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    itemsPerPage: number;
+  };
+}

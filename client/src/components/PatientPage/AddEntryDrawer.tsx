@@ -1,24 +1,27 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CSSTransition } from 'react-transition-group';
 import { useTheme } from '@mui/material/styles';
 import './AddEntryDrawer.css';
-import { IconButton } from '@mui/material';
+import { IconButton, Snackbar } from '@mui/material';
 import { Close } from '@mui/icons-material';
 
 interface AddEntryDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  onEntryAdded?: () => void; // Optional callback for entry added
 }
 
 const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
   isOpen,
   onClose,
   children,
+  onEntryAdded,
 }) => {
   const theme = useTheme();
   const drawerRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -42,9 +45,29 @@ const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
 
   useEffect(() => {
     if (isOpen && drawerRef.current) {
-      drawerRef.current.focus();
+      // Focus the first form field when drawer opens
+      const firstInput = drawerRef.current.querySelector('input');
+      if (firstInput) {
+        (firstInput as HTMLElement).focus();
+      }
     }
   }, [isOpen]);
+
+  const handleEntryAdded = () => {
+    if (onEntryAdded) {
+      onEntryAdded();
+    }
+    setSnackbarOpen(true);
+  };
+
+  useEffect(() => {
+    if (snackbarOpen) {
+      const timer = setTimeout(() => {
+        setSnackbarOpen(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [snackbarOpen]);
 
   return (
     <>
@@ -105,6 +128,20 @@ const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
           </div>
         </div>
       </CSSTransition>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        message="Entry added successfully"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        ContentProps={{
+          style: {
+            backgroundColor: theme.palette.success.main,
+            color: theme.palette.success.contrastText,
+          },
+        }}
+      />
     </>
   );
 };

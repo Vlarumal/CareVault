@@ -1,3 +1,15 @@
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .drawer-backdrop {
   position: fixed;
   top: 0;
@@ -31,8 +43,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
-  max-width: 400px;
+  width: 500px;
   background-color: var(--background-paper);
   color: var(--text-primary);
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
@@ -43,10 +54,9 @@
   padding: 20px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 767px) {
   .drawer {
-    width: 100%;
-    max-width: 100%;
+    width: 100vw;
     padding: 10px;
   }
 
@@ -56,6 +66,12 @@
 
   .drawer-content {
     padding-top: 30px; /* Adjust space for close button on smaller screens */
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .drawer {
+    width: 70vw;
   }
 }
 

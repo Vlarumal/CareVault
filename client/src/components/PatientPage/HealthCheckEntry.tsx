@@ -1,5 +1,5 @@
 import { HealthCheckEntry } from '../../types';
-import { getIcon } from '../../utils';
+import { getIcon, renderDiagnosisCodes } from '../../utils';
 
 const HealthCheckEntryComponent: React.FC<{
   entry: HealthCheckEntry;
@@ -14,6 +14,7 @@ const HealthCheckEntryComponent: React.FC<{
       </div>
       <div>{getIcon(entry.healthCheckRating)}</div>
       <div>diagnose by {entry.specialist}</div>
+      {renderDiagnosisCodes(entry.diagnosisCodes)}
     </section>
   );
 };

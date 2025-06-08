@@ -1,5 +1,5 @@
 import { OccupationalHealthcareEntry } from '../../types';
-import { getIcon } from '../../utils';
+import { getIcon, renderDiagnosisCodes } from '../../utils';
 
 const OccupationalHealthcareEntryComponent: React.FC<{
   entry: OccupationalHealthcareEntry;
@@ -19,6 +19,7 @@ const OccupationalHealthcareEntryComponent: React.FC<{
           {entry.sickLeave?.endDate}
         </div>
       )}
+      {renderDiagnosisCodes(entry.diagnosisCodes)}
     </section>
   );
 };

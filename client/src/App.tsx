@@ -59,7 +59,7 @@ const App = () => {
     error
   } = useQuery<Patient[], Error>({
     queryKey: ['patients'],
-    queryFn: patientService.getAll,
+    queryFn: ({ pageParam = 1 }) => patientService.getAll(pageParam as number).then(response => response.data),
     staleTime: 300000, // 5 minutes
   });
 

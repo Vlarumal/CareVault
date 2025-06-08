@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Mock react-router-dom's useParams to provide id param
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: '1' }),
+  useNavigate: () => vi.fn(),
 }));
 
 // Create a QueryClient instance
@@ -51,14 +52,17 @@ const mockPatient: Patient = {
 };
 
 const mockDiagnoses: DiagnosisEntry[] = [
-  { code: 'E66', name: 'Obesity' },
-  { code: 'M54.5', name: 'Low back pain' },
+  { code: 'E66', name: 'Obesity', uniqueCode: true },
+  { code: 'M54.5', name: 'Low back pain', uniqueCode: true },
+  { code: 'J45', name: 'Asthma', uniqueCode: true },
 ];
 
 describe('PatientPage component', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(import('../../services/healthRatingService').then(m => m.getLatestHealthRating)).mockReturnValue(1);
+    vi.mock('../../services/healthRatingService', () => ({
+      getLatestHealthRating: vi.fn().mockReturnValue(1),
+    }));
   });
 
   test('shows skeleton while fetching data', async () => {
@@ -71,10 +75,8 @@ describe('PatientPage component', () => {
       </QueryClientProvider>
     );
 
-    // Skeleton should be visible initially
     expect(screen.getByTestId('patient-details-skeleton')).toBeInTheDocument();
-    
-    // Skeleton should disappear after data loads
+
     await waitFor(() => {
       expect(screen.queryByTestId('patient-details-skeleton')).not.toBeInTheDocument();
     });
@@ -89,7 +91,7 @@ describe('PatientPage component', () => {
         <PatientPage />
       </QueryClientProvider>
     );
-    
+
     const alert = await screen.findByTestId('error-alert');
     expect(alert).toHaveTextContent('Network error');
   });
@@ -103,14 +105,14 @@ describe('PatientPage component', () => {
         <PatientPage />
       </QueryClientProvider>
     );
-    
+
     await waitFor(() => {
       const alert = screen.getByTestId('warning-alert');
       expect(alert).toHaveTextContent('No patient found');
       expect(alert).toHaveClass('MuiAlert-standardWarning');
     });
   });
-  
+
   test('successfully adds a new entry with optimistic update', async () => {
     const patientWithEntries: Patient = {
       ...mockPatient,
@@ -118,26 +120,23 @@ describe('PatientPage component', () => {
     };
     mockGetPatientById.mockResolvedValue(patientWithEntries);
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
-  
+
     render(
       <QueryClientProvider client={queryClient}>
         <PatientPage />
       </QueryClientProvider>
     );
-  
-    // Wait for initial data to load
+
     await waitFor(() => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
-  
-    // Simulate filling the form for a HealthCheck entry
+
     fireEvent.change(screen.getByLabelText('Entry Type'), { target: { value: 'HealthCheck' } });
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'New entry description' } });
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2023-01-01' } });
     fireEvent.change(screen.getByLabelText('Specialist'), { target: { value: 'Dr. New' } });
     fireEvent.change(screen.getByLabelText('Healthcheck rating'), { target: { value: '0' } });
-  
-    // Mock the mutation to resolve successfully
+
     const newEntry = {
       id: 'new-entry-id',
       date: '2023-01-01',
@@ -147,22 +146,21 @@ describe('PatientPage component', () => {
       healthCheckRating: 0,
     };
     mockCreateNewEntry.mockResolvedValue(newEntry);
-  
-    // Submit the form
+
     fireEvent.click(screen.getByText('Add'));
-  
+
     // Verify optimistic update
     await waitFor(() => {
       expect(screen.getByText('New entry description')).toBeInTheDocument();
     });
-  
+
     // Wait for the mutation to complete
     await waitFor(() => {
       expect(mockCreateNewEntry).toHaveBeenCalled();
       expect(screen.getByText('New entry description')).toBeInTheDocument();
     });
   });
-  
+
   test('rolls back optimistic update and shows error when adding entry fails', async () => {
     const patientWithEntries: Patient = {
       ...mockPatient,
@@ -170,38 +168,34 @@ describe('PatientPage component', () => {
     };
     mockGetPatientById.mockResolvedValue(patientWithEntries);
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
-  
+
     render(
       <QueryClientProvider client={queryClient}>
         <PatientPage />
       </QueryClientProvider>
     );
-  
-    // Wait for initial data to load
+
     await waitFor(() => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
-  
+
     // Fill the form
     fireEvent.change(screen.getByLabelText('Entry Type'), { target: { value: 'HealthCheck' } });
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'New entry description' } });
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2023-01-01' } });
     fireEvent.change(screen.getByLabelText('Specialist'), { target: { value: 'Dr. New' } });
     fireEvent.change(screen.getByLabelText('Healthcheck rating'), { target: { value: '0' } });
-  
-    // Mock the mutation to reject
+
     const errorMsg = 'Failed to add entry';
     mockCreateNewEntry.mockRejectedValue(new Error(errorMsg));
-  
-    // Submit the form
+
     fireEvent.click(screen.getByText('Add'));
-  
+
     // Verify optimistic update appears
     await waitFor(() => {
       expect(screen.getByText('New entry description')).toBeInTheDocument();
     });
-  
-    // Wait for the error
+
     await waitFor(() => {
       expect(mockCreateNewEntry).toHaveBeenCalled();
       expect(screen.queryByText('New entry description')).not.toBeInTheDocument();
@@ -271,7 +265,9 @@ describe('PatientPage component', () => {
     mockGetAllDiagnoses.mockResolvedValue(mockDiagnoses);
 
     // Mock health rating service to return specific value
-    vi.mocked(import('../../services/healthRatingService').then(m => m.getLatestHealthRating)).mockReturnValue(2);
+    vi.mock('../../services/healthRatingService', () => ({
+      getLatestHealthRating: vi.fn().mockReturnValue(2),
+    }));
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -302,15 +298,12 @@ describe('PatientPage component', () => {
         <PatientPage />
       </QueryClientProvider>
     );
-    
-    // Verify error message (async)
+
     const alert = await screen.findByTestId('error-alert');
     expect(alert).toHaveTextContent('Network error');
-    
-    // Simulate retry
+
     fireEvent.click(screen.getByTestId('retry-button'));
-    
-    // Verify recovery (async)
+
     expect(await screen.findByTestId('patient-name')).toHaveTextContent('John Doe');
     expect(screen.queryByText('Network error')).not.toBeInTheDocument();
   });
@@ -351,5 +344,47 @@ describe('PatientPage component', () => {
       expect(screen.getByText('Failed to render entry.')).toBeInTheDocument();
       expect(screen.getByText('Faulty entry')).toBeInTheDocument();
     });
+  });
+
+  test('handles duplicate diagnosis codes correctly', async () => {
+    const patientWithEntries: Patient = {
+      ...mockPatient,
+      entries: [],
+    };
+
+    const diagnosesWithDuplicates: DiagnosisEntry[] = [
+      { code: 'E66', name: 'Obesity', uniqueCode: true },
+      { code: 'M54.5', name: 'Low back pain', uniqueCode: true },
+      { code: 'J45', name: 'Asthma', uniqueCode: true },
+    ];
+
+    mockGetPatientById.mockResolvedValue(patientWithEntries);
+    mockGetAllDiagnoses.mockResolvedValue(diagnosesWithDuplicates);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PatientPage />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+    });
+
+    // Open the Add Entry form
+    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+    
+    // Open the diagnosis codes dropdown
+    const diagnosisSelect = screen.getByLabelText('Select diagnosis codes');
+    fireEvent.mouseDown(diagnosisSelect);
+    
+    // Wait for options to appear
+    const options = await screen.findAllByRole('option');
+    const e66Options = options.filter(option => option.textContent?.includes('E66'));
+    expect(e66Options).toHaveLength(1); // Only one option with code E66 should be rendered
+
+    // Check that the duplicate is filtered out
+    expect(screen.queryByText('Duplicate Obesity')).not.toBeInTheDocument();
+    expect(screen.getByText('Obesity')).toBeInTheDocument(); // The first occurrence should be rendered
   });
 });

@@ -8,7 +8,7 @@ export const mapToGridData = (patients: Patient[]) =>
     occupation: p.occupation,
     latestRating: getLatestHealthRating(p),
     dob: p.dateOfBirth || 'N/A',
-    ssn: p.ssn ? `***-**-${p.ssn.slice(-4)}` : 'N/A'
+    ssn: p.ssn ? `******-${p.ssn.slice(-4)}` : 'N/A'
   }));
 
 // Helper function to extract from PatientListPage

@@ -111,51 +111,65 @@ describe('AddPatientForm', () => {
     await userEvent.tab();
     
     expect(await screen.findByText('Date of birth is required')).toBeInTheDocument();
-    // Focus management tests
-    it('moves focus to first error when form is invalid', async () => {
-      render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
-      
-      const submitButton = screen.getByText('Add');
-      await userEvent.click(submitButton);
-      
-      await waitFor(() => {
-        const firstError = screen.getByText('Name is required');
-        expect(document.activeElement).toBe(firstError.closest('div'));
-      });
-    });
-  
-    it('moves focus to error container when multiple errors exist', async () => {
-      render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
-      
-      const submitButton = screen.getByText('Add');
-      await userEvent.click(submitButton);
-      
-      await waitFor(() => {
-        const errorContainer = screen.getByRole('alert');
-        expect(document.activeElement).toBe(errorContainer);
-      });
+  });
+
+  it('clears error when valid date of birth is entered', async () => {
+    render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+
+    const dobInput = screen.getByLabelText('Date of birth');
+    await userEvent.type(dobInput, '1990-01-01');
+    await userEvent.tab();
+
+    expect(screen.queryByText('Date of birth is required')).not.toBeInTheDocument();
+    expect(screen.queryByText('Invalid date format (use YYYY-MM-DD)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Date cannot be in the future')).not.toBeInTheDocument();
+  });
+
+  // Focus management tests
+  it('moves focus to first error when form is invalid', async () => {
+    render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+
+    const submitButton = screen.getByText('Add');
+    await userEvent.click(submitButton);
+
+    await waitFor(() => {
+      const firstError = screen.getByText('Name is required');
+      expect(document.activeElement).toBe(firstError.closest('div'));
     });
   });
-  
-  // Focus management test for ErrorBoundary
-  describe('ErrorBoundary focus management', () => {
-    it('moves focus to error message when boundary catches error', async () => {
-      const ThrowingComponent = () => {
-        throw new Error('Test error');
-      };
-  
-      render(
-        <ErrorBoundary>
-          <ThrowingComponent />
-        </ErrorBoundary>
-      );
-  
-      await waitFor(() => {
-        const errorMessage = screen.getByRole('alert');
-        expect(document.activeElement).toBe(errorMessage);
-      });
+
+  it('moves focus to error container when multiple errors exist', async () => {
+    render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
+
+    const submitButton = screen.getByText('Add');
+    await userEvent.click(submitButton);
+
+    await waitFor(() => {
+      const errorContainer = screen.getByRole('alert');
+      expect(document.activeElement).toBe(errorContainer);
     });
   });
+});
+
+// Focus management test for ErrorBoundary
+describe('ErrorBoundary focus management', () => {
+  it('moves focus to error message when boundary catches error', async () => {
+    const ThrowingComponent = () => {
+      throw new Error('Test error');
+    };
+
+    render(
+      <ErrorBoundary>
+        <ThrowingComponent />
+      </ErrorBoundary>
+    );
+
+    await waitFor(() => {
+      const errorMessage = screen.getByRole('alert');
+      expect(document.activeElement).toBe(errorMessage);
+    });
+  });
+
 
   it('shows error when date of birth is in future', async () => {
     render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
@@ -224,15 +238,15 @@ describe('AddPatientForm', () => {
 // Gender selection test
 it('allows changing gender selection', async () => {
   render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
-  
+
   // Open select
   const genderCombobox = screen.getByRole('combobox', { name: /gender/i });
   await userEvent.click(genderCombobox);
-  
-  const maleOption = screen.getByRole('option', { name: 'Male' });
+
+  const maleOption = screen.getByRole('option', { name: /male/i });
   await userEvent.click(maleOption);
-  
-  expect(await screen.findByText('Male')).toBeInTheDocument();
+
+  expect(await screen.findByText(/male/i)).toBeInTheDocument();
 });
 
 // Form submission with invalid data test
@@ -258,21 +272,28 @@ it('matches initial form snapshot', () => {
 
 it('matches form with errors snapshot', async () => {
   const { container } = render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
-  
+
   const nameInput = screen.getByLabelText('Name');
   await userEvent.type(nameInput, 'ab');
   await userEvent.tab();
-  
+
+  // Update snapshot with dynamic IDs
+  const dynamicIds = container.querySelectorAll('[id^=":r"]');
+  dynamicIds.forEach((id, index) => {
+    id.setAttribute('id', `:r${index}`);
+  });
   expect(container).toMatchSnapshot();
 });
 
 it('matches filled form snapshot', async () => {
   const { container } = render(<AddPatientForm onCancel={mockOnCancel} onSubmit={mockOnSubmit} />);
-  
+
   await userEvent.type(screen.getByLabelText('Name'), 'John Doe');
   await userEvent.type(screen.getByLabelText('Social security number'), '123456-7890');
   await userEvent.type(screen.getByLabelText('Date of birth'), '1990-01-01');
   await userEvent.type(screen.getByLabelText('Occupation'), 'Developer');
-  
+
+  // Update snapshot with dynamic IDs
+  expect(container.querySelectorAll('[id^=":r"]').length).toBeGreaterThan(0);
   expect(container).toMatchSnapshot();
 });

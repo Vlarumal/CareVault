@@ -1,5 +1,5 @@
 import React from 'react';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { Link } from 'react-router-dom';
 import { Patient } from '../../types';
 import { mapToGridData } from '../../utils/patientDataMapper';
@@ -22,7 +22,7 @@ const columns: GridColDef[] = [
   {
     field: 'latestRating',
     headerName: 'Health Rating',
-    width: 180,
+    width: 280,
     renderCell: (params) => (
       <HealthRatingBar rating={params.value} showText={true} />
     )
@@ -31,9 +31,20 @@ const columns: GridColDef[] = [
 
 interface PatientDataGridProps {
   patients: Patient[];
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  pageSizeOptions: number[]; // Add new prop
 }
 
-const PatientDataGrid: React.FC<PatientDataGridProps> = ({ patients }) => {
+const PatientDataGrid: React.FC<PatientDataGridProps> = ({
+  patients,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange
+}) => {
   const rows = mapToGridData(patients);
 
   return (
@@ -41,8 +52,19 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({ patients }) => {
       <DataGrid
         rows={rows}
         columns={columns}
+        pagination
+        paginationMode="client"
+        paginationModel={{
+          page: page - 1, // DataGrid uses 0-based index
+          pageSize: pageSize
+        }}
         pageSizeOptions={[10, 25, 50]}
+        onPaginationModelChange={(params: GridPaginationModel) => {
+          onPageChange(params.page + 1); // Convert to 1-based
+          onPageSizeChange(params.pageSize);
+        }}
         disableRowSelectionOnClick
+        aria-label="Patient data grid"
       />
     </div>
   );
