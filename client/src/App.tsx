@@ -64,7 +64,16 @@ const App = () => {
         <Router>
           <AppBar position="static" color="primary" aria-label="CareVault navigation">
             <Toolbar>
-              <Link to="/" aria-label="Home">
+              <Link
+                to="/"
+                aria-label="Home"
+                style={{
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
                 <HomeIcon sx={{ mr: 1 }} />
               </Link>
               <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
