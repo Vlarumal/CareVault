@@ -177,7 +177,6 @@ const addPatient = (event: SyntheticEvent) => {
 
             formHelperText: {
               id: 'name-error',
-              ref: errorRef,
               tabIndex: -1
             }
           }} />  

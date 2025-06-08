@@ -13,8 +13,12 @@ const cssVariables = {
   '--tertiary-dark': '#483d8b',
   '--background-default': '#f8f9fa',
   '--background-paper': '#ffffff',
+  '--background-default-dark': '#1e272e',
+  '--background-paper-dark': '#253036',
   '--text-primary': '#121212',
+  '--text-primary-dark': '#e0e0e0',
   '--text-secondary': '#1a2329',
+  '--text-secondary-dark': '#b0bec5',
   '--error-main': '#e53935',
   '--warning-main': '#ffb300',
   '--info-main': '#1e88e5',
@@ -214,6 +218,14 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         ':root': cssVariables,
+        '@media (prefers-color-scheme: dark)': {
+          ':root': {
+            '--background-default': 'var(--background-default-dark)',
+            '--background-paper': 'var(--background-paper-dark)',
+            '--text-primary': 'var(--text-primary-dark)',
+            '--text-secondary': 'var(--text-secondary-dark)',
+          },
+        },
       },
     },
   },

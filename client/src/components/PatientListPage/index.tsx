@@ -31,6 +31,7 @@ import AddPatientModal from '../AddPatientModal';
 import HealthRatingBar from '../HealthRatingBar';
 import patientService from '../../services/patients';
 import { Link } from 'react-router-dom';
+import { getIcon } from '../../utils';
 
 // Helper to get latest health rating from entries
 const getLatestHealthRating = (patient: Patient): number | null => {
@@ -142,7 +143,7 @@ const PatientListPage = () => {
       case 'female':
         return theme.palette.secondary.main;
       default:
-        return (theme.palette as { tertiary?: { main: string } }).tertiary?.main || theme.palette.primary.main;
+        return (theme.palette as { tertiary?: { main: string } }).tertiary?.main || theme.palette.grey[500];
     }
   };
 
@@ -384,7 +385,7 @@ const PatientListPage = () => {
                                 height: 40
                               }}
                             >
-                              {patient.name.charAt(0)}
+                              {getIcon(patient.gender)}
                             </Avatar>
                             <Box>
                               <Typography

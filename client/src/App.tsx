@@ -3,6 +3,7 @@ import {
   BrowserRouter as Router,
   Route,
   Routes,
+  Link,
 } from 'react-router-dom';
 import {
   AppBar,
@@ -35,16 +36,14 @@ const App = () => {
   const theme = useMemo(() => createTheme({
     palette: {
       mode: darkMode ? 'dark' : 'light',
-      ...(darkMode ? {
-        background: {
-          default: '#121212',
-          paper: '#1e1e1e',
-        },
-        text: {
-          primary: '#e0e0e0',
-          secondary: '#b0b0b0',
-        },
-      } : {}),
+      background: {
+        default: darkMode ? '#121212' : '#f8f9fa',
+        paper: darkMode ? '#1e1e1e' : '#ffffff',
+      },
+      text: {
+        primary: darkMode ? '#e0e0e0' : '#121212',
+        secondary: darkMode ? '#b0b0b0' : '#1a2329',
+      },
     },
   }), [darkMode]);
 
@@ -65,7 +64,9 @@ const App = () => {
         <Router>
           <AppBar position="static" color="primary" aria-label="CareVault navigation">
             <Toolbar>
-              <HomeIcon sx={{ mr: 1 }} aria-label="Home" />
+              <Link to="/" aria-label="Home">
+                <HomeIcon sx={{ mr: 1 }} />
+              </Link>
               <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                 CareVault
               </Typography>

@@ -4,6 +4,7 @@ import {
   Healing,
   Male,
   MedicalServices,
+  Transgender,
   Work,
 } from '@mui/icons-material';
 import { Entry, HealthCheckEntry, Patient } from './types';
@@ -40,7 +41,7 @@ export const getIcon = (
     case 'female':
       return <Female />;
     case 'other':
-      break;
+      return <Transgender />;
     case 'Hospital':
       return <Healing />;
     case 'OccupationalHealthcare':

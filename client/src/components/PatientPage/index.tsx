@@ -9,13 +9,16 @@ import { getIcon } from '../../utils';
 import patientService from '../../services/patients';
 import diagnosisService from '../../services/diagnoses';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Box, Button } from '@mui/material';
+import { Alert, Box, Button, Fab } from '@mui/material';
 import AddEntryForm from './AddEntryForm';
+import AddEntryDrawer from './AddEntryDrawer';
 import HealthRatingBar from '../HealthRatingBar';
 import TimelineView from './TimelineView';
 import PatientDetailsSkeleton from './PatientDetailsSkeleton';
 import { getLatestHealthRating } from '../../services/healthRatingService';
 import { createDeduplicatedQuery } from '../../utils/apiUtils';
+import { useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -104,6 +107,16 @@ const PatientPage = () => {
   // Use health rating service
   const latestHealthRating = patient ? getLatestHealthRating(patient.entries || []) : null;
 
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const handleDrawerToggle = () => {
+    setIsDrawerOpen(!isDrawerOpen);
+  };
+
+  const handleDrawerClose = () => {
+    setIsDrawerOpen(false);
+  };
+
   if (isLoading) {
     return <PatientDetailsSkeleton />;
   }
@@ -158,12 +171,26 @@ const PatientPage = () => {
             </div>
 
       <section>
-        <AddEntryForm
-          onAddEntry={mutation.mutate}
-          error={mutation.error?.message}
-          loading={mutation.isPending}
-          diagnosisCodesAll={diagnosisCodesAll}
-        />
+        <Fab
+          color="primary"
+          aria-label="add"
+          onClick={handleDrawerToggle}
+          style={{ position: 'fixed', bottom: 16, right: 16 }}
+        >
+          <AddIcon />
+        </Fab>
+        <AddEntryDrawer isOpen={isDrawerOpen} onClose={handleDrawerClose}>
+          <AddEntryForm
+            onAddEntry={(entry) => {
+              mutation.mutate(entry);
+              handleDrawerClose();
+            }}
+            error={mutation.error?.message}
+            loading={mutation.isPending}
+            diagnosisCodesAll={diagnosisCodesAll}
+            onClose={handleDrawerClose}
+          />
+        </AddEntryDrawer>
       </section>
 
       {patient.entries && patient.entries.length > 0 && (

@@ -27,9 +27,10 @@ interface Props {
   error: string | undefined;
   loading: boolean;
   diagnosisCodesAll: DiagnosisEntry['code'][];
+  onClose?: () => void;
 }
 
-const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCodesAll }) => {
+const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCodesAll, onClose }) => {
   const theme = useTheme();
   const initialFormState = {
     description: '',
@@ -82,7 +83,6 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
       ...prevData,
       [name]: value,
     }));
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({...prev, [name]: ''}));
     }
@@ -415,6 +415,19 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
         mt: 1,
         borderRadius: 3,
         backgroundColor: theme.palette.background.paper,
+        // Drawer-specific styles
+        maxWidth: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflowY: 'auto',
+        '& .MuiFormControl-marginNormal': {
+          marginTop: 0,
+          marginBottom: theme.spacing(1),
+        },
+        [theme.breakpoints.down('sm')]: {
+          padding: theme.spacing(1),
+        },
       }}
       component='form'
       onSubmit={handleSubmit}
@@ -626,7 +639,12 @@ const AddEntryForm: React.FC<Props> = ({ onAddEntry, error, loading, diagnosisCo
           color='secondary'
           variant='contained'
           type='button'
-          onClick={clearFields}
+          onClick={() => {
+            clearFields();
+            if (onClose) {
+              onClose();
+            }
+          }}
         >
           Cancel
         </Button>
