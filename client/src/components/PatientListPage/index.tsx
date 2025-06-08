@@ -82,7 +82,8 @@ const PatientListPage = () => {
   }, [viewMode]);
 
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100); // Show all patients by default
+  const [pageSize, setPageSize] = useState(100);
+  const pageSizeOptions = [10, 25, 50, 100];
 
   const { data: patientsData, isLoading } = useQuery<PaginatedResponse<Patient[]>, Error>({
     queryKey: ['patients', page, pageSize],
@@ -584,7 +585,7 @@ const PatientListPage = () => {
                     setPageSize(newPageSize);
                     setPage(1); // Reset to first page when changing page size
                   }}
-                  pageSizeOptions={[10, 25, 50, 100]}
+                  pageSizeOptions={pageSizeOptions}
                 />
               )
             )}

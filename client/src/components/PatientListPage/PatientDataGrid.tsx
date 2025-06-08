@@ -35,7 +35,7 @@ interface PatientDataGridProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
-  pageSizeOptions: number[]; // Add new prop
+  pageSizeOptions: number[];
 }
 
 const PatientDataGrid: React.FC<PatientDataGridProps> = ({
@@ -43,7 +43,8 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
   page,
   pageSize,
   onPageChange,
-  onPageSizeChange
+  onPageSizeChange,
+  pageSizeOptions
 }) => {
   const rows = mapToGridData(patients);
 
@@ -58,7 +59,7 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
           page: page - 1, // DataGrid uses 0-based index
           pageSize: pageSize
         }}
-        pageSizeOptions={[10, 25, 50]}
+        pageSizeOptions={pageSizeOptions}
         onPaginationModelChange={(params: GridPaginationModel) => {
           onPageChange(params.page + 1); // Convert to 1-based
           onPageSizeChange(params.pageSize);
