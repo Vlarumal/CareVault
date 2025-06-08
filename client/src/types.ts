@@ -1,5 +1,6 @@
 import * as medicalTypes from '@shared/src/types/medicalTypes';
 
+export type Gender = medicalTypes.Gender;
 export const Gender = medicalTypes.Gender;
 export const HealthCheckRating = medicalTypes.HealthCheckRating;
 
@@ -15,6 +16,23 @@ export type {
   HospitalEntry,
   Entry,
   UnionOmit,
-  NewEntryWithoutId as NewEntryFormValues,
-  OptimisticEntry
+  NewEntryWithoutId,
 } from '@shared/src/types/medicalTypes';
+
+export interface NewEntryFormValues {
+  type: 'HealthCheck' | 'Hospital' | 'OccupationalHealthcare';
+  description: string;
+  date: string;
+  specialist: string;
+  diagnosisCodes?: string[];
+  healthCheckRating?: number;
+  discharge?: {
+    date: string;
+    criteria: string;
+  };
+  employerName?: string;
+  sickLeave?: {
+    startDate: string;
+    endDate: string;
+  };
+}
