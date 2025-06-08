@@ -1,7 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
 import ErrorBoundary from './ErrorBoundary';
+import { afterEach } from 'vitest';
+import { test } from 'vitest';
 
 // Component that throws an error
 const ProblematicComponent = () => {
