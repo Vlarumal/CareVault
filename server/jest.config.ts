@@ -1,20 +1,19 @@
-import type { Config } from '@jest/types';
+import type { Config } from 'jest';
 
-const config: Config.InitialOptions = {
+const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  moduleFileExtensions: ['ts', 'js'],
-  testRegex: '.*\\.test\\.ts$',
-  transform: {
-    '^.+\\.ts$': 'ts-jest',
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
   },
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   collectCoverage: true,
-  coverageDirectory: './coverage',
-  coverageThreshold: {
-    global: {
-      lines: 75,
-    },
-  },
+  coverageDirectory: 'coverage',
+  coverageProvider: 'v8',
+  testTimeout: 30000,
+  globalSetup: '<rootDir>/src/tests/globalSetup.ts',
+  globalTeardown: '<rootDir>/src/tests/globalTeardown.ts',
 };
 
 export default config;

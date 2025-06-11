@@ -5,8 +5,13 @@ import {
   NewPatientEntryWithoutEntries,
   NonSensitivePatientEntry,
   PatientEntry,
-  PaginatedResponse
+  PaginatedResponse,
+  Entry,
 } from '../types';
+import { validate } from '../utils/validation';
+import { CreatePatientSchema } from '../schemas/patient.schema';
+import { EntrySchema } from '../schemas/entry.schema';
+import { DatabaseError, NotFoundError, ValidationError } from '../utils/errors';
 
 interface PaginationQuery {
   page?: string;
@@ -22,22 +27,37 @@ const patientsRouter = express.Router();
  */
 patientsRouter.get(
   '/',
-  async (req: Request<{}, {}, {}, PaginationQuery>, res: Response) => {
+  async (
+    req: Request<{}, {}, {}, PaginationQuery>,
+    res: Response
+  ) => {
     try {
       const page = parseInt(req.query.page ?? '1', 10);
       const pageSize = parseInt(req.query.pageSize ?? '10', 10);
 
+
       // Validate page and pageSize if provided
-      if (!isNaN(page) && !isNaN(pageSize) && page > 0 && pageSize > 0) {
-        const result: PaginatedResponse<NonSensitivePatientEntry[]> = patientService.getPaginatedNonSensitiveEntries(page, pageSize);
+      if (
+        !isNaN(page) &&
+        !isNaN(pageSize) &&
+        page > 0 &&
+        pageSize > 0
+      ) {
+        const result: PaginatedResponse<NonSensitivePatientEntry[]> =
+          await patientService.getPaginatedNonSensitiveEntries(
+            page,
+            pageSize
+          );
         res.json(result);
       } else {
         // Return all entries without pagination
-        const entries = patientService.getAllNonSensitiveEntries();
+        const entries =
+          await patientService.getAllNonSensitiveEntries();
         res.json(entries);
       }
       return;
     } catch (error) {
+      console.error('Error in GET /patients:', error);
       res.status(500).json({ error: 'Internal server error' });
       return;
     }
@@ -49,15 +69,21 @@ patientsRouter.get(
  */
 patientsRouter.get(
   '/:id',
-  (req, res: Response<PatientEntry>) => {
-    const patient = patientService.findById(req.params.id);
-    res.send(patient);
+  async (req, res: Response<PatientEntry | { error: string; details?: any }>) => {
+    try {
+      const patient = await patientService.getPatientById(req.params.id);
+      res.json(patient);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+      } else if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message, details: error.details });
+      } else {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    }
   }
 );
-
-import { validate } from '../utils/validation';
-import { CreatePatientSchema } from '../schemas/patient.schema';
-import { EntrySchema } from '../schemas/entry.schema';
 
 /**
  * POST a new patient
@@ -65,12 +91,20 @@ import { EntrySchema } from '../schemas/entry.schema';
 patientsRouter.post(
   '/',
   validate(CreatePatientSchema),
-  (
+  async (
     req: Request<unknown, unknown, NewPatientEntryWithoutEntries>,
-    res: Response<PatientEntry>
+    res: Response<PatientEntry | { error: string; details?: any }>
   ) => {
-    const addedPatientEntry = patientService.addPatient(req.body);
-    res.json(addedPatientEntry);
+    try {
+      const addedPatientEntry = await patientService.createPatient(req.body);
+      res.status(201).json(addedPatientEntry);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message, details: error.details });
+      } else {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    }
   }
 );
 
@@ -80,15 +114,115 @@ patientsRouter.post(
 patientsRouter.post(
   '/:id/entries',
   validate(EntrySchema),
-  (
+  async (
     req: Request<{ id: string }, unknown, NewEntryWithoutId>,
     res: Response
   ) => {
-    const patient = patientService.findById(req.params.id);
-    const addedEntry = patientService.addEntry(patient, req.body);
+    const patient = await patientService.getPatientById(
+      req.params.id
+    );
+    const addedEntry = await patientService.addEntry(
+      patient,
+      req.body
+    );
     res.status(201).json(addedEntry);
   }
 );
 
-export default patientsRouter;
+/**
+ * GET entries for a specific patient
+ */
+patientsRouter.get(
+  '/:id/entries',
+  async (req, res: Response<Entry[]>) => {
+    try {
+      const entries = await patientService.getEntriesByPatientId(
+        req.params.id
+      );
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ error: 'Internal server error' } as any);
+    }
+  }
+);
 
+patientsRouter.delete('/:id', async (req, res) => {
+  try {
+    await patientService.deletePatient(req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      res.status(404).json({ error: error.message });
+    } else if (error instanceof DatabaseError) {
+      res.status(500).json({ error: 'Internal server error' });
+    } else {
+      res.status(500).json({ error: 'Unexpected error occurred' });
+    }
+  }
+});
+
+patientsRouter.put(
+  '/:id',
+  async (req, res: Response<PatientEntry | { error: string; details?: any }>) => {
+    try {
+      const updatedPatient = await patientService.editPatient(
+        req.params.id,
+        req.body
+      );
+      res.json(updatedPatient);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+      } else if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message, details: error.details });
+      } else {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    }
+  }
+);
+
+patientsRouter.put(
+  '/:patientId/entries/:entryId',
+  validate(EntrySchema),
+  async (
+    req: Request<{ patientId: string; entryId: string }, unknown, NewEntryWithoutId>,
+    res: Response
+  ) => {
+    try {
+      const { patientId, entryId } = req.params;
+      const updatedEntry = await patientService.updateEntry(
+        patientId,
+        entryId,
+        req.body
+      );
+      res.json(updatedEntry);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+      } else if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message, details: error.details });
+      } else {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    }
+  }
+);
+
+patientsRouter.delete(
+'/:patientId/entries/:entryId',
+async (req, res) => {
+  try {
+    await patientService.deleteEntry(req.params.patientId, req.params.entryId);
+    res.status(204).end();
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      res.status(404).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+}
+);
+
+export default patientsRouter;

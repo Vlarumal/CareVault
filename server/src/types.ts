@@ -19,6 +19,7 @@ export {
   BaseEntry,
   DiagnosisEntry,
   Gender,
+  Patient,
   HealthCheckRating,
   HealthCheckEntry,
   Discharge,

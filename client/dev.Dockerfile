@@ -11,16 +11,16 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 # Copy package files first to leverage Docker cache
 COPY package*.json ./
 
-# Install dependencies
 RUN npm install
 
 # Remove build dependencies to keep image small
 RUN apk del make g++
 
-# Copy application files
 COPY . .
 
 ENV NODE_PATH=/usr/src/shared
+
+EXPOSE 5173
 
 ENTRYPOINT [ "/sbin/tini", "--"]
 CMD ["npm", "run", "dev", "--", "--host"]

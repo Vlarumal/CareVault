@@ -36,3 +36,15 @@ export class InternalServerError extends Error {
     this.status = 500;
   }
 }
+
+export class DatabaseError extends Error {
+  status: number;
+  originalError: any;
+
+  constructor(message: string, originalError?: any) {
+    super(message);
+    this.name = 'DatabaseError';
+    this.status = 500;
+    this.originalError = originalError;
+  }
+}

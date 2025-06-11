@@ -2,8 +2,9 @@ export interface DiagnosisEntry {
   code: string;
   name: string;
   latin?: string;
-  // Add unique constraint to code
   readonly uniqueCode: true;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export enum Gender {
@@ -19,6 +20,8 @@ export interface Patient {
   gender: Gender;
   ssn?: string;
   dateOfBirth?: string;
+  createdAt?: string;
+  updatedAt?: string;
   entries?: Entry[];
 }
 
@@ -29,8 +32,10 @@ export interface BaseEntry {
   description: string;
   date: string;
   specialist: string;
-  diagnosisCodes?: Array<DiagnosisEntry['code']>;
+  diagnosisCodes?: string[]; // Changed to string[] to match data
   isOptimistic?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export enum HealthCheckRating {
@@ -43,6 +48,8 @@ export enum HealthCheckRating {
 export interface HealthCheckEntry extends BaseEntry {
   type: 'HealthCheck';
   healthCheckRating: HealthCheckRating;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Discharge {
@@ -59,11 +66,15 @@ export interface OccupationalHealthcareEntry extends BaseEntry {
   type: 'OccupationalHealthcare';
   employerName: string;
   sickLeave?: SickLeave;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface HospitalEntry extends BaseEntry {
   type: 'Hospital';
   discharge: Discharge;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type Entry =
@@ -71,8 +82,8 @@ export type Entry =
   | OccupationalHealthcareEntry
   | HealthCheckEntry;
 
-export type UnionOmit<T, K extends string | number | symbol> = T extends unknown 
-  ? Omit<T, K> 
+export type UnionOmit<T, K extends string | number | symbol> = T extends unknown
+  ? Omit<T, K>
   : never;
 
 export type NewEntryWithoutId = UnionOmit<Entry, 'id'>;

@@ -8,9 +8,9 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest",
-    "test:file": "vitest run",
-    "test:accessibility": "vitest run src/utils/accessibility.test.tsx",
+    "test": "NODE_ENV=test vitest",
+    "test:file": "NODE_ENV=test vitest run",
+    "test:accessibility": "NODE_ENV=test vitest run src/utils/accessibility.test.tsx",
     "docs": "mkdir -p docs && cp src/components/*.docs.md docs/ && echo '# Documentation\n\n- [ErrorBoundary](./ErrorBoundary.docs.md)' > docs/README.md"
   },
   "dependencies": {

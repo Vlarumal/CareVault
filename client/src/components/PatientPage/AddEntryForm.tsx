@@ -688,7 +688,7 @@ const AddEntryForm: React.FC<Props> = ({
             }
           }}
         >
-          {loading ? 'Adding...' : 'Add (Ctrl+Enter)'}
+          {loading ? 'Adding...' : 'Add'}
         </Button>
       </Box>
     </Box>

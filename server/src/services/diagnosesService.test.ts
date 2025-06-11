@@ -18,6 +18,7 @@ describe('diagnosesService', () => {
         code: 'J03.0',
         name: 'Streptococcal tonsillitis',
         latin: 'Tonsillitis (palatina) streptococcica',
+        uniqueCode: true,
       };
 
       const result = diagnosesService.findByCode(testCode);
