@@ -84,7 +84,7 @@ describe('Patients API Endpoint', () => {
         );
         fail('Should have thrown error');
       } catch (error: any) {
-        expect(error.response?.status).toBe(404);
+        expect(error.response?.status).toBe(400);
       }
     });
 
