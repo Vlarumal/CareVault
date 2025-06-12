@@ -591,7 +591,7 @@ describe('Patients Service', () => {
     test('should prevent SQL injection in getPatientById', async () => {
       const maliciousId = "1'; DROP TABLE patients; --";
       await expect(patientService.getPatientById(maliciousId))
-        .rejects.toThrow(NotFoundError);
+        .rejects.toThrow(ValidationError);
     });
 
     test('should prevent SQL injection in createPatient', async () => {

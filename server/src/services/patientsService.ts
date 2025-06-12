@@ -26,6 +26,17 @@ import { sanitizeObject } from '../utils/sanitize';
 import { QueryResult } from 'pg';
 import formatToISODate from '../utils/dateFormatter';
 
+const SAFE_STRING_REGEX = /^[^;'"\\]*$/;
+
+const validateSafeString = (value: string, fieldName: string): void => {
+  if (!SAFE_STRING_REGEX.test(value)) {
+    throw new ValidationError(
+      `${fieldName} contains invalid characters`,
+      { invalidField: fieldName }
+    );
+  }
+};
+
 const mapToHealthCheckEntry = (row: any): HealthCheckEntry => {
   return {
     id: row.id,
@@ -246,6 +257,12 @@ const createPatient = async (
   entry: NewPatientEntryWithoutEntries
 ): Promise<PatientEntry> => {
   const sanitizedEntry = sanitizeObject(entry);
+  
+  validateSafeString(sanitizedEntry.name, 'name');
+  validateSafeString(sanitizedEntry.occupation, 'occupation');
+  if (sanitizedEntry.ssn) {
+    validateSafeString(sanitizedEntry.ssn, 'ssn');
+  }
 
   // Validate required fields
   const requiredFields: Array<keyof NewPatientEntryWithoutEntries> = [
@@ -420,6 +437,17 @@ const deletePatient = async (id: string): Promise<void> => {
 
 const validateEntry = (entry: NewEntryWithoutId): void => {
   const sanitizedEntry = sanitizeObject(entry);
+  
+  validateSafeString(sanitizedEntry.description, 'description');
+  validateSafeString(sanitizedEntry.specialist, 'specialist');
+  
+  if (sanitizedEntry.type === 'Hospital' && sanitizedEntry.discharge) {
+    validateSafeString(sanitizedEntry.discharge.criteria, 'discharge.criteria');
+  }
+  
+  if (sanitizedEntry.type === 'OccupationalHealthcare') {
+    validateSafeString(sanitizedEntry.employerName, 'employerName');
+  }
 
   // Validate required fields
   const baseFields: Array<keyof BaseEntry> = [

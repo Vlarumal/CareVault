@@ -4,11 +4,16 @@ import { BadRequestError } from './errors';
 import { sanitizeObject } from './sanitize';
 import { Gender, HealthCheckRating } from '../types';
 
+// Reusable schema for safe strings (prevents SQL injection)
+const safeStringSchema = (fieldName: string) =>
+  z.string().min(1, `${fieldName} is required`)
+    .regex(/^[^;'"\\]*$/, `${fieldName} contains invalid characters`);
+
 // Base schema for all entries
 const BaseEntrySchema = z.object({
-  description: z.string().min(1, 'Description is required'),
+  description: safeStringSchema('Description'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format: YYYY-MM-DD'),
-  specialist: z.string().min(1, 'Specialist name is required'),
+  specialist: safeStringSchema('Specialist name'),
   diagnosisCodes: z.array(z.string()).optional(),
 });
 
@@ -26,14 +31,14 @@ const HospitalEntrySchema = BaseEntrySchema.extend({
   type: z.literal('Hospital'),
   discharge: z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format: YYYY-MM-DD'),
-    criteria: z.string().min(1, 'Discharge criteria is required'),
+    criteria: safeStringSchema('Discharge criteria'),
   }),
 });
 
 // OccupationalHealthcare entry schema
 const OccupationalHealthcareEntrySchema = BaseEntrySchema.extend({
   type: z.literal('OccupationalHealthcare'),
-  employerName: z.string().min(1, 'Employer name is required'),
+  employerName: safeStringSchema('Employer name'),
   sickLeave: z.object({
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format: YYYY-MM-DD'),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format: YYYY-MM-DD'),
@@ -49,14 +54,14 @@ export const EntrySchema = z.union([
 
 // Patient schemas
 export const PatientEntrySchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: safeStringSchema('Name'),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format: YYYY-MM-DD'),
-  ssn: z.string().min(1, 'SSN is required'),
+  ssn: safeStringSchema('SSN'),
   gender: z.nativeEnum(Gender, {
     required_error: 'Gender is required',
     invalid_type_error: 'Invalid gender value',
   }),
-  occupation: z.string().min(1, 'Occupation is required'),
+  occupation: safeStringSchema('Occupation'),
   entries: z.array(EntrySchema).optional(),
 });
 
