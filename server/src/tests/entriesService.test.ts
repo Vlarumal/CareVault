@@ -8,6 +8,10 @@ describe('getEntriesByPatientId', () => {
     await seedDatabase();
   });
 
+  afterAll(async () => {
+    await pool.end();
+  });
+
   it('should return entries for a patient', async () => {
     // Get a patient ID from the database
     const patientResult = await pool.query('SELECT id FROM patients LIMIT 1');

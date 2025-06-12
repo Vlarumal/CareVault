@@ -1,73 +1,106 @@
 import pool from '../../db/connection';
-import { Patient, NewEntryWithoutId } from '../types';
+import { Patient, NewEntryWithoutId, Gender } from '../types';
 import { v1 as uuid } from 'uuid';
 
 export async function clearDatabase() {
   const client = await pool.connect();
   try {
     await client.query(
-      'TRUNCATE TABLE patients RESTART IDENTITY CASCADE'
+      'TRUNCATE TABLE patients, entries RESTART IDENTITY CASCADE'
     );
   } finally {
     client.release();
   }
 }
 
-export async function seedDatabase() {
+export async function seedDatabase(count?: number) {
   await clearDatabase();
 
-  // Use fixed UUIDs for consistent test data
-  const patient1Id = 'd2773336-f723-11e9-8f0b-362b9e155667';
-  const patient2Id = 'd2773598-f723-11e9-8f0b-362b9e155667';
+  if (count && count > 0) {
+    // Generate large dataset using bulk insert
+    const patients = [];
+    for (let i = 0; i < count; i++) {
+      const gender = i % 2 === 0 ? Gender.Male : Gender.Female;
+      patients.push({
+        id: uuid(),
+        name: `Patient ${i}`,
+        dateOfBirth: `19${Math.floor(Math.random() * 50) + 50}-${Math.floor(Math.random() * 12) + 1}-${Math.floor(Math.random() * 28) + 1}`,
+        gender,
+        occupation: `Occupation ${i}`,
+        ssn: `123-45-${1000 + i}`
+      });
+    }
 
-  await pool.query(
-    `
-    INSERT INTO patients (id, name, date_of_birth, gender, occupation)
-    VALUES
-      ($1, 'John Doe', '1980-01-01', 'male', 'Engineer'),
-      ($2, 'Jane Smith', '1990-05-15', 'female', 'Doctor')
-  `,
-    [patient1Id, patient2Id]
-  );
+    // Build the bulk insert query
+    const placeholders = [];
+    const values = [];
+    let paramIndex = 1;
+    for (const patient of patients) {
+      placeholders.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5})`);
+      values.push(patient.id, patient.name, patient.dateOfBirth, patient.gender, patient.occupation, patient.ssn);
+      paramIndex += 6;
+    }
 
-  await createTestEntry(patient1Id, {
-    description: 'Annual physical exam',
-    date: '2023-05-15',
-    specialist: 'Dr. Smith',
-    type: 'HealthCheck',
-    healthCheckRating: 0,
-  });
+    const queryText = `
+      INSERT INTO patients (id, name, date_of_birth, gender, occupation, ssn)
+      VALUES ${placeholders.join(', ')}
+    `;
 
-  await createTestEntry(patient1Id, {
-    description: 'Emergency appendectomy',
-    date: '2023-06-01',
-    specialist: 'Dr. Johnson',
-    type: 'Hospital',
-    discharge: {
-      date: '2023-06-03',
-      criteria: 'Recovering well',
-    },
-  });
+    await pool.query(queryText, values);
+  } else {
+    // Use fixed UUIDs for consistent test data
+    const patient1Id = 'd2773336-f723-11e9-8f0b-362b9e155667';
+    const patient2Id = 'd2773598-f723-11e9-8f0b-362b9e155667';
 
-  await createTestEntry(patient1Id, {
-    description: 'Work-related back injury',
-    date: '2023-04-20',
-    specialist: 'Dr. Williams',
-    type: 'OccupationalHealthcare',
-    employerName: 'Acme Corp',
-    sickLeave: {
-      startDate: '2023-04-20',
-      endDate: '2023-04-27',
-    },
-  });
+    await pool.query(
+      `
+      INSERT INTO patients (id, name, date_of_birth, gender, occupation)
+      VALUES
+        ($1, 'John Doe', '1980-01-01', 'male', 'Engineer'),
+        ($2, 'Jane Smith', '1990-05-15', 'female', 'Doctor')
+    `,
+      [patient1Id, patient2Id]
+    );
 
-  await createTestEntry(patient2Id, {
-    description: 'Annual checkup',
-    date: '2023-05-20',
-    specialist: 'Dr. Brown',
-    type: 'HealthCheck',
-    healthCheckRating: 1,
-  });
+    await createTestEntry(patient1Id, {
+      description: 'Annual physical exam',
+      date: '2023-05-15',
+      specialist: 'Dr. Smith',
+      type: 'HealthCheck',
+      healthCheckRating: 0,
+    });
+
+    await createTestEntry(patient1Id, {
+      description: 'Emergency appendectomy',
+      date: '2023-06-01',
+      specialist: 'Dr. Johnson',
+      type: 'Hospital',
+      discharge: {
+        date: '2023-06-03',
+        criteria: 'Recovering well',
+      },
+    });
+
+    await createTestEntry(patient1Id, {
+      description: 'Work-related back injury',
+      date: '2023-04-20',
+      specialist: 'Dr. Williams',
+      type: 'OccupationalHealthcare',
+      employerName: 'Acme Corp',
+      sickLeave: {
+        startDate: '2023-04-20',
+        endDate: '2023-04-27',
+      },
+    });
+
+    await createTestEntry(patient2Id, {
+      description: 'Annual checkup',
+      date: '2023-05-20',
+      specialist: 'Dr. Brown',
+      type: 'HealthCheck',
+      healthCheckRating: 1,
+    });
+  }
 }
 
 export async function createTestPatient(patient: Patient) {

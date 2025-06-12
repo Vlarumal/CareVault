@@ -21,21 +21,20 @@ describe('Database Migration', () => {
   it('should use centralized connection pool from connection.ts', async () => {
     const mockClient = {
       query: jest.fn().mockResolvedValue({} as QueryResult),
-      release: jest.fn()
+      release: jest.fn(),
     };
     (pool.connect as jest.Mock).mockResolvedValue(mockClient);
 
     await migrate();
-    
+
     expect(pool.connect).toHaveBeenCalled();
   });
 
   it('should run migration without errors', async () => {
     // Mock successful queries
     const mockClient = {
-      query: jest.fn()
-        .mockResolvedValue({} as QueryResult),
-      release: jest.fn()
+      query: jest.fn().mockResolvedValue({} as QueryResult),
+      release: jest.fn(),
     };
     (pool.connect as jest.Mock).mockResolvedValue(mockClient);
 
@@ -46,10 +45,11 @@ describe('Database Migration', () => {
   it('should handle transaction rollback on error', async () => {
     // Mock error during migration
     const mockClient = {
-      query: jest.fn()
+      query: jest
+        .fn()
         .mockResolvedValueOnce({} as QueryResult)
         .mockRejectedValue(new Error('Migration failed')),
-      release: jest.fn()
+      release: jest.fn(),
     };
     (pool.connect as jest.Mock).mockResolvedValue(mockClient);
 

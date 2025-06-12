@@ -1,10 +1,8 @@
 import pool from '../../db/connection';
 
-export default async function globalTeardown() {
-  try {
+export default async () => {
+  if (pool) {
     await pool.end();
-    console.log('Database connection pool closed successfully');
-  } catch (err) {
-    console.error('Error closing database connection pool:', err);
+    console.log('Database pool closed');
   }
-}
+};

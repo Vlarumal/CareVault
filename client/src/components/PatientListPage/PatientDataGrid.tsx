@@ -4,6 +4,15 @@ import { Link } from 'react-router-dom';
 import { Patient } from '../../types';
 import { mapToGridData } from '../../utils/patientDataMapper';
 import HealthRatingBar from '../HealthRatingBar';
+import DOMPurify from 'dompurify';
+
+// Sanitize function to prevent XSS
+const sanitize = (value: string): string => {
+  return DOMPurify.sanitize(value, {
+    ALLOWED_TAGS: [], // Remove all HTML tags
+    ALLOWED_ATTR: []  // Remove all attributes
+  });
+};
 
 const columns: GridColDef[] = [
   {
@@ -12,13 +21,28 @@ const columns: GridColDef[] = [
     width: 200,
     renderCell: (params) => (
       <Link to={`/${params.row.id}`} style={{ color: 'inherit' }}>
-        {params.value}
+        {sanitize(params.value)}
       </Link>
     )
   },
-  { field: 'gender', headerName: 'Gender', width: 120 },
-  { field: 'occupation', headerName: 'Occupation', width: 200 },
-  { field: 'dob', headerName: 'Date of Birth', width: 150 },
+  {
+    field: 'gender',
+    headerName: 'Gender',
+    width: 120,
+    renderCell: (params) => sanitize(params.value)
+  },
+  {
+    field: 'occupation',
+    headerName: 'Occupation',
+    width: 200,
+    renderCell: (params) => sanitize(params.value)
+  },
+  {
+    field: 'dob',
+    headerName: 'Date of Birth',
+    width: 150,
+    renderCell: (params) => sanitize(params.value)
+  },
   {
     field: 'latestRating',
     headerName: 'Health Rating',
@@ -66,6 +90,7 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
         }}
         disableRowSelectionOnClick
         aria-label="Patient data grid"
+        disableVirtualization={process.env.NODE_ENV === 'test'}
       />
     </div>
   );

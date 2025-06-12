@@ -15,6 +15,10 @@ describe('Patients API Endpoint', () => {
     await clearDatabase();
   });
 
+  afterAll(async () => {
+    await pool.end();
+  });
+
   describe('GET /api/patients', () => {
     beforeEach(async () => {
       await seedDatabase();
@@ -70,6 +74,18 @@ describe('Patients API Endpoint', () => {
         ]
       );
       patientId = patient.id;
+    });
+
+    test('should reject SQL injection in patient ID', async () => {
+      const maliciousId = "1' OR '1'='1";
+      try {
+        await axios.get(
+          `${baseUrl}/api/patients/${maliciousId}`
+        );
+        fail('Should have thrown error');
+      } catch (error: any) {
+        expect(error.response?.status).toBe(404);
+      }
     });
 
     test('should return patient details with entries including full structure', async () => {
@@ -155,7 +171,7 @@ describe('Patients API Endpoint', () => {
 
     test('should return 400 for invalid patient data', async () => {
       const invalidPatient = {
-        name: '', 
+        name: '',
         dateOfBirth: 'invalid-date',
         gender: 'unknown',
         occupation: '',
@@ -171,6 +187,46 @@ describe('Patients API Endpoint', () => {
         const errorResponse = error as any;
         expect(errorResponse.response?.status).toBe(400);
         expect(errorResponse.response?.data).toHaveProperty('error');
+      }
+    });
+
+    test('should reject XSS in name field', async () => {
+      const xssPatient = {
+        name: '<script>alert("XSS")</script>',
+        dateOfBirth: '1985-05-15',
+        gender: 'male',
+        occupation: 'Hacker'
+      };
+
+      try {
+        await axios.post(
+          `${baseUrl}/api/patients`,
+          xssPatient
+        );
+        fail('Should have thrown error');
+      } catch (error) {
+        const errorResponse = error as any;
+        expect(errorResponse.response?.status).toBe(400);
+      }
+    });
+
+    test('should reject SQL injection in occupation field', async () => {
+      const sqlPatient = {
+        name: 'John Doe',
+        dateOfBirth: '1985-05-15',
+        gender: 'male',
+        occupation: "'); DROP TABLE patients; --"
+      };
+
+      try {
+        await axios.post(
+          `${baseUrl}/api/patients`,
+          sqlPatient
+        );
+        fail('Should have thrown error');
+      } catch (error) {
+        const errorResponse = error as any;
+        expect(errorResponse.response?.status).toBe(400);
       }
     });
   });

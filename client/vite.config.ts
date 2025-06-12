@@ -4,6 +4,7 @@ import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  envDir: '.', // Load environment variables from current directory
   resolve: {
     alias: {
       '@shared': path.resolve(__dirname, '../shared'),
@@ -11,20 +12,16 @@ export default defineConfig({
     }
   },
   plugins: [react()],
+  css: {
+    modules: {
+      localsConvention: 'camelCaseOnly',
+      generateScopedName: '[name]__[local]___[hash:base64:5]'
+    }
+  },
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/setupTests.ts'],
-    poolOptions: {
-      threads: {
-        execArgv: [
-          '--cpu-prof',
-          '--cpu-prof-dir=test-runner-profile',
-          '--heap-prof',
-          '--heap-prof-dir=test-runner-profile'
-        ],
-        singleThread: true
-      }
-    }
+    setupFiles: ['./src/setupTests.ts', './src/__mocks__/dompurify.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}']
   }
 });

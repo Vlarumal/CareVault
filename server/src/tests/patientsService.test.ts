@@ -29,6 +29,7 @@ describe('Patients Service', () => {
     }
   });
 
+
   test('should get patient by ID', async () => {
     const result = await pool.query(
       'SELECT id FROM patients LIMIT 1'
@@ -162,7 +163,7 @@ describe('Patients Service', () => {
 
       const invalidDate = {
         description: 'Test',
-        date: '',
+        date: 'invalid-date',
         specialist: 'Dr. Test',
         type: 'HealthCheck',
         healthCheckRating: HealthCheckRating.Healthy,
@@ -342,9 +343,9 @@ describe('Patients Service', () => {
           specialist: 'Dr. Test',
           type: 'HealthCheck',
           healthCheckRating: HealthCheckRating.Healthy,
-          diagnosisCodes: ['INVALID-CODE', 'A1'] // Invalid formats
+          diagnosisCodes: ['INVALID-CODE', 'A1.2'] // Invalid formats
         };
-    
+
         await expect(
           patientService.addEntry(patient, entry)
         ).rejects.toThrow(ValidationError);
@@ -584,6 +585,47 @@ describe('Patients Service', () => {
 
       // Restore original query method
       pool.query = originalQuery;
+    });
+  });
+  describe('SQL Injection Protection', () => {
+    test('should prevent SQL injection in getPatientById', async () => {
+      const maliciousId = "1'; DROP TABLE patients; --";
+      await expect(patientService.getPatientById(maliciousId))
+        .rejects.toThrow(NotFoundError);
+    });
+
+    test('should prevent SQL injection in createPatient', async () => {
+      const maliciousPatient: NewPatientEntryWithoutEntries = {
+        name: "Robert'); DROP TABLE patients; --",
+        dateOfBirth: '1990-01-01',
+        gender: Gender.Male,
+        occupation: 'Hacker'
+      };
+      await expect(patientService.createPatient(maliciousPatient))
+        .rejects.toThrow(ValidationError);
+    });
+
+    test('should prevent SQL injection in addEntry', async () => {
+      const patient = await createTestPatientWithEntries(
+        {
+          name: 'Test Patient',
+          dateOfBirth: '1990-01-01',
+          gender: Gender.Male,
+          occupation: 'Engineer'
+        },
+        []
+      );
+      
+      const maliciousEntry: NewEntryWithoutId = {
+        description: "Malicious'); DROP TABLE entries; --",
+        date: '2020-01-01',
+        specialist: 'Dr. Test',
+        type: 'HealthCheck',
+        healthCheckRating: HealthCheckRating.Healthy
+      };
+      
+      await expect(patientService.addEntry(patient, maliciousEntry))
+        .rejects.toThrow(ValidationError);
     });
   });
 });
