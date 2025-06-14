@@ -200,13 +200,11 @@ export const validateDateRange = (startDate: string, endDate: string): string =>
  *
  * @context7 /microsoft/typescript-website
  */
-export const validateSSN = (ssn: string): string => {
-  const regex = /^(\d{6}-\d{4}|\d{6}-\d{3}[A-Za-z])$/;
-
-  if (!regex.test(ssn)) {
-    return 'Invalid SSN format. Use XXXXXX-XXXX';
+export const validateSSN = (ssn: string): string | undefined => {
+  if (!/^\d{6}-\d{4}$/.test(ssn)) {
+    return 'SSN must be in format 123456-7890';
   }
-  return '';
+  return undefined;
 };
 
 /**

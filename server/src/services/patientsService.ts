@@ -25,10 +25,17 @@ import logger from '../utils/logger';
 import { sanitizeObject } from '../utils/sanitize';
 import { QueryResult } from 'pg';
 import formatToISODate from '../utils/dateFormatter';
+import {
+  buildWhereClause,
+  buildOrderByClause,
+} from '../utils/queryBuilder';
 
 const SAFE_STRING_REGEX = /^[^;'"\\]*$/;
 
-const validateSafeString = (value: string, fieldName: string): void => {
+const validateSafeString = (
+  value: string,
+  fieldName: string
+): void => {
   if (!SAFE_STRING_REGEX.test(value)) {
     throw new ValidationError(
       `${fieldName} contains invalid characters`,
@@ -109,8 +116,9 @@ const getNonSensitiveEntries = async (): Promise<
 > => {
   try {
     const result = (await pool.query(`
-      SELECT id, name, date_of_birth, gender, occupation, created_at, updated_at
+      SELECT patients.*, patient_health_ratings.health_rating
       FROM patients
+      LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
     `)) as QueryResult<{
       id: string;
       name: string;
@@ -119,6 +127,7 @@ const getNonSensitiveEntries = async (): Promise<
       occupation: string;
       created_at: string;
       updated_at: string;
+      health_rating: number | null;
     }>;
 
     return result.rows.map((row) => ({
@@ -129,6 +138,8 @@ const getNonSensitiveEntries = async (): Promise<
       occupation: row.occupation,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      healthRating:
+        row.health_rating === -1 ? null : row.health_rating,
     }));
   } catch (error) {
     throw new DatabaseError(
@@ -145,10 +156,11 @@ const getAllNonSensitiveEntries = async (): Promise<
   return getNonSensitiveEntries();
 };
 
-// Get paginated non-sensitive patient entries
 const getPaginatedNonSensitiveEntries = async (
   page: number = 1,
-  pageSize: number = 10
+  pageSize: number = 10,
+  filterModel: any = null,
+  sortModel: any = null
 ): Promise<PaginatedResponse<NonSensitivePatientEntry[]>> => {
   if (page < 1 || pageSize < 1) {
     throw new ValidationError(
@@ -158,24 +170,94 @@ const getPaginatedNonSensitiveEntries = async (
   }
 
   try {
-    const offset = (page - 1) * pageSize;
-    const result = (await pool.query(
-      `
-      SELECT id, name, date_of_birth, gender, occupation
+    let filter: Record<string, any> = {};
+    if (filterModel) {
+      const filters = filterModel.items || [];
+
+      const searchFilters = filters.filter((f: any) =>
+        ['name', 'gender', 'occupation'].includes(f.field)
+      );
+
+      if (searchFilters.length > 3) {
+        const errorDetails = {
+          invalidFields: searchFilters.map(
+            (f: { field: string }) => f.field
+          ),
+          filterCount: searchFilters.length,
+          maxAllowed: 3,
+        };
+        logger.error('Filter validation failed', errorDetails);
+        throw new ValidationError(
+          'Maximum of 3 search parameters allowed (name, gender, occupation)',
+          errorDetails
+        );
+      }
+
+      searchFilters.forEach((filterItem: any) => {
+        const field = filterItem.field as keyof typeof filter;
+        filter[field] = filterItem.value;
+      });
+    }
+
+    let sortArray: Array<{ field: string; direction: string }> = [];
+    if (sortModel && Array.isArray(sortModel)) {
+      sortArray = sortModel.map((s) => ({
+        field: s.field || 'name',
+        direction: s.sort || 'asc',
+      }));
+    }
+
+    const paginationParams = [
+      Number(pageSize),
+      Number((page - 1) * pageSize),
+    ];
+
+    const { whereClause, params } = buildWhereClause(filter);
+    const { orderByClause, params: orderParams } = buildOrderByClause(
+      sortArray,
+      params
+    );
+
+    // Main query with pagination
+    const query = `
+      SELECT patients.*, COALESCE(patient_health_ratings.health_rating, -1) AS health_rating
       FROM patients
-      LIMIT $1 OFFSET $2
-    `,
-      [pageSize, offset]
+      LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
+      ${whereClause}
+      ${orderByClause}
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+
+    // Combine parameters after validation
+    const finalParams = [...(orderParams || []), ...paginationParams];
+    logger.debug('Final query parameters', {
+      filterParams: orderParams?.length || 0,
+      paginationParams: paginationParams.length,
+      totalParams: finalParams.length,
+    });
+
+    const result = (await pool.query(
+      query,
+      finalParams
     )) as QueryResult<{
       id: string;
       name: string;
       date_of_birth: string;
-      gender: string;
+      gender: Gender;
       occupation: string;
+      health_rating: number | null;
     }>;
 
+    const countQuery = `
+      SELECT COUNT(*)
+      FROM patients
+      LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
+      ${whereClause}
+    `;
+
     const totalResult = (await pool.query(
-      'SELECT COUNT(*) FROM patients'
+      countQuery,
+      params
     )) as QueryResult<{ count: string }>;
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
@@ -184,14 +266,17 @@ const getPaginatedNonSensitiveEntries = async (
         id: string;
         name: string;
         date_of_birth: string;
-        gender: string;
+        gender: Gender;
         occupation: string;
+        health_rating: number | null;
       }) => ({
         id: row.id,
         name: row.name,
-        dateOfBirth: row.date_of_birth,
+        dateOfBirth: formatToISODate(row.date_of_birth),
         gender: row.gender,
         occupation: row.occupation,
+        healthRating:
+          row.health_rating === -1 ? null : row.health_rating,
       })
     );
 
@@ -207,6 +292,93 @@ const getPaginatedNonSensitiveEntries = async (
   } catch (error) {
     throw new DatabaseError(
       'Failed to fetch paginated non-sensitive patient entries',
+      error
+    );
+  }
+};
+
+const getAllPatientsWithEntries = async (): Promise<
+  PatientEntry[]
+> => {
+  try {
+    const patients = await getPatientEntries();
+    const patientsWithEntries = await Promise.all(
+      patients.map(async (patient) => {
+        const entries = await getEntriesByPatientId(patient.id);
+        return {
+          ...patient,
+          entries,
+        };
+      })
+    );
+    return patientsWithEntries;
+  } catch (error) {
+    throw new DatabaseError(
+      'Failed to fetch patients with entries',
+      error
+    );
+  }
+};
+
+const getPaginatedPatientsWithEntries = async (
+  page: number = 1,
+  pageSize: number = 10
+): Promise<PaginatedResponse<PatientEntry[]>> => {
+  if (page < 1 || pageSize < 1) {
+    throw new ValidationError(
+      'Page and pageSize must be positive integers',
+      { invalidFields: ['page', 'pageSize'] }
+    );
+  }
+
+  try {
+    const offset = (page - 1) * pageSize;
+    const result = await pool.query(
+      `
+      SELECT id, name, date_of_birth, gender, occupation, ssn
+      FROM patients
+      LIMIT $1 OFFSET $2
+    `,
+      [pageSize, offset]
+    );
+
+    const totalResult = (await pool.query(
+      'SELECT COUNT(*) FROM patients'
+    )) as QueryResult<{ count: string }>;
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const patients = result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      dateOfBirth: formatToISODate(row.date_of_birth),
+      gender: row.gender,
+      occupation: row.occupation,
+      ssn: row.ssn,
+      entries: [],
+    })) as PatientEntry[];
+
+    const patientsWithEntries = await Promise.all(
+      patients.map(async (patient) => {
+        const entries = await getEntriesByPatientId(patient.id);
+        return {
+          ...patient,
+          entries,
+        };
+      })
+    );
+
+    return {
+      data: patientsWithEntries,
+      metadata: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize),
+        currentPage: page,
+        itemsPerPage: pageSize,
+      },
+    };
+  } catch (error) {
+    throw new DatabaseError(
+      'Failed to fetch paginated patients with entries',
       error
     );
   }
@@ -257,14 +429,13 @@ const createPatient = async (
   entry: NewPatientEntryWithoutEntries
 ): Promise<PatientEntry> => {
   const sanitizedEntry = sanitizeObject(entry);
-  
+
   validateSafeString(sanitizedEntry.name, 'name');
   validateSafeString(sanitizedEntry.occupation, 'occupation');
   if (sanitizedEntry.ssn) {
     validateSafeString(sanitizedEntry.ssn, 'ssn');
   }
 
-  // Validate required fields
   const requiredFields: Array<keyof NewPatientEntryWithoutEntries> = [
     'name',
     'occupation',
@@ -282,11 +453,14 @@ const createPatient = async (
   }
 
   if (sanitizedEntry.dateOfBirth) {
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(sanitizedEntry.dateOfBirth)) {
-      throw new ValidationError('Invalid date format: YYYY-MM-DD', {
-        invalidField: 'dateOfBirth',
-      });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedEntry.dateOfBirth)) {
+      throw new ValidationError(
+        'Invalid date format. Use YYYY-MM-DD',
+        {
+          invalidField: 'dateOfBirth',
+          status: 400,
+        }
+      );
     }
   }
 
@@ -328,11 +502,14 @@ const editPatient = async (
   const sanitizedUpdate = sanitizeObject(updateData);
 
   if (sanitizedUpdate.dateOfBirth) {
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(sanitizedUpdate.dateOfBirth)) {
-      throw new ValidationError('Invalid date format: YYYY-MM-DD', {
-        invalidField: 'dateOfBirth',
-      });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedUpdate.dateOfBirth)) {
+      throw new ValidationError(
+        'Invalid date format. Use YYYY-MM-DD',
+        {
+          invalidField: 'dateOfBirth',
+          status: 400,
+        }
+      );
     }
   }
 
@@ -346,14 +523,12 @@ const editPatient = async (
     }
     const existingPatient = existingResult.rows[0] as any;
 
-    // Merge updates while preserving existing dateOfBirth if not provided
     const updatedFields = {
       name: sanitizedUpdate.name ?? existingPatient.name,
       occupation:
         sanitizedUpdate.occupation ?? existingPatient.occupation,
       gender: sanitizedUpdate.gender ?? existingPatient.gender,
       ssn: sanitizedUpdate.ssn ?? existingPatient.ssn,
-      // Use snake_case for database field
       date_of_birth:
         sanitizedUpdate.dateOfBirth ?? existingPatient.date_of_birth,
       updated_at: new Date().toISOString(),
@@ -437,19 +612,24 @@ const deletePatient = async (id: string): Promise<void> => {
 
 const validateEntry = (entry: NewEntryWithoutId): void => {
   const sanitizedEntry = sanitizeObject(entry);
-  
+
   validateSafeString(sanitizedEntry.description, 'description');
   validateSafeString(sanitizedEntry.specialist, 'specialist');
-  
-  if (sanitizedEntry.type === 'Hospital' && sanitizedEntry.discharge) {
-    validateSafeString(sanitizedEntry.discharge.criteria, 'discharge.criteria');
+
+  if (
+    sanitizedEntry.type === 'Hospital' &&
+    sanitizedEntry.discharge
+  ) {
+    validateSafeString(
+      sanitizedEntry.discharge.criteria,
+      'discharge.criteria'
+    );
   }
-  
+
   if (sanitizedEntry.type === 'OccupationalHealthcare') {
     validateSafeString(sanitizedEntry.employerName, 'employerName');
   }
 
-  // Validate required fields
   const baseFields: Array<keyof BaseEntry> = [
     'description',
     'date',
@@ -475,7 +655,7 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
 
   if (sanitizedEntry.diagnosisCodes) {
     const invalidCodes = sanitizedEntry.diagnosisCodes.filter(
-      (code) => !/^[A-Z0-9]{3,}$/.test(code)
+      (code) => !/^[A-Z0-9]{3,}(?:\.[0-9]+)?$/.test(code)
     );
     if (invalidCodes.length > 0) {
       throw new ValidationError(
@@ -557,12 +737,10 @@ const addEntry = async (
 
     const id: string = uuid();
 
-    // Start transaction
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      // Insert base entry
       (await client.query(
         `
         INSERT INTO entries (id, patient_id, description, date, specialist, type)
@@ -579,7 +757,6 @@ const addEntry = async (
         ]
       )) as QueryResult<Entry>;
 
-      // Insert entry-diagnosis relationships
       if (entry.diagnosisCodes) {
         for (const code of entry.diagnosisCodes) {
           await client.query(
@@ -589,7 +766,6 @@ const addEntry = async (
         }
       }
 
-      // Insert type-specific data
       if (entry.type === 'HealthCheck') {
         await client.query(
           'INSERT INTO healthcheck_entries (entry_id, health_check_rating) VALUES ($1, $2)',
@@ -613,6 +789,30 @@ const addEntry = async (
       }
 
       await client.query('COMMIT');
+      try {
+        const viewExists = (
+          await pool.query<{ exists: boolean }>(
+            `SELECT EXISTS(
+            SELECT 1 FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'm'
+            AND n.nspname = 'public'
+            AND c.relname = 'patient_health_ratings'
+          )`
+          )
+        ).rows[0].exists;
+        if (viewExists) {
+          await pool.query(
+            'REFRESH MATERIALIZED VIEW patient_health_ratings'
+          );
+        } else {
+          logger.warn(
+            'Materialized view patient_health_ratings does not exist'
+          );
+        }
+      } catch (error) {
+        logger.error('Failed to refresh materialized view:', error);
+      }
 
       const createdEntry = {
         id,
@@ -621,7 +821,6 @@ const addEntry = async (
         updatedAt: new Date().toISOString(),
       } as Entry;
 
-      // Map to the appropriate type based on entry type
       switch (entry.type) {
         case 'HealthCheck':
           return {
@@ -722,7 +921,6 @@ const updateEntry = async (
       }
     }
 
-    // Update base entry
     await client.query(
       `
       UPDATE entries
@@ -741,7 +939,6 @@ const updateEntry = async (
       ]
     );
 
-    // Update diagnosis codes
     await client.query(
       'DELETE FROM entry_diagnoses WHERE entry_id = $1',
       [entryId]
@@ -755,7 +952,6 @@ const updateEntry = async (
       }
     }
 
-    // Update type-specific data
     if (updateData.type === 'HealthCheck') {
       await client.query(
         `
@@ -800,6 +996,9 @@ const updateEntry = async (
     }
 
     await client.query('COMMIT');
+    await pool.query(
+      'REFRESH MATERIALIZED VIEW patient_health_ratings'
+    );
 
     const updatedEntry = {
       ...updateData,
@@ -871,7 +1070,6 @@ const getEntriesByPatientId = async (
       GROUP BY e.id, oh.employer_name, oh.sick_leave_start_date, oh.sick_leave_end_date
     `;
 
-    // Execute all queries in parallel
     const [healthCheckResult, hospitalResult, occupationalResult] =
       await Promise.all([
         pool.query(healthCheckQuery, [patientId]),
@@ -974,6 +1172,9 @@ const deleteEntry = async (
     }
 
     await client.query('COMMIT');
+    await pool.query(
+      'REFRESH MATERIALIZED VIEW patient_health_ratings'
+    );
     logger.info(
       `Successfully deleted entry ${entryId} for patient ${patientId}`
     );
@@ -993,11 +1194,186 @@ const deleteEntry = async (
   }
 };
 
+const getPatientsSortedByHealthRating = async (): Promise<
+  PatientEntry[]
+> => {
+  try {
+    const result = (await pool.query(`
+      SELECT patients.*, COALESCE(patient_health_ratings.health_rating, -1) AS health_rating
+      FROM patients
+      LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
+      ORDER BY health_rating DESC NULLS LAST
+    `)) as QueryResult<{
+      id: string;
+      name: string;
+      date_of_birth: string;
+      gender: string;
+      occupation: string;
+      health_rating: number | null;
+    }>;
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      dateOfBirth: formatToISODate(row.date_of_birth),
+      gender: row.gender as Gender,
+      occupation: row.occupation,
+      ssn: '',
+      entries: [],
+      healthRating:
+        row.health_rating === -1 ? null : row.health_rating,
+    }));
+  } catch (error) {
+    throw new DatabaseError(
+      'Failed to fetch patients sorted by health rating',
+      error
+    );
+  }
+};
+
+const getFilteredAndPaginatedPatients = async (
+  page: number = 1,
+  pageSize: number = 10,
+  filters: Record<string, any> = {},
+  sortModel: { field: string; direction: string } | null = null,
+  searchText?: string
+): Promise<PaginatedResponse<NonSensitivePatientEntry[]>> => {
+  if (page < 1 || pageSize < 1) {
+    throw new ValidationError(
+      'Page and pageSize must be positive integers',
+      { invalidFields: ['page', 'pageSize'] }
+    );
+  }
+
+  try {
+    const { whereClause, params: filterParams } = buildWhereClause(
+      Object.fromEntries(
+        Object.entries(filters).filter(([key]) =>
+          ['name', 'occupation', 'gender'].includes(key)
+        )
+      ),
+      searchText
+    );
+
+    const explicitFilterCount = Object.keys(filters).length;
+    const totalFilters = explicitFilterCount + (searchText ? 1 : 0);
+
+    if (totalFilters > 3) {
+      const errorDetails = {
+        invalidFields: Object.keys(filters),
+        filterCount: totalFilters,
+        maxAllowed: 3,
+      };
+      logger.error('Filter validation failed', errorDetails);
+      throw new ValidationError(
+        'Maximum of 3 search parameters allowed (name, gender, occupation)',
+        errorDetails
+      );
+    }
+
+    let orderByClause = 'ORDER BY name ASC';
+    if (sortModel) {
+      const validFields = [
+        'name',
+        'gender',
+        'occupation',
+        'health_rating',
+      ];
+      if (validFields.includes(sortModel.field)) {
+        orderByClause = `ORDER BY ${
+          sortModel.field
+        } ${sortModel.direction.toUpperCase()}`;
+        if (sortModel.field === 'health_rating') {
+          orderByClause += ' NULLS LAST';
+        }
+      }
+    }
+
+    // Main query with fixed parameter indexing
+    const query = `
+      SELECT patients.*, COALESCE(patient_health_ratings.health_rating, -1) AS health_rating
+      FROM patients
+      LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
+      ${whereClause}
+      ${orderByClause}
+      LIMIT $${filterParams.length + 1}::integer
+      OFFSET $${filterParams.length + 2}::integer
+    `;
+
+    const finalParams = [
+      ...filterParams,
+      pageSize,
+      (page - 1) * pageSize,
+    ];
+
+    const result = (await pool.query(
+      query,
+      finalParams
+    )) as QueryResult<{
+      id: string;
+      name: string;
+      date_of_birth: string;
+      gender: Gender;
+      occupation: string;
+      health_rating: number | null;
+    }>;
+
+    const countQuery = `
+      SELECT COUNT(*)
+      FROM patients
+      LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
+      ${whereClause}
+    `;
+
+    const totalResult = (await pool.query(
+      countQuery,
+      filterParams
+    )) as QueryResult<{ count: string }>;
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const entries = result.rows.map(
+      (row: {
+        id: string;
+        name: string;
+        date_of_birth: string;
+        gender: Gender;
+        occupation: string;
+        health_rating: number | null;
+      }) => ({
+        id: row.id,
+        name: row.name,
+        dateOfBirth: formatToISODate(row.date_of_birth),
+        gender: row.gender,
+        occupation: row.occupation,
+        healthRating:
+          row.health_rating === -1 ? null : row.health_rating,
+      })
+    );
+
+    return {
+      data: entries as NonSensitivePatientEntry[],
+      metadata: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize),
+        currentPage: page,
+        itemsPerPage: pageSize,
+      },
+    };
+  } catch (error) {
+    throw new DatabaseError(
+      'Failed to fetch filtered and paginated patients',
+      error
+    );
+  }
+};
+
 export const patientService = {
   getPatientEntries,
   getNonSensitiveEntries,
   getAllNonSensitiveEntries,
   getPaginatedNonSensitiveEntries,
+  getAllPatientsWithEntries,
+  getPaginatedPatientsWithEntries,
   addEntry,
   getPatientById,
   getEntriesByPatientId,
@@ -1006,4 +1382,6 @@ export const patientService = {
   deletePatient,
   updateEntry,
   deleteEntry,
+  getPatientsSortedByHealthRating,
+  getFilteredAndPaginatedPatients,
 };

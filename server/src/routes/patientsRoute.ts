@@ -3,19 +3,25 @@ import { patientService } from '../services/patientsService';
 import {
   NewEntryWithoutId,
   NewPatientEntryWithoutEntries,
-  NonSensitivePatientEntry,
   PatientEntry,
-  PaginatedResponse,
   Entry,
 } from '../types';
 import { validate } from '../utils/validation';
 import { CreatePatientSchema } from '../schemas/patient.schema';
 import { EntrySchema } from '../schemas/entry.schema';
-import { DatabaseError, NotFoundError, ValidationError } from '../utils/errors';
+import {
+  DatabaseError,
+  NotFoundError,
+  ValidationError,
+} from '../utils/errors';
+import qs from 'qs';
 
 interface PaginationQuery {
   page?: string;
   pageSize?: string;
+  filterModel?: string;
+  sortModel?: string;
+  searchText?: string;
 }
 
 const patientsRouter = express.Router();
@@ -28,31 +34,81 @@ const patientsRouter = express.Router();
 patientsRouter.get(
   '/',
   async (
-    req: Request<{}, {}, {}, PaginationQuery>,
+    req: Request<
+      {},
+      {},
+      {},
+      PaginationQuery & { withEntries?: string }
+    >,
     res: Response
   ) => {
     try {
       const page = parseInt(req.query.page ?? '1', 10);
       const pageSize = parseInt(req.query.pageSize ?? '10', 10);
+      const withEntries = req.query.withEntries === 'true';
+      let searchText = req.query.searchText as string | undefined;
 
+      if (searchText) {
+        searchText = searchText.trim().replace(/[^\w\s-]/g, '');
 
-      // Validate page and pageSize if provided
+        if (searchText.length > 100) {
+          searchText = searchText.substring(0, 100);
+        }
+      }
+
+      const filterModel = req.query.filterModel
+        ? qs.parse(req.query.filterModel as string)
+        : null;
+      const sortModel = req.query.sortModel
+        ? qs.parse(req.query.sortModel as string)
+        : null;
+
+      const filters: Record<string, any> = {};
+      if (filterModel) {
+        if (filterModel.gender) filters.gender = filterModel.gender;
+        if (filterModel.occupation)
+          filters.occupation = filterModel.occupation;
+      }
+
+      if (sortModel) {
+        if (sortModel.field === 'dateOfBirth')
+          sortModel.field = 'date_of_birth';
+        if (sortModel.field === 'healthRating')
+          sortModel.field = 'health_rating';
+      }
+
+      const sortConfig = sortModel
+        ? {
+            field: sortModel.field as string,
+            direction: sortModel.sort as string,
+          }
+        : null;
+
       if (
         !isNaN(page) &&
         !isNaN(pageSize) &&
         page > 0 &&
         pageSize > 0
       ) {
-        const result: PaginatedResponse<NonSensitivePatientEntry[]> =
-          await patientService.getPaginatedNonSensitiveEntries(
-            page,
-            pageSize
-          );
+        const result = withEntries
+          ? await patientService.getFilteredAndPaginatedPatients(
+              page,
+              pageSize,
+              filters || {},
+              sortConfig,
+              searchText || undefined
+            )
+          : await patientService.getPaginatedPatientsWithEntries(
+              page,
+              pageSize
+            );
+
         res.json(result);
       } else {
         // Return all entries without pagination
-        const entries =
-          await patientService.getAllNonSensitiveEntries();
+        const entries = withEntries
+          ? await patientService.getAllPatientsWithEntries()
+          : await patientService.getAllNonSensitiveEntries();
         res.json(entries);
       }
       return;
@@ -69,15 +125,22 @@ patientsRouter.get(
  */
 patientsRouter.get(
   '/:id',
-  async (req, res: Response<PatientEntry | { error: string; details?: any }>) => {
+  async (
+    req,
+    res: Response<PatientEntry | { error: string; details?: any }>
+  ) => {
     try {
-      const patient = await patientService.getPatientById(req.params.id);
+      const patient = await patientService.getPatientById(
+        req.params.id
+      );
       res.json(patient);
     } catch (error) {
       if (error instanceof NotFoundError) {
         res.status(404).json({ error: error.message });
       } else if (error instanceof ValidationError) {
-        res.status(400).json({ error: error.message, details: error.details });
+        res
+          .status(400)
+          .json({ error: error.message, details: error.details });
       } else {
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -96,11 +159,15 @@ patientsRouter.post(
     res: Response<PatientEntry | { error: string; details?: any }>
   ) => {
     try {
-      const addedPatientEntry = await patientService.createPatient(req.body);
+      const addedPatientEntry = await patientService.createPatient(
+        req.body
+      );
       res.status(201).json(addedPatientEntry);
     } catch (error) {
       if (error instanceof ValidationError) {
-        res.status(400).json({ error: error.message, details: error.details });
+        res
+          .status(400)
+          .json({ error: error.message, details: error.details });
       } else {
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -163,7 +230,10 @@ patientsRouter.delete('/:id', async (req, res) => {
 
 patientsRouter.put(
   '/:id',
-  async (req, res: Response<PatientEntry | { error: string; details?: any }>) => {
+  async (
+    req,
+    res: Response<PatientEntry | { error: string; details?: any }>
+  ) => {
     try {
       const updatedPatient = await patientService.editPatient(
         req.params.id,
@@ -174,7 +244,9 @@ patientsRouter.put(
       if (error instanceof NotFoundError) {
         res.status(404).json({ error: error.message });
       } else if (error instanceof ValidationError) {
-        res.status(400).json({ error: error.message, details: error.details });
+        res
+          .status(400)
+          .json({ error: error.message, details: error.details });
       } else {
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -186,7 +258,11 @@ patientsRouter.put(
   '/:patientId/entries/:entryId',
   validate(EntrySchema),
   async (
-    req: Request<{ patientId: string; entryId: string }, unknown, NewEntryWithoutId>,
+    req: Request<
+      { patientId: string; entryId: string },
+      unknown,
+      NewEntryWithoutId
+    >,
     res: Response
   ) => {
     try {
@@ -201,7 +277,9 @@ patientsRouter.put(
       if (error instanceof NotFoundError) {
         res.status(404).json({ error: error.message });
       } else if (error instanceof ValidationError) {
-        res.status(400).json({ error: error.message, details: error.details });
+        res
+          .status(400)
+          .json({ error: error.message, details: error.details });
       } else {
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -210,19 +288,22 @@ patientsRouter.put(
 );
 
 patientsRouter.delete(
-'/:patientId/entries/:entryId',
-async (req, res) => {
-  try {
-    await patientService.deleteEntry(req.params.patientId, req.params.entryId);
-    res.status(204).end();
-  } catch (error) {
-    if (error instanceof NotFoundError) {
-      res.status(404).json({ error: error.message });
-    } else {
-      res.status(500).json({ error: 'Internal server error' });
+  '/:patientId/entries/:entryId',
+  async (req, res) => {
+    try {
+      await patientService.deleteEntry(
+        req.params.patientId,
+        req.params.entryId
+      );
+      res.status(204).end();
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
   }
-}
 );
 
 export default patientsRouter;

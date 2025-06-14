@@ -124,7 +124,9 @@ const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
             className='drawer-content'
             style={{ color: theme.palette.text.primary }}
           >
-            {children}
+            {React.cloneElement(children as React.ReactElement, {
+              onEntryAdded: handleEntryAdded
+            })}
           </div>
         </div>
       </CSSTransition>
@@ -133,12 +135,14 @@ const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
         open={snackbarOpen}
         autoHideDuration={3000}
         onClose={() => setSnackbarOpen(false)}
-        message="Entry added successfully"
+        message='Entry added successfully'
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        ContentProps={{
-          style: {
-            backgroundColor: theme.palette.success.main,
-            color: theme.palette.success.contrastText,
+        slotProps={{
+          content: {
+            style: {
+              backgroundColor: theme.palette.success.main,
+              color: theme.palette.success.contrastText,
+            },
           },
         }}
       />

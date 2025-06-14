@@ -1,9 +1,14 @@
 import axios from 'axios';
-import { Entry, NewEntryFormValues, Patient, PatientFormValues } from '../types';
+import qs from 'qs';
+import {
+  Entry,
+  NewEntryFormValues,
+  Patient,
+  PatientFormValues,
+} from '../types';
 import { apiBaseUrl } from '../constants';
 import { apiRetry } from '../utils/apiUtils';
-
-type PatientResponse = PaginatedResponse<Patient[]> | Patient[];
+import { toServerFilter } from '../utils/gridFilterConverter';
 
 export interface PaginatedResponse<T> {
   data: T;
@@ -15,42 +20,94 @@ export interface PaginatedResponse<T> {
   };
 }
 
-const getAll = async (page = 1, pageSize = 10) => {
-  try {
-    const response = await apiRetry(() =>
-      axios.get(`${apiBaseUrl}/patients`, {
-        params: { page, pageSize }
-      })
-    );
+interface FilterModel {
+  items: Array<{
+    field: string;
+    operator: string;
+    value: string;
+  }>;
+}
 
-    // Check if response is paginated or non-paginated
-    if ('metadata' in response.data) {
-      // Paginated response
-      return response.data as PaginatedResponse<Patient[]>;
-    } else {
-      // Non-paginated response
-      return { data: response.data as Patient[], metadata: null };
-    }
-  } catch (error) {
-    throw error;
-  }
+interface SortModel {
+  field: string;
+  sort: 'asc' | 'desc';
+}
+
+const getAll = async (
+  withEntries = false,
+  page = 1,
+  pageSize = 10,
+  filterModel: FilterModel | null = null,
+  sortModel: SortModel | null = null,
+  searchText?: string
+) => {
+  const serverFilter = filterModel
+    ? toServerFilter(filterModel)
+    : null;
+  const params = {
+    withEntries,
+    page,
+    pageSize,
+    ...(serverFilter && { filterModel: qs.stringify(serverFilter) }),
+    ...(sortModel && { sortModel: qs.stringify(sortModel) }),
+    ...(searchText && { searchText }),
+  };
+
+  const response = await apiRetry(() =>
+    axios.get(`${apiBaseUrl}/patients`, { params })
+  );
+
+  return response.data as PaginatedResponse<Patient[]>;
 };
 
 const getById = async (id: string) => {
   return apiRetry(() =>
-    axios.get<Patient>(`${apiBaseUrl}/patients/${id}`).then(res => res.data)
+    axios
+      .get<Patient>(`${apiBaseUrl}/patients/${id}`)
+      .then((res) => res.data)
   );
 };
 
 const create = async (object: PatientFormValues) => {
+  try {
+    const response = await apiRetry(() =>
+      axios.post<Patient>(`${apiBaseUrl}/patients`, object)
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Patient creation failed: ', error);
+    throw error;
+  }
+};
+
+const createNewEntry = async (
+  id: string,
+  object: NewEntryFormValues
+) => {
   return apiRetry(() =>
-    axios.post<Patient>(`${apiBaseUrl}/patients`, object).then(res => res.data)
+    axios
+      .post<Entry>(`${apiBaseUrl}/patients/${id}/entries`, object)
+      .then((res) => res.data)
   );
 };
 
-const createNewEntry = async (id: string, object: NewEntryFormValues) => {
+const getEntriesByPatientId = async (id: string) => {
   return apiRetry(() =>
-    axios.post<Entry>(`${apiBaseUrl}/patients/${id}/entries`, object).then(res => res.data)
+    axios
+      .get<Entry[]>(`${apiBaseUrl}/patients/${id}/entries}`)
+      .then((res) => res.data)
+  );
+};
+
+const updatePatient = async (
+  id: string,
+  object: PatientFormValues
+) => {
+  return apiRetry(() =>
+    axios
+      .put<Patient>(`${apiBaseUrl}/patients/${id}`, object)
+      .then((res) => res.data)
   );
 };
 
@@ -59,4 +116,6 @@ export default {
   create,
   createNewEntry,
   getById,
+  getEntriesByPatientId,
+  updatePatient,
 };

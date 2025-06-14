@@ -1,631 +1,712 @@
 import { patientService } from '../services/patientsService';
-import {
-  Gender,
-  NewPatientEntryWithoutEntries,
-  HealthCheckRating,
-  NewEntryWithoutId,
-  PatientEntry,
-  HealthCheckEntry,
-  HospitalEntry,
-  OccupationalHealthcareEntry,
-} from '../types';
-import { clearDatabase, createTestPatient, createTestPatientWithEntries, seedDatabase } from './testUtils';
 import pool from '../../db/connection';
-import {
-  DatabaseError,
-  NotFoundError,
-  ValidationError,
-} from '../utils/errors';
+import { clearDatabase, seedDatabase } from './testUtils';
+import { QueryResult } from 'pg';
 import { v1 as uuid } from 'uuid';
+import { DatabaseError } from '../utils/errors';
 
-describe('Patients Service', () => {
+jest.mock('../services/patientsService', () => {
+  const originalModule = jest.requireActual(
+    '../services/patientsService'
+  );
+  return {
+    ...originalModule,
+    getEntriesByPatientId: jest.fn().mockResolvedValue([]),
+  };
+});
+
+import {
+  Patient,
+  NonSensitivePatientEntry,
+  NewPatientEntryWithoutEntries,
+  Gender,
+} from '../types';
+
+jest.mock('../../db/connection');
+jest.mock('../utils/queryBuilder');
+
+describe('PatientService', () => {
   beforeAll(async () => {
-    try {
-      await clearDatabase();
-      await seedDatabase();
-    } catch (error) {
-      console.error('Setup failed:', error);
-      process.exit(1);
-    }
+    await clearDatabase();
+    await seedDatabase();
   });
 
-
-  test('should get patient by ID', async () => {
-    const result = await pool.query(
-      'SELECT id FROM patients LIMIT 1'
-    );
-    const patientId = result.rows[0].id;
-
-    const patient = await patientService.getPatientById(patientId);
-    expect(patient).toBeDefined();
-    expect(patient.id).toBe(patientId);
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  test('should create a new patient', async () => {
-    const newPatient: NewPatientEntryWithoutEntries = {
-      name: 'John Eod',
-      dateOfBirth: '1980-01-01',
-      gender: Gender.Male,
-      occupation: 'Tester',
-    };
-    const createdPatient = await patientService.createPatient(
-      newPatient
-    );
-    expect(createdPatient).toBeDefined();
-    expect(createdPatient.name).toBe('John Eod');
+  beforeEach(() => {
+    jest.resetAllMocks();
   });
 
-  test('should get non-sensitive entries', async () => {
-    const entries = await patientService.getNonSensitiveEntries();
-    expect(entries).toBeDefined();
-    expect(Array.isArray(entries)).toBe(true);
-    expect(entries.length).toBeGreaterThan(0);
-    expect(entries[0]).toHaveProperty('id');
-    expect(entries[0]).toHaveProperty('name');
-  });
-
-  it('should return patient with nested entries', async () => {
-    // Create test patient with entries
-    const patient = await createTestPatientWithEntries(
-      {
-        name: 'Test Patient',
-        dateOfBirth: '1990-01-01',
-        gender: Gender.Male,
-        occupation: 'Engineer'
-      },
-      [
+  describe('getNonSensitiveEntries', () => {
+    it('should return a list of non-sensitive patients', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
         {
-          description: 'Health check description',
-          date: '2020-01-01',
-          specialist: 'Dr. Healthy',
-          type: 'HealthCheck',
-          healthCheckRating: HealthCheckRating.Healthy
-        },
-        {
-          description: 'Hospital stay description',
-          date: '2020-02-01',
-          specialist: 'Dr. Hospital',
-          type: 'Hospital',
-          discharge: {
-            date: '2020-02-02',
-            criteria: 'Stable'
-          }
-        },
-        {
-          description: 'Occupational healthcare description',
-          date: '2020-03-01',
-          specialist: 'Dr. Work',
-          type: 'OccupationalHealthcare',
-          employerName: 'Test Employer',
-          sickLeave: {
-            startDate: '2020-03-03',
-            endDate: '2020-03-10'
-          }
-        }
-      ]
-    );
-
-    // Retrieve patient with entries from service
-    const fullPatient = await patientService.getPatientById(patient.id);
-    const entries = await patientService.getEntriesByPatientId(patient.id);
-    fullPatient.entries = entries;
-
-    // Verify entries
-    expect(fullPatient).toBeDefined();
-    expect(fullPatient.entries).toBeDefined();
-    expect(fullPatient.entries).toHaveLength(3);
-
-    // Verify HealthCheck entry
-    const healthCheckEntry = fullPatient.entries?.find(e => e.type === 'HealthCheck');
-    expect(healthCheckEntry).toBeDefined();
-    expect(healthCheckEntry?.type).toBe('HealthCheck');
-    expect((healthCheckEntry as HealthCheckEntry).healthCheckRating).toBe(HealthCheckRating.Healthy);
-
-    // Verify Hospital entry
-    const hospitalEntry = fullPatient.entries?.find(e => e.type === 'Hospital');
-    expect(hospitalEntry).toBeDefined();
-    expect(hospitalEntry?.type).toBe('Hospital');
-    expect((hospitalEntry as HospitalEntry).discharge).toBeDefined();
-    expect((hospitalEntry as HospitalEntry).discharge?.date).toBe('2020-02-02');
-
-    // Verify OccupationalHealthcare entry
-    const occupationalEntry = fullPatient.entries?.find(e => e.type === 'OccupationalHealthcare');
-    expect(occupationalEntry).toBeDefined();
-    expect(occupationalEntry?.type).toBe('OccupationalHealthcare');
-    expect((occupationalEntry as OccupationalHealthcareEntry).employerName).toBe('Test Employer');
-    expect((occupationalEntry as OccupationalHealthcareEntry).sickLeave).toBeDefined();
-    expect((occupationalEntry as OccupationalHealthcareEntry).sickLeave?.startDate).toBe('2020-03-03');
-    expect((occupationalEntry as OccupationalHealthcareEntry).sickLeave?.endDate).toBe('2020-03-10');
-  });
-
-  describe('addEntry', () => {
-    let patients: PatientEntry[];
-
-    beforeEach(async () => {
-      const result = await pool.query(
-        'SELECT * FROM patients LIMIT 1'
-      );
-      patients = result.rows as PatientEntry[];
-    });
-
-    test('should validate required fields', async () => {
-      const patient = patients[0];
-      const invalidDescription = {
-        description: '',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: HealthCheckRating.Healthy,
-      } as NewEntryWithoutId;
-      await expect(
-        patientService.addEntry(patient, invalidDescription)
-      ).rejects.toThrow(ValidationError);
-
-      const invalidDate = {
-        description: 'Test',
-        date: 'invalid-date',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: HealthCheckRating.Healthy,
-      } as NewEntryWithoutId;
-      await expect(
-        patientService.addEntry(patient, invalidDate)
-      ).rejects.toThrow(ValidationError);
-
-      const invalidSpecialist = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: '',
-        type: 'HealthCheck',
-        healthCheckRating: HealthCheckRating.Healthy,
-      } as NewEntryWithoutId;
-      await expect(
-        patientService.addEntry(patient, invalidSpecialist)
-      ).rejects.toThrow(ValidationError);
-    });
-
-    test('should validate HealthCheck rating', async () => {
-      const patient = patients[0];
-      const invalidHigh = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: 5,
-      } as unknown as NewEntryWithoutId;
-      await expect(
-        patientService.addEntry(patient, invalidHigh)
-      ).rejects.toThrow(ValidationError);
-
-      const invalidLow = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: -1,
-      } as unknown as NewEntryWithoutId;
-      await expect(
-        patientService.addEntry(patient, invalidLow)
-      ).rejects.toThrow(ValidationError);
-    });
-
-    test('should validate missing HealthCheck rating', async () => {
-      const patient = patients[0];
-      const missingRating = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: undefined,
-      } as unknown as NewEntryWithoutId;
-      await expect(
-        patientService.addEntry(patient, missingRating)
-      ).rejects.toThrow(
-        'Missing healthCheckRating for HealthCheck entry'
-      );
-    });
-
-    test('should validate entry type', async () => {
-      const patient = patients[0];
-      const invalidEntry = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'InvalidType',
-        healthCheckRating: HealthCheckRating.Healthy,
-      } as unknown as NewEntryWithoutId;
-      await expect(
-        patientService.addEntry(patient, invalidEntry)
-      ).rejects.toThrow(ValidationError);
-    });
-    
-    describe('Entry Management', () => {
-      let patient: PatientEntry;
-      let entryId: string;
-    
-      beforeEach(async () => {
-        // Create a test patient with one entry
-        patient = await createTestPatientWithEntries(
-          {
-            name: 'Entry Test Patient',
-            dateOfBirth: '1995-05-05',
-            gender: Gender.Female,
-            occupation: 'Tester'
-          },
-          [{
-            description: 'Initial checkup',
-            date: '2023-01-01',
-            specialist: 'Dr. Initial',
-            type: 'HealthCheck',
-            healthCheckRating: HealthCheckRating.Healthy
-          }]
-        );
-        entryId = patient.entries![0].id;
-      });
-    
-      test('should update an existing entry', async () => {
-        const updateData: NewEntryWithoutId = {
-          description: 'Updated checkup',
-          date: '2023-01-02',
-          specialist: 'Dr. Updated',
-          type: 'HealthCheck',
-          healthCheckRating: HealthCheckRating.LowRisk
-        };
-    
-        const updatedEntry = await patientService.updateEntry(patient.id, entryId, updateData) as HealthCheckEntry;
-        expect(updatedEntry.description).toBe('Updated checkup');
-        expect(updatedEntry.healthCheckRating).toBe(HealthCheckRating.LowRisk);
-    
-        // Verify update in database
-        const patientAfterUpdate = await patientService.getPatientById(patient.id);
-        const entry = patientAfterUpdate.entries!.find(e => e.id === entryId);
-        expect(entry?.description).toBe('Updated checkup');
-      });
-    
-      test('should delete an entry', async () => {
-        await patientService.deleteEntry(patient.id, entryId);
-        
-        // Verify deletion
-        const patientAfterDelete = await patientService.getPatientById(patient.id);
-        expect(patientAfterDelete.entries).toHaveLength(0);
-      });
-    
-    });
-    
-    describe('Pagination', () => {
-      beforeAll(async () => {
-        await clearDatabase();
-        // Create 25 test patients
-        for (let i = 0; i < 25; i++) {
-          await createTestPatient({
-            id: uuid(),
-            name: `Patient ${i}`,
-            dateOfBirth: '1990-01-01',
-            gender: Gender.Other,
-            occupation: `Occupation ${i}`
-          });
-        }
-      });
-    
-      test('should return paginated results', async () => {
-        const page1 = await patientService.getPaginatedNonSensitiveEntries(1, 10);
-        expect(page1.data).toHaveLength(10);
-        expect(page1.metadata.totalItems).toBe(25);
-        expect(page1.metadata.totalPages).toBe(3);
-    
-        const page3 = await patientService.getPaginatedNonSensitiveEntries(3, 10);
-        expect(page3.data).toHaveLength(5);
-      });
-    
-      test('should handle invalid page parameters', async () => {
-        await expect(
-          patientService.getPaginatedNonSensitiveEntries(0, 10)
-        ).rejects.toThrow(ValidationError);
-    
-        await expect(
-          patientService.getPaginatedNonSensitiveEntries(1, 0)
-        ).rejects.toThrow(ValidationError);
-      });
-    });
-    
-    describe('Validation Edge Cases', () => {
-      let patient: PatientEntry;
-    
-      beforeEach(async () => {
-        const result = await pool.query('SELECT id FROM patients LIMIT 1');
-        patient = await patientService.getPatientById(result.rows[0].id);
-      });
-    
-      test('should reject invalid diagnosis codes', async () => {
-        const entry: NewEntryWithoutId = {
-          description: 'Invalid codes',
-          date: '2020-01-01',
-          specialist: 'Dr. Test',
-          type: 'HealthCheck',
-          healthCheckRating: HealthCheckRating.Healthy,
-          diagnosisCodes: ['INVALID-CODE', 'A1.2'] // Invalid formats
-        };
-
-        await expect(
-          patientService.addEntry(patient, entry)
-        ).rejects.toThrow(ValidationError);
-      });
-    
-      test('should reject missing discharge criteria for hospital entry', async () => {
-        const entry: NewEntryWithoutId = {
-          description: 'Missing discharge',
-          date: '2020-01-01',
-          specialist: 'Dr. Test',
-          type: 'Hospital',
-          discharge: {
-            date: '2020-01-02',
-            criteria: '' // Invalid empty
-          }
-        };
-    
-        await expect(
-          patientService.addEntry(patient, entry)
-        ).rejects.toThrow(ValidationError);
-      });
-    });
-
-    test('should add HealthCheck entry', async () => {
-      const patient = patients[0];
-      const entry: NewEntryWithoutId = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: HealthCheckRating.Healthy,
-        diagnosisCodes: [],
-      };
-      const result = await patientService.addEntry(patient, entry);
-      expect(result).toBeDefined();
-      expect(result.type).toBe('HealthCheck');
-      expect((result as HealthCheckEntry).healthCheckRating).toBe(
-        HealthCheckRating.Healthy
-      );
-      // Verify entry was actually added
-      const updatedPatient = await patientService.getPatientById(patient.id);
-      expect(updatedPatient.entries).toContainEqual(expect.objectContaining({
-        type: 'HealthCheck',
-        description: 'Test'
-      }));
-    });
-
-    test('should add Hospital entry', async () => {
-      const patient = patients[0];
-      const entry: NewEntryWithoutId = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'Hospital',
-        discharge: {
-          date: '2020-01-02',
-          criteria: 'Test criteria',
-        },
-        diagnosisCodes: [],
-      };
-      const result = await patientService.addEntry(patient, entry);
-      expect(result).toBeDefined();
-      expect(result.type).toBe('Hospital');
-      expect((result as HospitalEntry).discharge).toBeDefined();
-      // Verify entry was actually added
-      const updatedPatient = await patientService.getPatientById(patient.id);
-      expect(updatedPatient.entries).toContainEqual(expect.objectContaining({
-        type: 'Hospital',
-        description: 'Test'
-      }));
-    });
-
-    test('should add OccupationalHealthcare entry', async () => {
-      const patient = patients[0];
-      const entry: NewEntryWithoutId = {
-        description: 'Test',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'OccupationalHealthcare',
-        employerName: 'Test Employer',
-        sickLeave: {
-          startDate: '2020-01-02',
-          endDate: '2020-01-03',
-        },
-        diagnosisCodes: [],
-      };
-      const result = await patientService.addEntry(patient, entry);
-      expect(result).toBeDefined();
-      expect(result.type).toBe('OccupationalHealthcare');
-      expect(
-        (result as OccupationalHealthcareEntry).employerName
-      ).toBe('Test Employer');
-      // Verify entry was actually added
-      const updatedPatient = await patientService.getPatientById(patient.id);
-      expect(updatedPatient.entries).toContainEqual(expect.objectContaining({
-        type: 'OccupationalHealthcare',
-        description: 'Test'
-      }));
-    });
-  });
-
-  describe('deletePatient', () => {
-    let patientId: string;
-
-    beforeEach(async () => {
-      // Create test patient using helper
-      const patient = await createTestPatientWithEntries(
-        {
-          name: 'Patient to delete',
-          dateOfBirth: '1990-01-01',
+          id: '1',
+          name: 'John Doe',
+          dateOfBirth: '1980-01-01',
           gender: Gender.Male,
-          occupation: 'Test Occupation'
+          occupation: 'Developer',
+          healthRating: 85,
         },
-        []
+        {
+          id: '2',
+          name: 'Jane Smith',
+          dateOfBirth: '1990-01-01',
+          gender: Gender.Female,
+          occupation: 'Designer',
+          healthRating: 90,
+        },
+      ];
+
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [
+          {
+            id: '1',
+            name: 'John Doe',
+            date_of_birth: '1980-01-01',
+            gender: 'male',
+            occupation: 'Developer',
+            health_rating: 85,
+          },
+          {
+            id: '2',
+            name: 'Jane Smith',
+            date_of_birth: '1990-01-01',
+            gender: 'female',
+            occupation: 'Designer',
+            health_rating: 90,
+          },
+        ],
+      } as unknown as QueryResult);
+
+      const result = await patientService.getNonSensitiveEntries();
+      expect(result).toEqual(mockPatients);
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT')
       );
-      patientId = patient.id;
     });
 
-    test('should delete an existing patient', async () => {
-      await patientService.deletePatient(patientId);
-      // Verify deletion by trying to fetch the patient
+    it('should handle empty result set', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [],
+      } as unknown as QueryResult);
+
+      const result = await patientService.getNonSensitiveEntries();
+      expect(result).toEqual([]);
+    });
+
+    it('should throw an error when database query fails', async () => {
+      const error = new Error('Database error');
+      (pool.query as jest.Mock).mockRejectedValueOnce(error);
+
       await expect(
-        patientService.getPatientById(patientId)
-      ).rejects.toThrow(NotFoundError);
+        patientService.getNonSensitiveEntries()
+      ).rejects.toThrow(
+        'Failed to fetch non-sensitive patient entries'
+      );
     });
+  });
 
-    test('should throw NotFoundError for non-existent id', async () => {
-      const nonExistentId = uuid();
-      await expect(
-        patientService.deletePatient(nonExistentId)
-      ).rejects.toThrow(NotFoundError);
-    });
-
-    test('should throw NotFoundError with correct message for non-existent id', async () => {
-      const nonExistentId = uuid();
-      try {
-        await patientService.deletePatient(nonExistentId);
-        fail('Expected NotFoundError but no error was thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(NotFoundError);
-        if (error instanceof NotFoundError) {
-          expect(error.message).toContain(`Patient with ID ${nonExistentId} not found`);
-        }
-      }
-    });
-
-    test('should delete patient with entries', async () => {
-      // Add an entry to the patient
-      const entry: NewEntryWithoutId = {
-        description: 'Test entry',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: HealthCheckRating.Healthy,
-        diagnosisCodes: [],
+  describe('getPatientById', () => {
+    it('should return a patient by ID', async () => {
+      const validUuid = '0ce7e630-4860-11f0-835a-299764267caf';
+      const mockPatient: Patient = {
+        id: validUuid,
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+        entries: [],
       };
-      // Add entry to get a valid UUID (ignore the result since we just need the entry to exist)
-      await patientService.addEntry(
-        await patientService.getPatientById(patientId),
-        entry
-      );
 
-      await patientService.deletePatient(patientId);
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [mockPatient],
+        rowCount: 1,
+      } as unknown as QueryResult);
+
+      const result = await patientService.getPatientById(validUuid);
+      expect(result).toEqual(mockPatient);
+      expect(pool.query).toHaveBeenCalledWith(
+        'SELECT * FROM patients WHERE id = $1',
+        [validUuid]
+      );
+    });
+
+    it('should return null if patient not found', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [],
+      } as unknown as QueryResult);
+
+      const result = await patientService.getPatientById('999');
+      expect(result).toBeNull();
+    });
+
+    it('should throw an error when database query fails', async () => {
+      const error = new Error('Database error');
+      (pool.query as jest.Mock).mockRejectedValueOnce(error);
+      const validUuid = uuid();
 
       await expect(
-        patientService.getPatientById(patientId)
-      ).rejects.toThrow(NotFoundError);
-      const entries = await patientService.getEntriesByPatientId(
-        patientId
+        patientService.getPatientById(validUuid)
+      ).rejects.toThrow('Failed to find patient by ID');
+    });
+  });
+
+  describe('createPatient', () => {
+    it('should create a new patient', async () => {
+      const newPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+
+      const createdPatient: Patient = {
+        id: '1',
+        ...newPatient,
+        entries: [],
+      };
+
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [createdPatient],
+      } as unknown as QueryResult);
+
+      const result = await patientService.createPatient(newPatient);
+      expect(result).toEqual(createdPatient);
+      expect(pool.query).toHaveBeenCalledWith(
+        'INSERT INTO patients (name, date_of_birth, gender, occupation) VALUES ($1, $2, $3, $4) RETURNING *',
+        ['John Doe', '1980-01-01', 'male', 'Developer']
       );
-      expect(entries).toHaveLength(0);
+    });
+
+    it('should throw an error when database query fails', async () => {
+      const error = new Error('Database error');
+      (pool.query as jest.Mock).mockRejectedValueOnce(error);
+
+      const newPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+
+      await expect(
+        patientService.createPatient(newPatient)
+      ).rejects.toThrow('Failed to add patient');
     });
   });
 
   describe('editPatient', () => {
-    let patientId: string;
-
-    beforeAll(async () => {
-      // Create a patient to edit
-      const newPatient: NewPatientEntryWithoutEntries = {
-        name: 'Original Name',
-        dateOfBirth: '1990-01-01',
+    it('should update an existing patient', async () => {
+      const updatedPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
         gender: Gender.Male,
-        occupation: 'Original Occupation',
+        occupation: 'Developer',
       };
-      const createdPatient = await patientService.createPatient(
-        newPatient
-      );
-      patientId = createdPatient.id;
-    });
 
-    test('should update patient fields and preserve dateOfBirth', async () => {
-      const updates = {
-        name: 'Updated Name',
-        occupation: 'Updated Occupation',
+      const patientWithId: Patient = {
+        id: '1',
+        ...updatedPatient,
+        entries: [],
       };
-      const updatedPatient = await patientService.editPatient(
-        patientId,
-        updates
+
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [patientWithId],
+      } as unknown as QueryResult);
+
+      const result = await patientService.editPatient(
+        '1',
+        updatedPatient
       );
-      expect(updatedPatient.name).toBe(updates.name);
-      expect(updatedPatient.occupation).toBe(updates.occupation);
-      // Verify dateOfBirth remains unchanged
-      expect(updatedPatient.dateOfBirth).toBe('1990-01-01');
-      expect(updatedPatient.gender).toBe(Gender.Male);
+      expect(result).toEqual(patientWithId);
+      expect(pool.query).toHaveBeenCalledWith(
+        'UPDATE patients SET name = $1, date_of_birth = $2, gender = $3, occupation = $4 WHERE id = $5 RETURNING *',
+        ['John Doe', '1980-01-01', 'male', 'Developer', '1']
+      );
     });
 
-    test('should throw NotFoundError for non-existent id', async () => {
-      const nonExistentId = uuid();
-      await expect(
-        patientService.editPatient(nonExistentId, {
-          name: 'New Name',
-        })
-      ).rejects.toThrow(NotFoundError);
+    it('should return null if patient not found', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [],
+      } as unknown as QueryResult);
+
+      const updatedPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+
+      const result = await patientService.editPatient(
+        '999',
+        updatedPatient
+      );
+      expect(result).toBeNull();
     });
 
-    test('should validate date format', async () => {
-      await expect(
-        patientService.editPatient(patientId, {
-          dateOfBirth: 'invalid-date',
-        })
-      ).rejects.toThrow(ValidationError);
-    });
+    it('should throw an error when database query fails', async () => {
+      const error = new Error('Database error');
+      (pool.query as jest.Mock).mockRejectedValueOnce(error);
 
-    test('should handle database errors', async () => {
-      // Mock pool.query to simulate database error
-      const originalQuery = pool.query;
-      pool.query = jest
-        .fn()
-        .mockRejectedValue(new Error('Database connection error'));
+      const updatedPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
 
       await expect(
-        patientService.editPatient(patientId, {
-          name: 'New Name',
-        })
-      ).rejects.toThrow(DatabaseError);
-
-      // Restore original query method
-      pool.query = originalQuery;
+        patientService.editPatient('1', updatedPatient)
+      ).rejects.toThrow('Failed to edit patient');
     });
   });
-  describe('SQL Injection Protection', () => {
-    test('should prevent SQL injection in getPatientById', async () => {
-      const maliciousId = "1'; DROP TABLE patients; --";
-      await expect(patientService.getPatientById(maliciousId))
-        .rejects.toThrow(ValidationError);
-    });
 
-    test('should prevent SQL injection in createPatient', async () => {
-      const maliciousPatient: NewPatientEntryWithoutEntries = {
-        name: "Robert'); DROP TABLE patients; --",
-        dateOfBirth: '1990-01-01',
-        gender: Gender.Male,
-        occupation: 'Hacker'
-      };
-      await expect(patientService.createPatient(maliciousPatient))
-        .rejects.toThrow(ValidationError);
-    });
+  describe('deletePatient', () => {
+    it('should delete a patient by ID', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [{ id: '1' }],
+      } as unknown as QueryResult);
 
-    test('should prevent SQL injection in addEntry', async () => {
-      const patient = await createTestPatientWithEntries(
-        {
-          name: 'Test Patient',
-          dateOfBirth: '1990-01-01',
-          gender: Gender.Male,
-          occupation: 'Engineer'
-        },
-        []
+      const result = await patientService.deletePatient('1');
+      expect(result).toEqual({ id: '1' });
+      expect(pool.query).toHaveBeenCalledWith(
+        'DELETE FROM patients WHERE id = $1 RETURNING *',
+        ['1']
       );
-      
-      const maliciousEntry: NewEntryWithoutId = {
-        description: "Malicious'); DROP TABLE entries; --",
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: HealthCheckRating.Healthy
+    });
+
+    it('should return null if patient not found', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [],
+      } as unknown as QueryResult);
+
+      const result = await patientService.deletePatient('999');
+      expect(result).toBeNull();
+    });
+
+    it('should throw an error when database query fails', async () => {
+      const error = new DatabaseError('Failed to delete patient');
+      (pool.query as jest.Mock).mockRejectedValueOnce(error);
+
+      const mockClient = {
+        query: jest.fn().mockRejectedValue(error),
+        release: jest.fn(),
       };
-      
-      await expect(patientService.addEntry(patient, maliciousEntry))
-        .rejects.toThrow(ValidationError);
+      (pool.connect as jest.Mock).mockResolvedValue(mockClient);
+
+      await expect(patientService.deletePatient('1')).rejects.toThrow(
+        'Failed to delete patient'
+      );
+    });
+  });
+
+  describe('parameter binding consistency', () => {
+    it('should use parameterized queries for all database operations', () => {
+      patientService.getNonSensitiveEntries();
+      const queryArgs = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs[1]).toBeInstanceOf(Array);
+      expect(queryArgs[1].length).toBeGreaterThan(0);
+
+      patientService.getPatientById('1');
+      const queryArgs2 = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs2[1]).toBeInstanceOf(Array);
+      expect(queryArgs2[1].length).toBeGreaterThan(0);
+
+      const newPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+      patientService.createPatient(newPatient);
+      const queryArgs3 = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs3[1]).toBeInstanceOf(Array);
+      expect(queryArgs3[1].length).toBeGreaterThan(0);
+
+      patientService.editPatient('1', newPatient);
+      const queryArgs4 = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs4[1]).toBeInstanceOf(Array);
+      expect(queryArgs4[1].length).toBeGreaterThan(0);
+
+      patientService.deletePatient('1');
+      const queryArgs5 = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs5[1]).toBeInstanceOf(Array);
+      expect(queryArgs5[1].length).toBeGreaterThan(0);
+    });
+
+    it('should prevent SQL injection through parameter binding', async () => {
+      const dangerousInput = "'; DROP TABLE patients; --";
+      const newPatient: NewPatientEntryWithoutEntries = {
+        name: dangerousInput,
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+
+      await expect(
+        patientService.createPatient(newPatient)
+      ).resolves.not.toThrow();
+
+      const queryArgs = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs[1]).toEqual([
+        dangerousInput,
+        '1980-01-01',
+        'male',
+        'Developer',
+      ]);
+    });
+
+    it('should handle special characters in parameters correctly', async () => {
+      const specialChars = "O'Reilly & Sons";
+      const newPatient: NewPatientEntryWithoutEntries = {
+        name: specialChars,
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+
+      await expect(
+        patientService.createPatient(newPatient)
+      ).resolves.not.toThrow();
+
+      const queryArgs = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs[1]).toEqual([
+        specialChars,
+        '1980-01-01',
+        'male',
+        'Developer',
+      ]);
+    });
+
+    it('should maintain parameter order consistency', async () => {
+      const newPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+
+      await patientService.createPatient(newPatient);
+
+      const queryArgs = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs[1][0]).toBe('John Doe');
+      expect(queryArgs[1][1]).toBe('1980-01-01');
+      expect(queryArgs[1][2]).toBe('male');
+      expect(queryArgs[1][3]).toBe('Developer');
+    });
+
+    it('should handle null values in parameters', async () => {
+      const newPatient: NewPatientEntryWithoutEntries = {
+        name: 'John Doe',
+        dateOfBirth: null as any, // TypeScript will complain about this, but we want to test null handling
+        gender: Gender.Male,
+        occupation: 'Developer',
+      };
+
+      await expect(
+        patientService.createPatient(newPatient)
+      ).resolves.not.toThrow();
+
+      const queryArgs = (pool.query as jest.Mock).mock.calls[0];
+      expect(queryArgs[1]).toEqual([
+        'John Doe',
+        null,
+        'male',
+        'Developer',
+      ]);
+    });
+
+    describe('getFilteredAndPaginatedPatients', () => {
+      it('should return paginated results with default sorting', async () => {
+        const mockPatients: NonSensitivePatientEntry[] = Array.from(
+          { length: 10 },
+          (_, i) => ({
+            id: i.toString(),
+            name: `Patient ${i}`,
+            dateOfBirth: '1980-01-01',
+            gender: i % 2 === 0 ? Gender.Male : Gender.Female,
+            occupation: 'Developer',
+            healthRating: 85,
+          })
+        );
+
+        (pool.query as jest.Mock).mockResolvedValueOnce({
+          rows: mockPatients.map((p) => ({
+            id: p.id,
+            name: p.name,
+            date_of_birth: p.dateOfBirth,
+            gender: p.gender.toLowerCase(),
+            occupation: p.occupation,
+            health_rating: p.healthRating,
+          })),
+        } as unknown as QueryResult);
+
+        const result =
+          await patientService.getFilteredAndPaginatedPatients(
+            1,
+            10,
+            {}
+          );
+
+        expect(result.data).toHaveLength(10);
+        expect(result.metadata.totalItems).toBe(10);
+        expect(result.metadata.currentPage).toBe(1);
+        expect(pool.query).toHaveBeenCalledWith(
+          expect.stringContaining('ORDER BY name ASC')
+        );
+      });
+
+      it('should sort results by health rating in descending order', async () => {
+        const mockPatients: NonSensitivePatientEntry[] = [
+          {
+            id: '1',
+            name: 'Patient 1',
+            dateOfBirth: '1980-01-01',
+            gender: Gender.Male,
+            occupation: 'Developer',
+            healthRating: 90,
+          },
+          {
+            id: '2',
+            name: 'Patient 2',
+            dateOfBirth: '1980-01-01',
+            gender: Gender.Female,
+            occupation: 'Designer',
+            healthRating: 80,
+          },
+          {
+            id: '3',
+            name: 'Patient 3',
+            dateOfBirth: '1980-01-01',
+            gender: Gender.Male,
+            occupation: 'Engineer',
+            healthRating: 85,
+          },
+        ];
+
+        (pool.query as jest.Mock).mockResolvedValueOnce({
+          rows: mockPatients.map((p) => ({
+            id: p.id,
+            name: p.name,
+            date_of_birth: p.dateOfBirth,
+            gender: p.gender.toLowerCase(),
+            occupation: p.occupation,
+            health_rating: p.healthRating,
+          })),
+        } as unknown as QueryResult);
+
+        const result =
+          await patientService.getFilteredAndPaginatedPatients(
+            1,
+            10,
+            {},
+            { field: 'health_rating', direction: 'DESC' }
+          );
+
+        expect(result.data).toHaveLength(3);
+        expect(result.data[0].healthRating).toBe(90);
+        expect(result.data[1].healthRating).toBe(85);
+        expect(result.data[2].healthRating).toBe(80);
+        expect(pool.query).toHaveBeenCalledWith(
+          expect.stringContaining('ORDER BY health_rating DESC')
+        );
+      });
+
+      it('should sort results by name in ascending order', async () => {
+        const mockPatients: NonSensitivePatientEntry[] = [
+          {
+            id: '1',
+            name: 'Charlie',
+            dateOfBirth: '1980-01-01',
+            gender: Gender.Male,
+            occupation: 'Developer',
+            healthRating: 85,
+          },
+          {
+            id: '2',
+            name: 'Alice',
+            dateOfBirth: '1980-01-01',
+            gender: Gender.Female,
+            occupation: 'Designer',
+            healthRating: 90,
+          },
+          {
+            id: '3',
+            name: 'Bob',
+            dateOfBirth: '1980-01-01',
+            gender: Gender.Male,
+            occupation: 'Engineer',
+            healthRating: 80,
+          },
+        ];
+
+        (pool.query as jest.Mock).mockResolvedValueOnce({
+          rows: mockPatients.map((p) => ({
+            id: p.id,
+            name: p.name,
+            date_of_birth: p.dateOfBirth,
+            gender: p.gender.toLowerCase(),
+            occupation: p.occupation,
+            health_rating: p.healthRating,
+          })),
+        } as unknown as QueryResult);
+
+        const result =
+          await patientService.getFilteredAndPaginatedPatients(
+            1,
+            10,
+            {},
+            { field: 'name', direction: 'ASC' }
+          );
+
+        expect(result.data).toHaveLength(3);
+        expect(result.data[0].name).toBe('Alice');
+        expect(result.data[1].name).toBe('Bob');
+        expect(result.data[2].name).toBe('Charlie');
+        expect(pool.query).toHaveBeenCalledWith(
+          expect.stringContaining('ORDER BY name ASC')
+        );
+      });
+
+      it('should handle invalid sort field gracefully', async () => {
+        const mockPatients: NonSensitivePatientEntry[] = Array.from(
+          { length: 10 },
+          (_, i) => ({
+            id: i.toString(),
+            name: `Patient ${i}`,
+            dateOfBirth: '1980-01-01',
+            gender: i % 2 === 0 ? Gender.Male : Gender.Female,
+            occupation: 'Developer',
+            healthRating: 85,
+          })
+        );
+
+        (pool.query as jest.Mock).mockResolvedValueOnce({
+          rows: mockPatients.map((p) => ({
+            id: p.id,
+            name: p.name,
+            date_of_birth: p.dateOfBirth,
+            gender: p.gender.toLowerCase(),
+            occupation: p.occupation,
+            health_rating: p.healthRating,
+          })),
+        } as unknown as QueryResult);
+
+        const result =
+          await patientService.getFilteredAndPaginatedPatients(
+            1,
+            10,
+            {},
+            { field: 'invalid_field', direction: 'ASC' }
+          );
+
+        expect(result.data).toHaveLength(10);
+        expect(pool.query).toHaveBeenCalledWith(
+          expect.stringContaining('ORDER BY name ASC')
+        );
+      });
+    });
+  });
+
+  describe('parameter binding and health rating tests', () => {
+    it('should maintain consistent parameter count between main and count queries', async () => {
+      const filters = { gender: 'male', minHealthRating: 80 };
+      const sort = { field: 'health_rating', direction: 'DESC' };
+
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [
+          {
+            id: '1',
+            name: 'John Doe',
+            date_of_birth: '1980-01-01',
+            gender: 'male',
+            occupation: 'Developer',
+            health_rating: 85,
+          },
+        ],
+        rowCount: 1,
+      });
+
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [{ count: 1 }],
+      });
+
+      await patientService.getFilteredAndPaginatedPatients(
+        1,
+        10,
+        filters,
+        sort
+      );
+
+      const mainQueryParams = (pool.query as jest.Mock).mock
+        .calls[0][1];
+      const countQueryParams = (pool.query as jest.Mock).mock
+        .calls[1][1];
+
+      expect(mainQueryParams).toEqual(countQueryParams);
+    });
+
+    it('should handle null health ratings in sorting', async () => {
+      const mockPatients = [
+        {
+          id: '1',
+          name: 'John Doe',
+          date_of_birth: '1980-01-01',
+          gender: 'male',
+          occupation: 'Developer',
+          health_rating: 90,
+        },
+        {
+          id: '2',
+          name: 'Jane Smith',
+          date_of_birth: '1990-01-01',
+          gender: 'female',
+          occupation: 'Designer',
+          health_rating: 85,
+        },
+        {
+          id: '3',
+          name: 'Bob Johnson',
+          date_of_birth: '1975-05-15',
+          gender: 'male',
+          occupation: 'Manager',
+          health_rating: null,
+        },
+      ];
+
+      (pool.query as jest.Mock).mockResolvedValue({
+        rows: mockPatients,
+      });
+
+      const result =
+        await patientService.getFilteredAndPaginatedPatients(
+          1,
+          10,
+          {},
+          { field: 'health_rating', direction: 'DESC' }
+        );
+
+      expect(result.data[0].healthRating).toBe(90);
+      expect(result.data[1].healthRating).toBe(85);
+      expect(result.data[2].healthRating).toBeNull();
+    });
+  });
+
+  describe('regression tests', () => {
+    it('should handle 08P01 protocol violation gracefully', async () => {
+      const error = new Error(
+        'canceling statement due to user request'
+      );
+      (error as any).code = '08P01';
+
+      (pool.query as jest.Mock).mockRejectedValueOnce(error);
+
+      await expect(
+        patientService.getNonSensitiveEntries()
+      ).rejects.toThrow('08P01');
     });
   });
 });

@@ -1,13 +1,16 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, expect, test, afterEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import HealthRatingBar from './HealthRatingBar';
+
+afterEach(cleanup);
 
 describe('HealthRatingBar Component', () => {
   test('renders correct hearts for rating 0', () => {
     render(<HealthRatingBar rating={0} showText={false} />);
-    const hearts = screen.getAllByTestId('FavoriteIcon');
+    const hearts = screen.getAllByTestId(/heart-/);
     expect(hearts).toHaveLength(4);
+    // All hearts should be green
     hearts.forEach(heart => {
       expect(heart).toHaveStyle({ color: '#4caf50' });
     });
@@ -15,29 +18,29 @@ describe('HealthRatingBar Component', () => {
 
   test('renders correct hearts for rating 1', () => {
     render(<HealthRatingBar rating={1} showText={false} />);
-    const hearts = screen.getAllByTestId('FavoriteIcon');
-    expect(hearts[0]).toHaveStyle({ color: '#ffeb3b' });
-    expect(hearts[1]).toHaveStyle({ color: '#ffeb3b' });
-    expect(hearts[2]).toHaveStyle({ color: '#ffeb3b' });
-    expect(hearts[3]).toHaveStyle({ color: 'rgba(0, 0, 0, 0)' }); // Transparent
+    // Only first 3 hearts should be yellow, last transparent
+    expect(screen.getByTestId('heart-0')).toHaveStyle({ color: '#ffeb3b' });
+    expect(screen.getByTestId('heart-1')).toHaveStyle({ color: '#ffeb3b' });
+    expect(screen.getByTestId('heart-2')).toHaveStyle({ color: '#ffeb3b' });
+    expect(screen.getByTestId('heart-3')).toHaveStyle({ color: 'transparent' });
   });
 
   test('renders correct hearts for rating 2', () => {
     render(<HealthRatingBar rating={2} showText={false} />);
-    const hearts = screen.getAllByTestId('FavoriteIcon');
-    expect(hearts[0]).toHaveStyle({ color: '#ff9800' });
-    expect(hearts[1]).toHaveStyle({ color: '#ff9800' });
-    expect(hearts[2]).toHaveStyle({ color: 'rgba(0, 0, 0, 0)' }); // Transparent
-    expect(hearts[3]).toHaveStyle({ color: 'rgba(0, 0, 0, 0)' }); // Transparent
+    // Only first 2 hearts should be orange, others transparent
+    expect(screen.getByTestId('heart-0')).toHaveStyle({ color: '#ff9800' });
+    expect(screen.getByTestId('heart-1')).toHaveStyle({ color: '#ff9800' });
+    expect(screen.getByTestId('heart-2')).toHaveStyle({ color: 'transparent' });
+    expect(screen.getByTestId('heart-3')).toHaveStyle({ color: 'transparent' });
   });
 
   test('renders correct hearts for rating 3', () => {
     render(<HealthRatingBar rating={3} showText={false} />);
-    const hearts = screen.getAllByTestId('FavoriteIcon');
-    expect(hearts[0]).toHaveStyle({ color: '#f44336' });
-    expect(hearts[1]).toHaveStyle({ color: 'rgba(0, 0, 0, 0)' }); // Transparent
-    expect(hearts[2]).toHaveStyle({ color: 'rgba(0, 0, 0, 0)' }); // Transparent
-    expect(hearts[3]).toHaveStyle({ color: 'rgba(0, 0, 0, 0)' }); // Transparent
+    // Only first heart should be red, others transparent
+    expect(screen.getByTestId('heart-0')).toHaveStyle({ color: '#f44336' });
+    expect(screen.getByTestId('heart-1')).toHaveStyle({ color: 'transparent' });
+    expect(screen.getByTestId('heart-2')).toHaveStyle({ color: 'transparent' });
+    expect(screen.getByTestId('heart-3')).toHaveStyle({ color: 'transparent' });
   });
 
   test('shows N/A with tooltip when rating is null', async () => {
@@ -49,7 +52,7 @@ describe('HealthRatingBar Component', () => {
     fireEvent.mouseOver(helpIcon);
     
     // Tooltip content should appear
-    expect(await screen.findByText('Health rating is only available for patients with HealthCheck entries')).toBeInTheDocument();
+    expect(await screen.findByText('N/A: Health rating not available (requires HealthCheck entry)')).toBeInTheDocument();
   });
 
   test('displays text when showText is true', () => {
@@ -59,7 +62,7 @@ describe('HealthRatingBar Component', () => {
 
   test('hides text when showText is false', () => {
     render(<HealthRatingBar rating={0} showText={false} />);
-    expect(screen.queryByText('The patient is in great shape')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('health-rating-text')).not.toBeInTheDocument();
   });
 });
 

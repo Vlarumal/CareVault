@@ -1,16 +1,21 @@
 import React from 'react';
-import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
+import {
+  DataGrid,
+  GridColDef,
+  GridPaginationModel,
+  GridFilterModel,
+  GridSortModel,
+} from '@mui/x-data-grid';
 import { Link } from 'react-router-dom';
 import { Patient } from '../../types';
 import { mapToGridData } from '../../utils/patientDataMapper';
 import HealthRatingBar from '../HealthRatingBar';
 import DOMPurify from 'dompurify';
 
-// Sanitize function to prevent XSS
 const sanitize = (value: string): string => {
   return DOMPurify.sanitize(value, {
-    ALLOWED_TAGS: [], // Remove all HTML tags
-    ALLOWED_ATTR: []  // Remove all attributes
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
   });
 };
 
@@ -20,55 +25,71 @@ const columns: GridColDef[] = [
     headerName: 'Name',
     width: 200,
     renderCell: (params) => (
-      <Link to={`/${params.row.id}`} style={{ color: 'inherit' }}>
+      <Link
+        to={`/${params.row.id}`}
+        style={{ color: 'inherit' }}
+      >
         {sanitize(params.value)}
       </Link>
-    )
+    ),
   },
   {
     field: 'gender',
     headerName: 'Gender',
-    width: 120,
-    renderCell: (params) => sanitize(params.value)
+    width: 130,
+    renderCell: (params) => sanitize(params.value),
   },
   {
     field: 'occupation',
     headerName: 'Occupation',
     width: 200,
-    renderCell: (params) => sanitize(params.value)
+    renderCell: (params) => sanitize(params.value),
   },
   {
-    field: 'dob',
+    field: 'dateOfBirth',
     headerName: 'Date of Birth',
-    width: 150,
-    renderCell: (params) => sanitize(params.value)
+    width: 160,
+    renderCell: (params) => sanitize(params.value),
   },
   {
-    field: 'latestRating',
+    field: 'healthRating',
     headerName: 'Health Rating',
-    width: 280,
+    width: 370,
     renderCell: (params) => (
-      <HealthRatingBar rating={params.value} showText={true} />
-    )
-  }
+      <HealthRatingBar
+        rating={params.value}
+        showText={true}
+      />
+    ),
+  },
 ];
 
 interface PatientDataGridProps {
   patients: Patient[];
   page: number;
   pageSize: number;
+  totalCount: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   pageSizeOptions: number[];
+  filterModel?: GridFilterModel | null;
+  onFilterModelChange?: (filterModel: GridFilterModel) => void;
+  sortModel?: GridSortModel;
+  onSortModelChange?: (sortModel: GridSortModel) => void;
 }
 
 const PatientDataGrid: React.FC<PatientDataGridProps> = ({
   patients,
   page,
   pageSize,
+  totalCount,
   onPageChange,
   onPageSizeChange,
-  pageSizeOptions
+  pageSizeOptions,
+  filterModel,
+  onFilterModelChange,
+  sortModel,
+  onSortModelChange,
 }) => {
   const rows = mapToGridData(patients);
 
@@ -78,18 +99,25 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
         rows={rows}
         columns={columns}
         pagination
-        paginationMode="client"
+        paginationMode='server'
+        rowCount={totalCount}
         paginationModel={{
-          page: page - 1, // DataGrid uses 0-based index
-          pageSize: pageSize
+          page: page,
+          pageSize: pageSize,
         }}
         pageSizeOptions={pageSizeOptions}
         onPaginationModelChange={(params: GridPaginationModel) => {
-          onPageChange(params.page + 1); // Convert to 1-based
+          onPageChange(params.page);
           onPageSizeChange(params.pageSize);
         }}
+        filterModel={filterModel || undefined}
+        onFilterModelChange={onFilterModelChange}
+        sortModel={sortModel}
+        onSortModelChange={onSortModelChange}
+        filterMode='server'
+        sortingMode='server'
         disableRowSelectionOnClick
-        aria-label="Patient data grid"
+        aria-label='Patient data grid'
         disableVirtualization={process.env.NODE_ENV === 'test'}
       />
     </div>

@@ -9,7 +9,7 @@ import { Entry, HealthCheckEntry } from '../types';
  * @param entries - Array of patient entries
  * @returns Latest health rating or null if not available
  */
-export const getLatestHealthRating = (entries: Entry[]): number | null => {
+export const getLatestHealthRating = (entries: Entry[] | undefined): number | null => {
   if (!entries || entries.length === 0) return null;
   
   const healthCheckEntries = entries.filter(
@@ -22,5 +22,5 @@ export const getLatestHealthRating = (entries: Entry[]): number | null => {
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
   
-  return sortedEntries[0].healthCheckRating ?? null;
+  return sortedEntries[0].healthCheckRating;
 };

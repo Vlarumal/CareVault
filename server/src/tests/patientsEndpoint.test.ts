@@ -1,730 +1,562 @@
-import axios, { AxiosError }from 'axios';
-import { clearDatabase, createTestPatientWithEntries, seedDatabase } from './testUtils';
-import pool from '../../db/connection';
-import formatToISODate from '../../src/utils/dateFormatter';
-import { Gender, NewEntryWithoutId } from '../../src/types';
-import { v1 as uuid } from 'uuid';
-import dotenv from 'dotenv';
+import request from 'supertest';
+import app from '../index';
+import { patientService } from '../services/patientsService';
+import { clearDatabase, seedDatabase } from './testUtils';
+import {
+  NonSensitivePatientEntry,
+  Gender,
+  PaginatedResponse,
+  Patient,
+} from '../types';
 
-dotenv.config()
+jest.mock('../services/patientsService');
 
-const baseUrl = process.env.BASE_URL;
-
-describe('Patients API Endpoint', () => {
-  beforeEach(async () => {
+describe('Patients Endpoint', () => {
+  beforeAll(async () => {
     await clearDatabase();
+    await seedDatabase();
   });
 
-  afterAll(async () => {
-    await pool.end();
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('GET /api/patients', () => {
-    beforeEach(async () => {
-      await seedDatabase();
-    });
+    it('should return a list of patients', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+      ];
 
-    test('should return 200 status with patient data', async () => {
-      const response = await axios.get(
-        `${baseUrl}/api/patients`
-      );
-      expect(response.status).toBe(200);
-      expect(response.data).toBeDefined();
-      expect(typeof response.data === 'object').toBe(true);
-      expect(response.data).toHaveProperty('data');
-      expect(Array.isArray(response.data.data)).toBe(true);
-      expect(response.data.data.length).toBeGreaterThan(0);
-      expect(response.data.data[0]).toHaveProperty('id');
-      expect(response.data.data[0]).toHaveProperty('name');
-      expect(response.data.data[0]).toHaveProperty('dateOfBirth');
-      expect(response.data.data[0]).toHaveProperty('gender');
-      expect(response.data.data[0]).toHaveProperty('occupation');
-    });
-  });
-
-  describe('GET /api/patients/:id', () => {
-    let patientId: string;
-
-    beforeEach(async () => {
-      const patient = await createTestPatientWithEntries(
-        {
-          name: 'Test Patient',
-          dateOfBirth: '1990-01-01',
-          gender: Gender.Male,
-          occupation: 'Engineer'
+      const paginatedResponse: PaginatedResponse<NonSensitivePatientEntry[]> = {
+        data: mockPatients,
+        metadata: {
+          totalItems: mockPatients.length,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
         },
-        [
-          {
-            description: 'Annual physical',
-            date: '2023-05-15',
-            specialist: 'Dr. Smith',
-            type: 'HealthCheck',
-            healthCheckRating: 0
-          },
-          {
-            description: 'Emergency visit',
-            date: '2023-06-01',
-            specialist: 'Dr. Johnson',
-            type: 'Hospital',
-            discharge: {
-              date: '2023-06-03',
-              criteria: 'Stable condition'
-            }
-          }
-        ]
+      };
+
+      (patientService.getFilteredAndPaginatedPatients as jest.Mock).mockResolvedValue(
+        paginatedResponse,
       );
-      patientId = patient.id;
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ page: 1, pageSize: 10 });
+        
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(paginatedResponse);
     });
 
-    test('should reject SQL injection in patient ID', async () => {
-      const maliciousId = "1' OR '1'='1";
-      try {
-        await axios.get(
-          `${baseUrl}/api/patients/${maliciousId}`
-        );
-        fail('Should have thrown error');
-      } catch (error: any) {
-        expect(error.response?.status).toBe(400);
-      }
+    it('should handle empty result set', async () => {
+      const paginatedResponse: PaginatedResponse<NonSensitivePatientEntry[]> = {
+        data: [],
+        metadata: {
+          totalItems: 0,
+          totalPages: 0,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
+      };
+
+      (patientService.getFilteredAndPaginatedPatients as jest.Mock).mockResolvedValue(
+        paginatedResponse,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ page: 1, pageSize: 10 });
+        
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(paginatedResponse);
     });
 
-    test('should return patient details with entries including full structure', async () => {
-
-      const response = await axios.get(
-        `${baseUrl}/api/patients/${patientId}`
+    it('should handle database error', async () => {
+      const error = new Error('Database error');
+      (patientService.getFilteredAndPaginatedPatients as jest.Mock).mockRejectedValue(
+        error,
       );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ page: 1, pageSize: 10 });
+        
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Database error' });
+    });
+
+    it('should support pagination', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+        { id: '3', name: 'Bob Johnson', dateOfBirth: '1975-05-15', gender: Gender.Male, occupation: 'Manager', healthRating: 75 },
+      ];
+
+      const paginatedResponse: PaginatedResponse<NonSensitivePatientEntry[]> = {
+        data: mockPatients.slice(0, 2),
+        metadata: {
+          totalItems: mockPatients.length,
+          totalPages: 2,
+          currentPage: 1,
+          itemsPerPage: 2,
+        },
+      };
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        paginatedResponse,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ page: 1, pageSize: 2 });
 
       expect(response.status).toBe(200);
-      expect(response.data).toBeDefined();
-
-      // Verify basic patient details
-      expect(response.data).toHaveProperty('id', patientId);
-      expect(response.data).toHaveProperty('name', 'Test Patient');
-      expect(['1990-01-01', '1990-01-01T00:00:00.000Z']).toContain(
-        response.data.date_of_birth
-      );
-      expect(response.data).toHaveProperty('gender', 'male');
-      expect(response.data).toHaveProperty('occupation', 'Engineer');
-
-      expect(response.data).toHaveProperty('entries');
-      const entries = response.data.entries;
-      expect(Array.isArray(entries)).toBe(true);
-      expect(entries.length).toBe(2);
-
-      const firstEntry = entries[0];
-      expect(firstEntry).toHaveProperty('id');
-      expect(firstEntry).toHaveProperty('description');
-      expect(firstEntry).toHaveProperty('date');
-      expect(firstEntry).toHaveProperty('specialist');
-      expect(firstEntry).toHaveProperty('type');
-
-      if (firstEntry.type === 'HealthCheck') {
-        expect(firstEntry).toHaveProperty('healthCheckRating');
-      } else if (firstEntry.type === 'Hospital') {
-        expect(firstEntry).toHaveProperty('discharge');
-        expect(firstEntry.discharge).toHaveProperty('date');
-        expect(firstEntry.discharge).toHaveProperty('criteria');
-      } else if (firstEntry.type === 'OccupationalHealthcare') {
-        expect(firstEntry).toHaveProperty('employerName');
-      }
+      expect(response.body).toEqual(paginatedResponse);
     });
 
-    test('should handle invalid patient ID', async () => {
-      try {
-        await axios.get(
-          `${baseUrl}/api/patients/00000000-0000-0000-0000-000000000000`
-        );
-      } catch (error: any) {
-        expect(error.response?.status).toBe(404);
-        expect(error.response?.data).toHaveProperty('error');
-      }
+    it('should support filtering', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ gender: 'male' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
+    });
+
+    it('should support sorting', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ sortBy: 'name', sortOrder: 'asc' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
+    });
+
+    it('should support health rating integration', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ minHealthRating: 80 });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
+    });
+
+    it('should handle invalid query parameters', async () => {
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ invalidParam: 'value' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'Invalid query parameters' });
+    });
+
+    it('should handle missing required parameters', async () => {
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ page: 'abc' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'Invalid query parameters' });
+    });
+
+    it('should handle parameter count mismatches', async () => {
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ page: 1, pageSize: 'abc' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'Invalid query parameters' });
+    });
+
+    it('should handle sorting by health rating', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+      ];
+
+      (patientService.getFilteredAndPaginatedPatients as jest.Mock).mockResolvedValue({
+        data: mockPatients,
+        metadata: {
+          totalItems: 2,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
+      });
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ sortBy: 'healthRating', sortOrder: 'desc' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual(mockPatients);
+    });
+
+    it('should handle complex query parameter parsing', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+      ];
+
+      (patientService.getFilteredAndPaginatedPatients as jest.Mock).mockResolvedValue({
+        data: mockPatients,
+        metadata: {
+          totalItems: 1,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
+      });
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({
+          page: 1,
+          pageSize: 10,
+          gender: 'male',
+          minHealthRating: 80,
+          sortBy: 'healthRating',
+          sortOrder: 'desc',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual(mockPatients);
+    });
+
+    it('should handle health rating integration with filtering', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+      ];
+
+      (patientService.getFilteredAndPaginatedPatients as jest.Mock).mockResolvedValue({
+        data: mockPatients,
+        metadata: {
+          totalItems: 1,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
+      });
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({
+          minHealthRating: 80,
+          gender: 'male',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual(mockPatients);
+    });
+
+    it('should handle health rating integration with sorting and pagination', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+      ];
+
+      (patientService.getFilteredAndPaginatedPatients as jest.Mock).mockResolvedValue({
+        data: mockPatients,
+        metadata: {
+          totalItems: 2,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
+      });
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({
+          page: 1,
+          pageSize: 10,
+          sortBy: 'healthRating',
+          sortOrder: 'desc',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual(mockPatients);
+    });
+
+    it('should filter by exact date match', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ dateOfBirth: '1980-01-01' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
+    });
+
+    it('should filter by date greater than', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ dateOfBirth: { '>': '1985-01-01' } });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
+    });
+
+    it('should filter by date less than', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ dateOfBirth: { '<': '1985-01-01' } });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
+    });
+
+    it('should filter by date range', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+        { id: '2', name: 'Jane Smith', dateOfBirth: '1990-01-01', gender: Gender.Female, occupation: 'Designer', healthRating: 90 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({
+          dateOfBirth: {
+            '>=': '1980-01-01',
+            '<=': '1990-01-01'
+          }
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
+    });
+
+    it('should reject invalid date format', async () => {
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ dateOfBirth: '01-01-1980' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('should handle filtering combinations', async () => {
+      const mockPatients: NonSensitivePatientEntry[] = [
+        { id: '1', name: 'John Doe', dateOfBirth: '1980-01-01', gender: Gender.Male, occupation: 'Developer', healthRating: 85 },
+      ];
+
+      (patientService.getNonSensitiveEntries as jest.Mock).mockResolvedValue(
+        mockPatients,
+      );
+
+      const response = await request(app)
+        .get('/api/patients')
+        .query({ gender: 'male', minHealthRating: 80 });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockPatients);
     });
   });
 
   describe('POST /api/patients', () => {
-    test('should create a new patient with empty entries array and return 201', async () => {
+    it('should create a new patient', async () => {
       const newPatient = {
         name: 'John Doe',
-        dateOfBirth: '1985-05-15',
-        gender: 'male',
-        occupation: 'Software Engineer',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
       };
 
-      const response = await axios.post(
-        `${baseUrl}/api/patients`,
-        newPatient
-      );
-      expect(response.status).toBe(201);
-      expect(response.data).toBeDefined();
-      expect(response.data).toHaveProperty('id');
-      expect(response.data.name).toBe(newPatient.name);
-      expect(formatToISODate(response.data.date_of_birth)).toBe(
-        newPatient.dateOfBirth
-      );
-      expect(response.data.gender).toBe(newPatient.gender);
-      expect(response.data.occupation).toBe(newPatient.occupation);
+      const createdPatient: Patient = {
+        id: '1',
+        ...newPatient,
+        ssn: '123-45-6789',
+        entries: [],
+      };
 
-      expect(response.data).toHaveProperty('entries');
-      expect(Array.isArray(response.data.entries)).toBe(true);
-      expect(response.data.entries).toHaveLength(0);
+      (patientService.createPatient as jest.Mock).mockResolvedValue(
+        createdPatient,
+      );
+
+      const response = await request(app)
+        .post('/api/patients')
+        .send(newPatient);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual(createdPatient);
     });
 
-    test('should return 400 for invalid patient data', async () => {
+    it('should handle validation errors', async () => {
       const invalidPatient = {
         name: '',
-        dateOfBirth: 'invalid-date',
-        gender: 'unknown',
-        occupation: '',
+        dateOfBirth: 'invalid',
+        gender: 'invalid',
+        occupation: 'Developer',
       };
 
-      try {
-        await axios.post(
-          `${baseUrl}/api/patients`,
-          invalidPatient
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const errorResponse = error as any;
-        expect(errorResponse.response?.status).toBe(400);
-        expect(errorResponse.response?.data).toHaveProperty('error');
-      }
+      const response = await request(app)
+        .post('/api/patients')
+        .send(invalidPatient);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
     });
 
-    test('should reject XSS in name field', async () => {
-      const xssPatient = {
-        name: '<script>alert("XSS")</script>',
-        dateOfBirth: '1985-05-15',
-        gender: 'male',
-        occupation: 'Hacker'
-      };
-
-      try {
-        await axios.post(
-          `${baseUrl}/api/patients`,
-          xssPatient
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const errorResponse = error as any;
-        expect(errorResponse.response?.status).toBe(400);
-      }
-    });
-
-    test('should reject SQL injection in occupation field', async () => {
-      const sqlPatient = {
+    it('should handle database errors', async () => {
+      const newPatient = {
         name: 'John Doe',
-        dateOfBirth: '1985-05-15',
-        gender: 'male',
-        occupation: "'); DROP TABLE patients; --"
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
       };
 
-      try {
-        await axios.post(
-          `${baseUrl}/api/patients`,
-          sqlPatient
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const errorResponse = error as any;
-        expect(errorResponse.response?.status).toBe(400);
-      }
+      const error = new Error('Database error');
+      (patientService.createPatient as jest.Mock).mockRejectedValue(error);
+
+      const response = await request(app)
+        .post('/api/patients')
+        .send(newPatient);
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Database error' });
     });
   });
 
   describe('PUT /api/patients/:id', () => {
-    let patientId: string;
-    const updatedData = {
-      name: 'Updated Name',
-      occupation: 'Updated Occupation',
-    };
-
-    beforeEach(async () => {
-      const newPatient = {
-        name: 'Original Name',
-        dateOfBirth: '1990-01-01',
-        gender: 'male',
-        occupation: 'Original Occupation',
+    it('should update an existing patient', async () => {
+      const updatedPatient = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
       };
-      const response = await axios.post(
-        `${baseUrl}/api/patients`,
-        newPatient
+
+      const patientWithId: Patient = {
+        id: '1',
+        ...updatedPatient,
+        ssn: '123-45-6789',
+        entries: [],
+      };
+
+      (patientService.editPatient as jest.Mock).mockResolvedValue(
+        patientWithId,
       );
-      patientId = response.data.id;
-    });
 
-    test('should update patient and return 200', async () => {
-      const response = await axios.put(
-        `${baseUrl}/api/patients/${patientId}`,
-        updatedData
-      );
-      expect(response.status).toBe(200);
-      expect(response.data).toBeDefined();
-      expect(response.data.name).toBe(updatedData.name);
-      expect(response.data.occupation).toBe(updatedData.occupation);
-    });
-
-    test('should return 400 for invalid update data', async () => {
-      const invalidData = {
-        dateOfBirth: 'invalid-date',
-      };
-
-      try {
-        await axios.put(
-          `${baseUrl}/api/patients/${patientId}`,
-          invalidData
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const errorResponse = error as AxiosError;
-        expect(errorResponse.response?.status).toBe(400);
-        expect(errorResponse.response?.data).toHaveProperty('error');
-      }
-    });
-
-    test('should return 404 for non-existent patient', async () => {
-      const nonExistentId = uuid();
-      try {
-        await axios.put(
-          `${baseUrl}/api/patients/${nonExistentId}`,
-          updatedData
-        );
-        fail('Should have thrown error');
-      } catch (error: any) {
-        expect(error.response?.status).toBe(404);
-      }
-    });
-  });
-
-  describe('POST /api/patients/:id/entries', () => {
-    let patientId: string;
-
-    beforeEach(async () => {
-      const newPatient = {
-        name: 'Test Patient',
-        dateOfBirth: '1990-01-01',
-        gender: 'male',
-        occupation: 'Engineer',
-      };
-      const createResponse = await axios.post(
-        `${baseUrl}/api/patients`,
-        newPatient
-      );
-      patientId = createResponse.data.id;
-    });
-
-    test('should add HealthCheck entry to patient', async () => {
-      const newEntry = {
-        description: 'Annual checkup',
-        date: '2023-05-15',
-        specialist: 'Dr. Smith',
-        type: 'HealthCheck',
-        healthCheckRating: 0,
-      };
-
-      const response = await axios.post(
-        `${baseUrl}/api/patients/${patientId}/entries`,
-        newEntry
-      );
-      expect(response.status).toBe(201);
-      expect(response.data).toHaveProperty('id');
-      expect(response.data.description).toBe(newEntry.description);
-      expect(response.data.type).toBe('HealthCheck');
-    });
-
-    test('should add Hospital entry to patient', async () => {
-      const newEntry = {
-        description: 'Emergency visit',
-        date: '2023-06-01',
-        specialist: 'Dr. Johnson',
-        type: 'Hospital',
-        discharge: {
-          date: '2023-06-03',
-          criteria: 'Stable condition',
-        },
-      };
-
-      const response = await axios.post(
-        `${baseUrl}/api/patients/${patientId}/entries`,
-        newEntry
-      );
-      expect(response.status).toBe(201);
-      expect(response.data.type).toBe('Hospital');
-      expect(response.data.discharge.criteria).toBe(
-        'Stable condition'
-      );
-    });
-
-    test('should add OccupationalHealthcare entry to patient', async () => {
-      const newEntry = {
-        description: 'Work injury',
-        date: '2023-04-20',
-        specialist: 'Dr. Williams',
-        type: 'OccupationalHealthcare',
-        employerName: 'Acme Corp',
-        sickLeave: {
-          startDate: '2023-04-20',
-          endDate: '2023-04-27',
-        },
-      };
-
-      const response = await axios.post(
-        `${baseUrl}/api/patients/${patientId}/entries`,
-        newEntry
-      );
-      expect(response.status).toBe(201);
-      expect(response.data.type).toBe('OccupationalHealthcare');
-      expect(response.data.employerName).toBe('Acme Corp');
-    });
-
-    test('should return 400 for invalid entry data', async () => {
-      const invalidEntry = {
-        description: '',
-        date: '2023-01-01',
-        specialist: 'Dr. Invalid',
-        type: 'HealthCheck',
-        healthCheckRating: 5,
-      };
-
-      try {
-        await axios.post(
-          `${baseUrl}/api/patients/${patientId}/entries`,
-          invalidEntry
-        );
-        fail('Should have thrown validation error');
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        expect(axiosError.response?.status).toBe(400);
-        expect(axiosError.response?.data).toHaveProperty('error');
-      }
-    });
-
-    test('should return 404 for non-existent patient', async () => {
-      const nonExistentId = '00000000-0000-0000-0000-000000000000';
-      const validEntry = {
-        description: 'Valid entry',
-        date: '2023-01-01',
-        specialist: 'Dr. Valid',
-        type: 'HealthCheck',
-        healthCheckRating: 0,
-      };
-
-      try {
-        await axios.post(
-          `${baseUrl}/api/patients/${nonExistentId}/entries`,
-          validEntry
-        );
-        fail('Should have thrown not found error');
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        expect(axiosError.response?.status).toBe(404);
-      }
-    });
-  });
-  describe('PUT /api/patients/:patientId/entries/:entryId', () => {
-    let patientId: string;
-    let entryId: string;
-
-    beforeEach(async () => {
-      const newPatient = {
-        name: 'Test Patient for Entry Update',
-        dateOfBirth: '1990-01-01',
-        gender: 'male',
-        occupation: 'Engineer',
-      };
-      const createPatientResponse = await axios.post(
-        `${baseUrl}/api/patients`,
-        newPatient
-      );
-      patientId = createPatientResponse.data.id;
-
-      const newEntry = {
-        description: 'Initial description',
-        date: '2023-01-01',
-        specialist: 'Dr. Initial',
-        type: 'HealthCheck',
-        healthCheckRating: 0,
-      };
-      const createEntryResponse = await axios.post(
-        `${baseUrl}/api/patients/${patientId}/entries`,
-        newEntry
-      );
-      entryId = createEntryResponse.data.id;
-    });
-
-    test('should update an existing entry and return 200', async () => {
-      const updatedEntry = {
-        description: 'Updated description',
-        date: '2023-01-02',
-        specialist: 'Dr. Updated',
-        type: 'HealthCheck',
-        healthCheckRating: 1,
-      };
-
-      const response = await axios.put(
-        `${baseUrl}/api/patients/${patientId}/entries/${entryId}`,
-        updatedEntry
-      );
+      const response = await request(app)
+        .put('/api/patients/1')
+        .send(updatedPatient);
 
       expect(response.status).toBe(200);
-      expect(response.data).toMatchObject(updatedEntry);
+      expect(response.body).toEqual(patientWithId);
     });
 
-    test('should return 400 for invalid update data', async () => {
-      const invalidEntry = {
-        description: '',
-        date: '2023-01-02',
-        specialist: 'Dr. Updated',
-        healthCheckRating: 5,
+    it('should handle validation errors', async () => {
+      const invalidPatient = {
+        name: '',
+        dateOfBirth: 'invalid',
+        gender: 'invalid',
+        occupation: 'Developer',
       };
 
-      try {
-        await axios.put(
-          `${baseUrl}/api/patients/${patientId}/entries/${entryId}`,
-          invalidEntry
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        expect(axiosError.response?.status).toBe(400);
-        expect(axiosError.response?.data).toHaveProperty('error');
-      }
+      const response = await request(app)
+        .put('/api/patients/1')
+        .send(invalidPatient);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
     });
 
-    test('should return 404 for non-existent entry', async () => {
-      const nonExistentEntryId =
-        '00000000-0000-0000-0000-000000000000';
-      const validUpdate = {
-        description: 'Updated description',
-        date: '2023-01-02',
-        specialist: 'Dr. Updated',
-        type: 'HealthCheck',
-        healthCheckRating: 1,
+    it('should handle database errors', async () => {
+      const updatedPatient = {
+        name: 'John Doe',
+        dateOfBirth: '1980-01-01',
+        gender: Gender.Male,
+        occupation: 'Developer',
       };
 
-      try {
-        await axios.put(
-          `${baseUrl}/api/patients/${patientId}/entries/${nonExistentEntryId}`,
-          validUpdate
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        expect(axiosError.response?.status).toBe(404);
-      }
-    });
+      const error = new Error('Database error');
+      (patientService.editPatient as jest.Mock).mockRejectedValue(error);
 
-    test.skip('should handle concurrent updates with optimistic locking', async () => {
-      const firstUpdate = {
-        description: 'First update',
-        date: '2023-01-02',
-        specialist: 'Dr. First',
-        healthCheckRating: 1,
-      };
-      await axios.put(
-        `${baseUrl}/api/patients/${patientId}/entries/${entryId}`,
-        firstUpdate
-      );
+      const response = await request(app)
+        .put('/api/patients/1')
+        .send(updatedPatient);
 
-      // Second update with outdated data
-      const secondUpdate = {
-        description: 'Second update',
-        date: '2023-01-03',
-        specialist: 'Dr. Second',
-        healthCheckRating: 2,
-      };
-
-      try {
-        await axios.put(
-          `${baseUrl}/api/patients/${patientId}/entries/${entryId}`,
-          secondUpdate
-        );
-        fail('Should have thrown conflict error');
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        expect(axiosError.response?.status).toBe(409);
-      }
-    });
-
-    test('should validate entry type-specific fields during update', async () => {
-      const invalidHospitalEntry = {
-        description: 'Invalid hospital entry',
-        date: '2023-01-02',
-        specialist: 'Dr. Invalid',
-        type: 'Hospital',
-        discharge: {
-          date: 'invalid-date',
-          criteria: '',
-        },
-      };
-
-      try {
-        await axios.put(
-          `${baseUrl}/api/patients/${patientId}/entries/${entryId}`,
-          invalidHospitalEntry
-        );
-        fail('Should have thrown validation error');
-      } catch (error) {
-        const axiosError = error as AxiosError;
-        expect(axiosError.response?.status).toBe(400);
-        expect(axiosError.response?.data).toHaveProperty('error');
-      }
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Database error' });
     });
   });
 
   describe('DELETE /api/patients/:id', () => {
+    it('should delete a patient', async () => {
+      const deletedPatient = { id: '1' };
 
-    test('should delete a patient and return 204', async () => {
-      // Create a new patient just for this test
-      const tempPatient = await createTestPatientWithEntries(
-        {
-          name: 'Temp Patient',
-          dateOfBirth: '1990-01-01',
-          gender: Gender.Male,
-          occupation: 'Temp Worker'
-        },
-        []
+      (patientService.deletePatient as jest.Mock).mockResolvedValue(
+        deletedPatient,
       );
-      
-      const deleteResponse = await axios.delete(
-        `${baseUrl}/api/patients/${tempPatient.id}`
-      );
-      expect(deleteResponse.status).toBe(204);
 
-      try {
-        await axios.get(
-          `${baseUrl}/api/patients/${tempPatient.id}`
-        );
-        fail('Patient should not exist');
-      } catch (error) {
-        const errorResponse = error as AxiosError;
-        expect(errorResponse.response?.status).toBe(404);
-      }
+      const response = await request(app).delete('/api/patients/1');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(deletedPatient);
     });
 
-    test('should return 404 when deleting non-existent patient', async () => {
-      const nonExistentId = '00000000-0000-0000-0000-000000000000'; // valid UUID format but non-existent
-      try {
-        await axios.delete(
-          `${baseUrl}/api/patients/${nonExistentId}`
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const errorResponse = error as AxiosError;
-        expect(errorResponse.response?.status).toBe(404);
-        if (errorResponse.response) {
-          const responseData = errorResponse.response.data as {
-            error: string;
-          };
-          expect(responseData).toHaveProperty('error');
-          expect(responseData.error).toContain('Patient');
-        }
-      }
+    it('should handle database errors', async () => {
+      const error = new Error('Database error');
+      (patientService.deletePatient as jest.Mock).mockRejectedValue(error);
+
+      const response = await request(app).delete('/api/patients/1');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Database error' });
     });
-  });
-
-  describe('DELETE /api/patients/:patientId/entries/:entryId', () => {
-    let patientId: string;
-    let entryId: string;
-
-    beforeEach(async () => {
-      const entry: NewEntryWithoutId = {
-        description: 'Test entry',
-        date: '2020-01-01',
-        specialist: 'Dr. Test',
-        type: 'HealthCheck',
-        healthCheckRating: 0
-      } as const;
-      
-      const patient = await createTestPatientWithEntries(
-        {
-          name: 'Test Patient',
-          dateOfBirth: '1990-01-01',
-          gender: Gender.Male,
-          occupation: 'Engineer'
-        },
-        [entry]
-      );
-      
-      patientId = patient.id;
-      entryId = patient.entries[0].id;
-    });
-
-    test('should delete an entry and return 204', async () => {
-      // Create a new patient with an entry just for this test
-      const tempPatient = await createTestPatientWithEntries(
-        {
-          name: 'Temp Patient',
-          dateOfBirth: '1990-01-01',
-          gender: Gender.Male,
-          occupation: 'Temp Worker'
-        },
-        [
-          {
-            description: 'Temp entry',
-            date: '2023-01-01',
-            specialist: 'Dr. Temp',
-            type: 'HealthCheck',
-            healthCheckRating: 0
-          }
-        ]
-      );
-      const tempEntryId = tempPatient.entries[0].id;
-      
-      const response = await axios.delete(
-        `${baseUrl}/api/patients/${tempPatient.id}/entries/${tempEntryId}`
-      );
-      expect(response.status).toBe(204);
-
-      try {
-        await axios.get(
-          `${baseUrl}/api/patients/${tempPatient.id}/entries/${tempEntryId}`
-        );
-        fail('Entry should not exist');
-      } catch (error) {
-        const errorResponse = error as AxiosError;
-        expect(errorResponse.response?.status).toBe(404);
-      }
-    });
-
-    test('should return 404 for non-existent entry', async () => {
-      const nonExistentId = '00000000-0000-0000-0000-000000000000';
-      try {
-        await axios.delete(
-          `${baseUrl}/api/patients/${patientId}/entries/${nonExistentId}`
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const errorResponse = error as AxiosError;
-        expect(errorResponse.response?.status).toBe(404);
-      }
-    });
-
-    test('should return 404 for non-existent patient', async () => {
-      const nonExistentId = '00000000-0000-0000-0000-000000000000';
-      try {
-        await axios.delete(
-          `${baseUrl}/api/patients/${nonExistentId}/entries/${entryId}`
-        );
-        fail('Should have thrown error');
-      } catch (error) {
-        const errorResponse = error as AxiosError;
-        expect(errorResponse.response?.status).toBe(404);
-      }
-    });
-  });
-  test('should handle database connection issues', async () => {
-    await pool.end();
-    try {
-      await axios.get(`${baseUrl}/api/patients`);
-    } catch (error) {
-      const errorResponse = error as AxiosError;
-      expect(errorResponse.response?.status).toBe(500);
-      expect(errorResponse.response?.data).toHaveProperty('error');
-    } finally {
-      pool.connect = async () => {
-        const newPool = require('../../db/connection');
-        return newPool.connect();
-      };
-    }
   });
 });

@@ -32,7 +32,9 @@ export {
 export type PatientEntry = Patient;
 export type NewPatientEntry = z.infer<typeof NewPatientEntrySchema>;
 export type NewPatientEntryWithoutEntries = UnionOmit<NewPatientEntry, 'entries'>;
-export type NonSensitivePatientEntry = UnionOmit<PatientEntry, 'ssn' | 'entries'>;
+export type NonSensitivePatientEntry = UnionOmit<PatientEntry, 'ssn' | 'entries'> & {
+  healthRating: number | null;
+};
 export type NewEntryWithoutId = UnionOmit<z.infer<typeof EntrySchema>, 'id'>;
 
 /**

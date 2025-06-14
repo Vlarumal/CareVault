@@ -2,8 +2,9 @@ import pool from './connection';
 import { v1 as uuid } from 'uuid';
 import patientsData from '../data/patients-full';
 import diagnosesData from '../data/diagnoses';
-
-// Using centralized connection pool from connection.ts
+import { readFile, readdir } from 'fs/promises';
+import path from 'path';
+import logger from '../src/utils/logger';
 
 async function migrate() {
   const client = await pool.connect();
@@ -154,9 +155,39 @@ async function migrate() {
           }
         }
       }
-    
-    await client.query('COMMIT');
     }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await runAdditionalMigrations();
+}
+
+async function runAdditionalMigrations() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const migrationFiles = (
+      await readdir(path.join(__dirname, 'migrations'))
+    )
+      .filter((file) => file.endsWith('.sql'))
+      .sort();
+
+    // Run each migration in order
+    for (const file of migrationFiles) {
+      const migrationPath = path.join(__dirname, 'migrations', file);
+      const migrationSql = await readFile(migrationPath, 'utf8');
+      await client.query(migrationSql);
+      logger.info(`Executed migration: ${file}`);
+    }
+
+    await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

@@ -20,9 +20,11 @@ export interface Patient {
   gender: Gender;
   ssn?: string;
   dateOfBirth?: string;
+  date_of_birth?: string; // API response format
   createdAt?: string;
   updatedAt?: string;
   entries?: Entry[];
+  healthRating?: number | null; // Precomputed health rating from backend
 }
 
 export type PatientFormValues = Omit<Patient, 'id' | 'entries'>;

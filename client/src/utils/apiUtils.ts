@@ -13,11 +13,10 @@
  * // Custom retry settings
  * apiRetry(() => postData(data), 5, 2000)
  *
- * @context7 /microsoft/typescript-website
  */
-import { sanitizeObject } from './securityUtils';
 
 import { QueryClient } from '@tanstack/react-query';
+import DOMPurify from 'dompurify';
 
 /**
  * Global query client instance for query deduplication
@@ -40,13 +39,15 @@ export const apiRetry = async <T>(
     try {
       return await fn();
     } catch (error) {
+      console.error(`API attempt ${attempt} failed:`, error);
+
       if (attempt === maxRetries) throw error;
-      
+
       const delay = initialDelay * Math.pow(2, attempt - 1);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-  
+
   throw new Error('Max retries exceeded');
 };
 
@@ -57,9 +58,11 @@ export const apiRetry = async <T>(
  */
 export const sanitizeRequestData = <T>(data: T): T => {
   if (typeof data === 'string') {
-    return data; // Already sanitized by securityUtils at input
+    // Sanitize strings using DOMPurify
+    return DOMPurify.sanitize(data) as T;
   }
-  return sanitizeObject(data);
+  // For objects, recursively sanitize string values
+  return JSON.parse(DOMPurify.sanitize(JSON.stringify(data))) as T;
 };
 
 /**
@@ -68,7 +71,10 @@ export const sanitizeRequestData = <T>(data: T): T => {
  * @param queryFn - The actual query function
  * @returns Deduplicated query function
  */
-export const createDeduplicatedQuery = <T>(queryKey: string[], queryFn: () => Promise<T>) => {
+export const createDeduplicatedQuery = <T>(
+  queryKey: string[],
+  queryFn: () => Promise<T>
+) => {
   return async () => {
     return queryClient.fetchQuery({
       queryKey,

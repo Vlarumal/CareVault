@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   isDateValid,
   validateHealthRating,
@@ -10,6 +10,7 @@ import {
 } from './utils';
 import { Favorite, Male, Female, Healing, Work, MedicalServices, Transgender } from '@mui/icons-material';
 import { Patient, Entry, HealthCheckEntry } from './types';
+import { apiRetry, createDeduplicatedQuery, queryClient, sanitizeRequestData } from './utils/apiUtils';
 
 describe('Validation Utilities', () => {
   describe('isDateValid', () => {
@@ -136,3 +137,119 @@ describe('assertNever Utility', () => {
     );
   });
 });
+
+describe('API Utilities', () => {
+  describe('apiRetry', () => {
+    beforeEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should return result on successful first attempt', async () => {
+      const mockFn = vi.fn().mockResolvedValue('success');
+      const result = await apiRetry(mockFn, 3, 100);
+      expect(result).toBe('success');
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry and succeed after failures', async () => {
+      const mockFn = vi.fn()
+        .mockRejectedValueOnce(new Error('Failed'))
+        .mockRejectedValueOnce(new Error('Failed'))
+        .mockResolvedValue('success');
+      
+      const result = await apiRetry(mockFn, 3, 100);
+      expect(result).toBe('success');
+      expect(mockFn).toHaveBeenCalledTimes(3);
+    });
+
+    it('should throw after max retries', async () => {
+      const mockFn = vi.fn().mockRejectedValue(new Error('Failed'));
+      await expect(apiRetry(mockFn, 3, 100)).rejects.toThrow('Max retries exceeded');
+      expect(mockFn).toHaveBeenCalledTimes(3);
+    });
+
+    it('should use exponential backoff timing', async () => {
+      vi.useFakeTimers();
+      const mockFn = vi.fn()
+        .mockRejectedValueOnce(new Error('Failed'))
+        .mockRejectedValueOnce(new Error('Failed'))
+        .mockResolvedValue('success');
+      
+      const promise = apiRetry(mockFn, 3, 1000);
+      
+      // Advance past first retry
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mockFn).toHaveBeenCalledTimes(2);
+      
+      // Advance past second retry
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mockFn).toHaveBeenCalledTimes(3);
+      
+      await expect(promise).resolves.toBe('success');
+      vi.useRealTimers();
+    });
+  });
+
+  describe('createDeduplicatedQuery', () => {
+    beforeEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should call fetchQuery with correct parameters', async () => {
+      const queryKey = ['patients'];
+      const mockData = [{ id: '1', name: 'John' }];
+      const queryFn = vi.fn().mockResolvedValue(mockData);
+      
+      vi.spyOn(queryClient, 'fetchQuery').mockResolvedValue(mockData);
+      
+      const dedupedQuery = createDeduplicatedQuery(queryKey, queryFn);
+      const result = await dedupedQuery();
+      
+      expect(queryClient.fetchQuery).toHaveBeenCalledWith({
+        queryKey,
+        queryFn,
+        staleTime: 300000
+      });
+      expect(result).toEqual(mockData);
+    });
+  });
+
+  describe('sanitizeRequestData', () => {
+    beforeEach(() => {
+      vi.mock('dompurify', () => ({
+        default: {
+          sanitize: vi.fn((input) => input.replace(/<script.*?>.*?<\/script>/gi, ''))
+        }
+      }));
+    });
+
+    it('should sanitize strings', () => {
+      const maliciousString = '<script>alert("xss")</script>Safe text';
+      const sanitized = sanitizeRequestData(maliciousString);
+      expect(sanitized).toBe('Safe text');
+    });
+
+    it('should sanitize objects', () => {
+      const maliciousObject = {
+        name: '<b>John</b>',
+        bio: '<iframe src="malicious.com"></iframe>'
+      };
+      const sanitized = sanitizeRequestData(maliciousObject);
+      expect(sanitized).toEqual({
+        name: '<b>John</b>', // Allowed safe HTML
+        bio: '<iframe src="malicious.com"></iframe>' // Mock doesn't remove iframes
+      });
+    });
+
+    it('should prevent XSS attacks', () => {
+      const xssPayload = {
+        normal: 'Safe value',
+        attack: '"><script>alert(1)</script>'
+      };
+      const sanitized = sanitizeRequestData(xssPayload);
+      expect(sanitized.attack).not.toContain('<script>');
+      expect(sanitized.attack).toBe('">');
+    });
+  });
+});
+

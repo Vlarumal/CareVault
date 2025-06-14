@@ -1,4 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import EditPatientModal from './EditPatientModal';
 import {
   DiagnosisEntry,
   NewEntryFormValues,
@@ -14,6 +16,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { Alert, Box, Button, Fab, Typography } from '@mui/material';
+import { useNotification } from '../../services/notificationService';
 import AddEntryForm from './AddEntryForm';
 import AddEntryDrawer from './AddEntryDrawer';
 import HealthRatingBar from '../HealthRatingBar';
@@ -21,7 +24,6 @@ import TimelineView from './TimelineView';
 import PatientDetailsSkeleton from './PatientDetailsSkeleton';
 import { getLatestHealthRating } from '../../services/healthRatingService';
 import { createDeduplicatedQuery } from '../../utils/apiUtils';
-import { useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 
 const PatientPage = () => {
@@ -58,6 +60,7 @@ const PatientPage = () => {
     ),
   });
 
+  const { showNotification } = useNotification();
   const mutation = useMutation({
     mutationFn: (object: NewEntryFormValues) => {
       if (!validatedId) {
@@ -116,10 +119,11 @@ const PatientPage = () => {
           context.previousPatient
         );
       }
-      alert(
+      showNotification(
         `Failed to add entry: ${
           err instanceof Error ? err.message : 'Unknown error'
-        }`
+        }`,
+        'error'
       );
     },
     onSettled: () => {
@@ -139,7 +143,7 @@ const PatientPage = () => {
     return diagnosis ? diagnosis.name : 'Unknown diagnosis';
   };
 
-  const diagnosisCodesAll = diagnoses?.map((d) => d.code) || [];
+  const diagnosisCodesAll = diagnoses || [];
 
   // Use health rating service
   const latestHealthRating = patient
@@ -147,6 +151,7 @@ const PatientPage = () => {
     : null;
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const handleDrawerToggle = () => {
     setIsDrawerOpen(true);
@@ -207,15 +212,25 @@ const PatientPage = () => {
 
   return (
     <div>
-      <h2 data-testid='patient-name'>
-        {patient.name}
-        <span
-          aria-label={`Gender: ${patient.gender}`}
-          role='img'
+      <Box display="flex" alignItems="center" gap={2} marginBottom={2}>
+        <h2 data-testid='patient-name'>
+          {patient.name}
+          <span
+            aria-label={`Gender: ${patient.gender}`}
+            role='img'
+          >
+            {getIcon(patient.gender)}
+          </span>
+        </h2>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => setIsEditModalOpen(true)}
+          aria-label="Edit patient details"
         >
-          {getIcon(patient.gender)}
-        </span>
-      </h2>
+          Edit
+        </Button>
+      </Box>
       <Button
         variant='outlined'
         onClick={() => navigate('/')}
@@ -286,12 +301,18 @@ const PatientPage = () => {
             loading={mutation.isPending}
             diagnosisCodesAll={diagnosisCodesAll}
             onClose={handleDrawerClose}
-            onEntryAdded={() => {
-              handleDrawerClose();
-            }}
+            open={isDrawerOpen}
           />
         </AddEntryDrawer>
       </section>
+
+      {isEditModalOpen && (
+        <EditPatientModal
+          patient={patient}
+          open={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+        />
+      )}
 
       {patient.entries && patient.entries.length > 0 && (
         <Box>

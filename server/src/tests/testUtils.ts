@@ -5,11 +5,18 @@ import { v1 as uuid } from 'uuid';
 export async function clearDatabase() {
   const client = await pool.connect();
   try {
-    await client.query(
-      'TRUNCATE TABLE patients, entries RESTART IDENTITY CASCADE'
-    );
+    if (client) {
+      await client.query(
+        'TRUNCATE TABLE patients, entries RESTART IDENTITY CASCADE'
+      );
+    }
+  } catch (error) {
+    console.error('Error clearing database:', error);
+    throw error;
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -131,7 +138,6 @@ export async function createTestEntry(
   const createdAt = new Date().toISOString();
   const updatedAt = createdAt;
 
-  // Insert base entry
   await pool.query(
     `
     INSERT INTO entries (id, patient_id, description, date, specialist, type, created_at, updated_at)
@@ -149,7 +155,6 @@ export async function createTestEntry(
     ]
   );
 
-  // Insert type-specific data
   if (entry.type === 'HealthCheck') {
     await pool.query(
       `
@@ -198,93 +203,100 @@ export async function createTestEntry(
 export async function createTestPatientWithEntries(
   patient: Omit<Patient, 'id'>,
   entries: NewEntryWithoutId[]
-) {
+): Promise<Patient> {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    if (client) {
+      await client.query('BEGIN');
 
-    const patientId = uuid();
-
-    await client.query(
-      `
-      INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `,
-      [
-        patientId,
-        patient.name,
-        patient.occupation,
-        patient.gender,
-        patient.ssn || null,
-        patient.dateOfBirth,
-      ]
-    );
-
-    const createdEntries = [];
-    for (const entry of entries) {
-      const entryId = uuid();
+      const patientId = uuid();
 
       await client.query(
         `
-        INSERT INTO entries (id, patient_id, description, date, specialist, type)
+        INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth)
         VALUES ($1, $2, $3, $4, $5, $6)
       `,
         [
-          entryId,
           patientId,
-          entry.description,
-          entry.date,
-          entry.specialist,
-          entry.type,
+          patient.name,
+          patient.occupation,
+          patient.gender,
+          patient.ssn || null,
+          patient.dateOfBirth,
         ]
       );
 
-      // Insert type-specific data
-      if (entry.type === 'HealthCheck') {
+      const createdEntries = [];
+      for (const entry of entries) {
+        const entryId = uuid();
+
         await client.query(
           `
-          INSERT INTO healthcheck_entries (entry_id, health_check_rating)
-          VALUES ($1, $2)
-        `,
-          [entryId, entry.healthCheckRating]
-        );
-      } else if (entry.type === 'Hospital') {
-        await client.query(
-          `
-          INSERT INTO hospital_entries (entry_id, discharge_date, discharge_criteria)
-          VALUES ($1, $2, $3)
-        `,
-          [entryId, entry.discharge.date, entry.discharge.criteria]
-        );
-      } else if (entry.type === 'OccupationalHealthcare') {
-        await client.query(
-          `
-          INSERT INTO occupational_healthcare_entries (entry_id, employer_name, sick_leave_start_date, sick_leave_end_date)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO entries (id, patient_id, description, date, specialist, type)
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
           [
             entryId,
-            entry.employerName,
-            entry.sickLeave?.startDate || null,
-            entry.sickLeave?.endDate || null,
+            patientId,
+            entry.description,
+            entry.date,
+            entry.specialist,
+            entry.type,
           ]
         );
+
+        if (entry.type === 'HealthCheck') {
+          await client.query(
+            `
+            INSERT INTO healthcheck_entries (entry_id, health_check_rating)
+            VALUES ($1, $2)
+          `,
+            [entryId, entry.healthCheckRating]
+          );
+        } else if (entry.type === 'Hospital') {
+          await client.query(
+            `
+            INSERT INTO hospital_entries (entry_id, discharge_date, discharge_criteria)
+            VALUES ($1, $2, $3)
+          `,
+            [entryId, entry.discharge.date, entry.discharge.criteria]
+          );
+        } else if (entry.type === 'OccupationalHealthcare') {
+          await client.query(
+            `
+            INSERT INTO occupational_healthcare_entries (entry_id, employer_name, sick_leave_start_date, sick_leave_end_date)
+            VALUES ($1, $2, $3, $4)
+          `,
+            [
+              entryId,
+              entry.employerName,
+              entry.sickLeave?.startDate || null,
+              entry.sickLeave?.endDate || null,
+            ]
+          );
+        }
+
+        createdEntries.push({ ...entry, id: entryId });
       }
 
-      createdEntries.push({ ...entry, id: entryId });
+      await client.query('COMMIT');
+
+      return {
+        ...patient,
+        id: patientId,
+        entries: createdEntries,
+      } as Patient;
+    } else {
+      throw new Error('Failed to connect to database');
     }
-
-    await client.query('COMMIT');
-
-    return {
-      ...patient,
-      id: patientId,
-      entries: createdEntries,
-    };
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (client) {
+      await client.query('ROLLBACK');
+    }
     throw error;
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }

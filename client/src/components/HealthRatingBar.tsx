@@ -2,10 +2,9 @@ import React from 'react';
 import { Tooltip } from '@mui/material';
 import { Favorite } from '@mui/icons-material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-
 type BarProps = {
   rating: number | null;
-  showText: boolean;
+  showText?: boolean;
 };
 
 const HEALTHBAR_TEXTS = [
@@ -24,11 +23,11 @@ const HEALTHBAR_COLORS = [
 ];
 
 const HealthRatingBar = React.forwardRef<HTMLDivElement, BarProps>(
-  ({ rating, showText }, ref) => {
+  ({ rating, showText = false }, ref) => {
     if (rating === null) {
       return (
-        <Tooltip 
-          title="Health rating is only available for patients with HealthCheck entries" 
+        <Tooltip
+          title="Health rating is only available for patients with HealthCheck entries"
           arrow
         >
           <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -45,9 +44,9 @@ const HealthRatingBar = React.forwardRef<HTMLDivElement, BarProps>(
       <Favorite
         key={i}
         fontSize="inherit"
-        style={{ 
+        style={{
           color: i < heartCount ? heartColor : 'transparent',
-          marginRight: 2 
+          marginRight: 2
         }}
       />
     ));
@@ -58,16 +57,16 @@ const HealthRatingBar = React.forwardRef<HTMLDivElement, BarProps>(
         className="health-bar"
         style={{ display: 'flex', alignItems: 'center' }}
         role="img"
-        aria-label={`Health rating: ${HEALTHBAR_TEXTS[rating]}`}
+        aria-label={`Health rating: ${HEALTHBAR_TEXTS[rating]}`}  
       >
         <span aria-hidden="true">
           {hearts}
         </span>
-        {showText && (
+        {showText ? (
           <p style={{ marginLeft: 8 }} data-testid="health-rating-text">
             {HEALTHBAR_TEXTS[rating]}
           </p>
-        )}
+        ) : null}
       </div>
     );
   }
