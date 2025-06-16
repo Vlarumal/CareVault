@@ -1,23 +1,13 @@
 /**
- * Executes an API call with exponential backoff retry logic
- * @param fn - The API call function to execute
- * @param maxRetries - Maximum number of retry attempts (default: 3)
- * @param initialDelay - Initial delay between retries in ms (default: 1000)
- * @returns Promise resolving to the API response
- *
- * @example
- * // Basic usage
- * apiRetry(() => fetchData())
- *
- * @example
- * // Custom retry settings
- * apiRetry(() => postData(data), 5, 2000)
- *
+ * Centralized API configuration with credentials support
+ * @module apiUtils
  */
-
+  
+import axios, { AxiosError, AxiosInstance } from 'axios';
 import { QueryClient } from '@tanstack/react-query';
 import DOMPurify from 'dompurify';
-
+import { apiBaseUrl } from '../constants';
+  
 /**
  * Global query client instance for query deduplication
  */
@@ -29,7 +19,34 @@ export const queryClient = new QueryClient({
     },
   },
 });
+  
+/**
+ * Axios instance with credentials and base URL configuration
+ */
+export const api: AxiosInstance = axios.create({
+  baseURL: apiBaseUrl,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-User-Id': process.env.NODE_ENV === 'development' ? 'dev-user-id' : undefined
+  }
+});
 
+api.interceptors.request.use(config => {
+  console.debug('Sending payload:', config.data);
+  return config;
+});
+  
+api.interceptors.response.use(
+  response => response,
+  (error: AxiosError) => {
+    if (error.code === 'ERR_NETWORK') {
+      throw new Error('CORS error: Request blocked by browser security policy');
+    }
+    return Promise.reject(error);
+  }
+);
+  
 export const apiRetry = async <T>(
   fn: () => Promise<T>,
   maxRetries = 3,
@@ -40,17 +57,23 @@ export const apiRetry = async <T>(
       return await fn();
     } catch (error) {
       console.error(`API attempt ${attempt} failed:`, error);
-
+  
+      if (error instanceof Error && error.message.includes('CORS error')) {
+        throw new Error(
+          `CORS failure: ${error.message}. Verify backend CORS configuration`
+        );
+      }
+  
       if (attempt === maxRetries) throw error;
-
+  
       const delay = initialDelay * Math.pow(2, attempt - 1);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-
+  
   throw new Error('Max retries exceeded');
 };
-
+  
 /**
  * Sanitizes API request data to prevent XSS attacks
  * @param data - The data to sanitize
@@ -58,13 +81,11 @@ export const apiRetry = async <T>(
  */
 export const sanitizeRequestData = <T>(data: T): T => {
   if (typeof data === 'string') {
-    // Sanitize strings using DOMPurify
     return DOMPurify.sanitize(data) as T;
   }
-  // For objects, recursively sanitize string values
   return JSON.parse(DOMPurify.sanitize(JSON.stringify(data))) as T;
 };
-
+  
 /**
  * Creates a deduplicated query function for API calls
  * @param queryKey - Unique key for query deduplication

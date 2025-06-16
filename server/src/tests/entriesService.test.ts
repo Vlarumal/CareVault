@@ -32,3 +32,46 @@ describe('getEntriesByPatientId', () => {
     expect(firstEntry).toHaveProperty('type');
   });
 });
+
+describe('validateHealthCheckEntry', () => {
+  it('should validate a HealthCheck entry with valid rating', async () => {
+    const entry = {
+      type: 'HealthCheck',
+      description: 'Annual checkup',
+      date: '2025-06-16',
+      specialist: 'Dr. Smith',
+      healthCheckRating: 2
+    };
+    
+    const result = HealthCheckEntrySchema.safeParse(entry);
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate a HealthCheck entry with missing rating (uses default)', async () => {
+    const entry = {
+      type: 'HealthCheck',
+      description: 'Annual checkup',
+      date: '2025-06-16',
+      specialist: 'Dr. Smith'
+    };
+    
+    const result = HealthCheckEntrySchema.safeParse(entry);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.healthCheckRating).toBe(0);
+    }
+  });
+
+  it('should invalidate a HealthCheck entry with out-of-range rating', async () => {
+    const entry = {
+      type: 'HealthCheck',
+      description: 'Annual checkup',
+      date: '2025-06-16',
+      specialist: 'Dr. Smith',
+      healthCheckRating: 5
+    };
+    
+    const result = HealthCheckEntrySchema.safeParse(entry);
+    expect(result.success).toBe(false);
+  });
+});

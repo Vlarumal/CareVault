@@ -109,6 +109,9 @@ Adds new medical entry
 ```  
 
 [View Full API Documentation](server/src/routes/patientsRoute.ts)  
+## Authentication
+
+All write operations require the `X-User-Id` header to be set. In production, this header must contain a valid user ID. During development, if the header is not provided, the server will use a mock user ID.
 
 ## Screenshots  
 

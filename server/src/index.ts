@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 
@@ -37,9 +36,16 @@ app.use((_req, res, next) => {
 
 app.use(metricsMiddleware);
 
-app.use(cors());
+import { corsMiddleware } from './middleware/corsMiddleware';
+
+app.use(corsMiddleware);
 app.use(express.static('dist'));
 app.use(express.json());
+
+app.use((req, _res, next) => {
+  console.log('Received:', req.body);
+  next();
+});
 
 const baseUrl = process.env.BASE_URL;
 const PORT = process.env.PORT || 3001;

@@ -1,28 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { CSSTransition } from 'react-transition-group';
 import { useTheme } from '@mui/material/styles';
 import './AddEntryDrawer.css';
-import { IconButton, Snackbar } from '@mui/material';
+import { IconButton } from '@mui/material';
 import { Close } from '@mui/icons-material';
 
 interface AddEntryDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
-  onEntryAdded?: () => void; // Optional callback for entry added
+  title?: string;
 }
 
 const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
   isOpen,
   onClose,
   children,
-  onEntryAdded,
+  title,
 }) => {
   const theme = useTheme();
   const drawerRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -45,29 +43,12 @@ const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
 
   useEffect(() => {
     if (isOpen && drawerRef.current) {
-      // Focus the first form field when drawer opens
       const firstInput = drawerRef.current.querySelector('input');
       if (firstInput) {
         (firstInput as HTMLElement).focus();
       }
     }
   }, [isOpen]);
-
-  const handleEntryAdded = () => {
-    if (onEntryAdded) {
-      onEntryAdded();
-    }
-    setSnackbarOpen(true);
-  };
-
-  useEffect(() => {
-    if (snackbarOpen) {
-      const timer = setTimeout(() => {
-        setSnackbarOpen(false);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [snackbarOpen]);
 
   return (
     <>
@@ -97,17 +78,19 @@ const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
           tabIndex={-1}
           role='dialog'
           aria-modal='true'
-          aria-label='Add entry'
+          aria-label={title || 'Add entry'}
           ref={drawerRef}
           style={{
             backgroundColor: theme.palette.background.paper,
             color: theme.palette.text.primary,
           }}
         >
-          <IconButton
-            className='drawer-close'
-            onClick={onClose}
-            aria-label='Close drawer'
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {title && <h2 style={{ marginLeft: '16px' }}>{title}</h2>}
+            <IconButton
+              className='drawer-close'
+              onClick={onClose}
+              aria-label='Close drawer'
             sx={{
               justifyContent: 'flex-end',
               color: theme.palette.text.secondary,
@@ -120,32 +103,16 @@ const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
           >
             <Close />
           </IconButton>
+          </div>
           <div
             className='drawer-content'
             style={{ color: theme.palette.text.primary }}
           >
-            {React.cloneElement(children as React.ReactElement, {
-              onEntryAdded: handleEntryAdded
-            })}
+            {children}
           </div>
         </div>
       </CSSTransition>
 
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        message='Entry added successfully'
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        slotProps={{
-          content: {
-            style: {
-              backgroundColor: theme.palette.success.main,
-              color: theme.palette.success.contrastText,
-            },
-          },
-        }}
-      />
     </>
   );
 };

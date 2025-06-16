@@ -1,11 +1,11 @@
 /**
- * Formats dates to ISO 8601 date format (YYYY-MM-DD). Handles both strings and Date objects.
+ * Normalizes dates to ISO 8601 date format (YYYY-MM-DD). Handles both strings and Date objects.
  * For Date objects, uses local date components to maintain date values.
  *
- * @param date - The date to format (string or Date object)
- * @returns The formatted date string in YYYY-MM-DD format
+ * @param date - The date to normalize (string or Date object)
+ * @returns The normalized date string in YYYY-MM-DD format
  */
-export default function formatToISODate(date: string | Date): string {
+export function normalizeEntryDate(date: string | Date): string {
   // Handle pure date strings directly
   if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return date;

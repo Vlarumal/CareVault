@@ -10,6 +10,7 @@ import {
   NewPatientEntryWithoutEntries,
   HealthCheckRating,
   Gender,
+  EntryVersion,
 } from '../types';
 import {
   HealthCheckEntry,
@@ -20,15 +21,18 @@ import {
   ValidationError,
   NotFoundError,
   DatabaseError,
+  ConcurrencyError,
 } from '../utils/errors';
+import { EntryVersionService } from './entryVersionService';
 import logger from '../utils/logger';
 import { sanitizeObject } from '../utils/sanitize';
 import { QueryResult } from 'pg';
-import formatToISODate from '../utils/dateFormatter';
+import { normalizeEntryDate } from '../utils/dateFormatter';
 import {
   buildWhereClause,
   buildOrderByClause,
 } from '../utils/queryBuilder';
+import { AnyEntry } from 'shared/src/types/medicalTypes';
 
 const SAFE_STRING_REGEX = /^[^;'"\\]*$/;
 
@@ -48,7 +52,7 @@ const mapToHealthCheckEntry = (row: any): HealthCheckEntry => {
   return {
     id: row.id,
     description: row.description,
-    date: formatToISODate(row.date),
+    date: normalizeEntryDate(row.date),
     specialist: row.specialist,
     type: 'HealthCheck',
     healthCheckRating: row.health_check_rating as HealthCheckRating,
@@ -62,11 +66,11 @@ const mapToHospitalEntry = (row: any): HospitalEntry => {
   return {
     id: row.id,
     description: row.description,
-    date: formatToISODate(row.date),
+    date: normalizeEntryDate(row.date),
     specialist: row.specialist,
     type: 'Hospital',
     discharge: {
-      date: formatToISODate(row.discharge_date),
+      date: normalizeEntryDate(row.discharge_date),
       criteria: row.discharge_criteria as string,
     },
     diagnosisCodes: row.diagnosis_codes || [],
@@ -81,15 +85,15 @@ const mapToOccupationalHealthcareEntry = (
   return {
     id: row.id,
     description: row.description,
-    date: formatToISODate(row.date),
+    date: normalizeEntryDate(row.date),
     specialist: row.specialist,
     type: 'OccupationalHealthcare',
     employerName: row.employer_name as string,
     sickLeave:
       row.sick_leave_start_date && row.sick_leave_end_date
         ? {
-            startDate: formatToISODate(row.sick_leave_start_date),
-            endDate: formatToISODate(row.sick_leave_end_date),
+            startDate: normalizeEntryDate(row.sick_leave_start_date),
+            endDate: normalizeEntryDate(row.sick_leave_end_date),
           }
         : undefined,
     diagnosisCodes: row.diagnosis_codes || [],
@@ -272,7 +276,7 @@ const getPaginatedNonSensitiveEntries = async (
       }) => ({
         id: row.id,
         name: row.name,
-        dateOfBirth: formatToISODate(row.date_of_birth),
+        dateOfBirth: normalizeEntryDate(row.date_of_birth),
         gender: row.gender,
         occupation: row.occupation,
         healthRating:
@@ -350,7 +354,7 @@ const getPaginatedPatientsWithEntries = async (
     const patients = result.rows.map((row) => ({
       id: row.id,
       name: row.name,
-      dateOfBirth: formatToISODate(row.date_of_birth),
+      dateOfBirth: normalizeEntryDate(row.date_of_birth),
       gender: row.gender,
       occupation: row.occupation,
       ssn: row.ssn,
@@ -478,7 +482,7 @@ const createPatient = async (
         sanitizedEntry.occupation,
         sanitizedEntry.gender,
         sanitizedEntry.ssn,
-        formatToISODate(sanitizedEntry.dateOfBirth),
+        normalizeEntryDate(sanitizedEntry.dateOfBirth),
       ]
     )) as QueryResult<PatientEntry>;
 
@@ -564,7 +568,7 @@ const editPatient = async (
     return {
       id: row.id,
       name: row.name,
-      dateOfBirth: formatToISODate(row.date_of_birth),
+      dateOfBirth: normalizeEntryDate(row.date_of_birth),
       gender: row.gender,
       occupation: row.occupation,
       ssn: row.ssn,
@@ -821,6 +825,15 @@ const addEntry = async (
         updatedAt: new Date().toISOString(),
       } as Entry;
 
+      // Create version for new entry
+      await EntryVersionService.createVersion(
+        id,
+        'system',
+        'Entry created',
+        createdEntry,
+        'CREATE'
+      );
+
       switch (entry.type) {
         case 'HealthCheck':
           return {
@@ -864,77 +877,73 @@ const addEntry = async (
 const updateEntry = async (
   patientId: string,
   entryId: string,
-  updateData: NewEntryWithoutId
-): Promise<Entry> => {
-  // Validate entry synchronously
-  validateEntry(updateData);
+  updateData: NewEntryWithoutId & {
+    changeReason?: string;
+    lastUpdated?: string;
+  },
+  editorId: string = 'system'
+): Promise<AnyEntry> => {
+  // Destructure with defaults
+  const {
+    changeReason = 'Entry updated',
+    lastUpdated,
+    ...entryData
+  } = updateData;
+
+  // Validate entry
+  validateEntry(entryData);
+
+  // Concurrency check
+  // Concurrency check already performed at route level
+  // No need to duplicate the check here
+
+  logger.info(`Updating entry ${entryId} for patient ${patientId} by editor ${editorId}`);
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const patientResult = await client.query(
-      'SELECT id FROM patients WHERE id = $1',
-      [patientId]
+    // Create version snapshot before update
+    await EntryVersionService.createVersion(
+      entryId,
+      editorId,
+      changeReason || 'Entry updated'
     );
-    if (patientResult.rowCount === 0) {
-      throw new NotFoundError('Patient', patientId);
-    }
 
-    const entryResult = await client.query(
-      'SELECT * FROM entries WHERE id = $1',
-      [entryId]
+    const currentEntryResult = await client.query(
+      `SELECT * FROM entries WHERE id = $1 AND patient_id = $2`,
+      [entryId, patientId]
     );
-    if (entryResult.rowCount === 0) {
+
+    if (currentEntryResult.rowCount === 0) {
       throw new NotFoundError('Entry', entryId);
     }
 
-    const existingEntry = entryResult.rows[0];
+    const existingEntry = currentEntryResult.rows[0];
 
-    if (existingEntry.type !== updateData.type) {
+    if (existingEntry.type !== entryData.type) {
       throw new ValidationError(
         'Cannot change entry type during update',
         { invalidOperation: 'typeChange' }
       );
     }
 
-    if (
-      updateData.diagnosisCodes &&
-      updateData.diagnosisCodes.length > 0
-    ) {
-      const codeCheck = await client.query(
-        'SELECT code FROM diagnoses WHERE code = ANY($1)',
-        [updateData.diagnosisCodes]
-      );
-      const existingCodes = codeCheck.rows.map((row) => row.code);
-      const missingCodes = updateData.diagnosisCodes.filter(
-        (code) => !existingCodes.includes(code)
-      );
+    // Version creation is done at the route level
+    // No need to create another version here
 
-      if (missingCodes.length > 0) {
-        throw new ValidationError(
-          `Invalid diagnosis codes: ${missingCodes.join(
-            ', '
-          )}. These codes don't exist in the database.`,
-          { invalidCodes: missingCodes }
-        );
-      }
-    }
-
+    // Update entry and related tables
     await client.query(
-      `
-      UPDATE entries
-      SET
-        description = $1,
-        date = $2,
-        specialist = $3,
-        updated_at = NOW()
-      WHERE id = $4
-    `,
+      `UPDATE entries
+       SET
+         description = $1,
+         date = $2,
+         specialist = $3,
+         updated_at = NOW()
+       WHERE id = $4`,
       [
-        updateData.description,
-        updateData.date,
-        updateData.specialist,
+        entryData.description,
+        entryData.date,
+        entryData.specialist,
         entryId,
       ]
     );
@@ -943,8 +952,9 @@ const updateEntry = async (
       'DELETE FROM entry_diagnoses WHERE entry_id = $1',
       [entryId]
     );
-    if (updateData.diagnosisCodes) {
-      for (const code of updateData.diagnosisCodes) {
+
+    if (entryData.diagnosisCodes) {
+      for (const code of entryData.diagnosisCodes) {
         await client.query(
           'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2)',
           [entryId, code]
@@ -952,44 +962,39 @@ const updateEntry = async (
       }
     }
 
-    if (updateData.type === 'HealthCheck') {
+    // Update type-specific fields
+    if (entryData.type === 'HealthCheck') {
       await client.query(
-        `
-        UPDATE healthcheck_entries
-        SET health_check_rating = $1
-        WHERE entry_id = $2
-      `,
-        [updateData.healthCheckRating, entryId]
+        `UPDATE healthcheck_entries
+         SET health_check_rating = $1
+         WHERE entry_id = $2`,
+        [entryData.healthCheckRating, entryId]
       );
-    } else if (updateData.type === 'Hospital') {
+    } else if (entryData.type === 'Hospital') {
       await client.query(
-        `
-        UPDATE hospital_entries
-        SET
-          discharge_date = $1,
-          discharge_criteria = $2
-        WHERE entry_id = $3
-      `,
+        `UPDATE hospital_entries
+         SET
+           discharge_date = $1,
+           discharge_criteria = $2
+         WHERE entry_id = $3`,
         [
-          updateData.discharge.date,
-          updateData.discharge.criteria,
+          entryData.discharge.date,
+          entryData.discharge.criteria,
           entryId,
         ]
       );
-    } else if (updateData.type === 'OccupationalHealthcare') {
+    } else if (entryData.type === 'OccupationalHealthcare') {
       await client.query(
-        `
-        UPDATE occupational_healthcare_entries
-        SET
-          employer_name = $1,
-          sick_leave_start_date = $2,
-          sick_leave_end_date = $3
-        WHERE entry_id = $4
-      `,
+        `UPDATE occupational_healthcare_entries
+         SET
+           employer_name = $1,
+           sick_leave_start_date = $2,
+           sick_leave_end_date = $3
+         WHERE entry_id = $4`,
         [
-          updateData.employerName,
-          updateData.sickLeave?.startDate,
-          updateData.sickLeave?.endDate,
+          entryData.employerName,
+          entryData.sickLeave?.startDate,
+          entryData.sickLeave?.endDate,
           entryId,
         ]
       );
@@ -1000,14 +1005,7 @@ const updateEntry = async (
       'REFRESH MATERIALIZED VIEW patient_health_ratings'
     );
 
-    const updatedEntry = {
-      ...updateData,
-      id: entryId,
-      createdAt: existingEntry.created_at,
-      updatedAt: new Date().toISOString(),
-    } as Entry;
-
-    return updatedEntry;
+    return await getEntryById(entryId);
   } catch (error) {
     await client.query('ROLLBACK');
     if (
@@ -1019,7 +1017,7 @@ const updateEntry = async (
     throw new DatabaseError(
       `Failed to update entry: ${
         error instanceof Error ? error.message : 'Unknown error'
-      }. Check database constraints, connection, and ensure all referenced data exists.`,
+      }`,
       error
     );
   } finally {
@@ -1115,9 +1113,21 @@ const deleteEntry = async (
 ): Promise<void> => {
   logger.info(`Deleting entry ${entryId} for patient ${patientId}`);
 
+  // Get entry data for versioning
+  const entry = await getEntryById(entryId);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Create version snapshot before deletion
+    await EntryVersionService.createVersion(
+      entryId,
+      'system', // or pass actual editorId if available
+      'Entry deleted',
+      entry,
+      'DELETE'
+    );
 
     const patientCheck = await client.query(
       'SELECT id FROM patients WHERE id = $1',
@@ -1215,7 +1225,7 @@ const getPatientsSortedByHealthRating = async (): Promise<
     return result.rows.map((row) => ({
       id: row.id,
       name: row.name,
-      dateOfBirth: formatToISODate(row.date_of_birth),
+      dateOfBirth: normalizeEntryDate(row.date_of_birth),
       gender: row.gender as Gender,
       occupation: row.occupation,
       ssn: '',
@@ -1342,7 +1352,7 @@ const getFilteredAndPaginatedPatients = async (
       }) => ({
         id: row.id,
         name: row.name,
-        dateOfBirth: formatToISODate(row.date_of_birth),
+        dateOfBirth: normalizeEntryDate(row.date_of_birth),
         gender: row.gender,
         occupation: row.occupation,
         healthRating:
@@ -1367,6 +1377,283 @@ const getFilteredAndPaginatedPatients = async (
   }
 };
 
+const getEntryById = async (entryId: string): Promise<AnyEntry> => {
+  try {
+    const entryResult = await pool.query(
+      `SELECT * FROM entries WHERE id = $1`,
+      [entryId]
+    );
+
+    if (entryResult.rowCount === 0) {
+      throw new NotFoundError('Entry', entryId);
+    }
+
+    const entry = entryResult.rows[0];
+    let fullEntry: AnyEntry;
+
+    if (entry.type === 'HealthCheck') {
+      const healthCheckResult = await pool.query(
+        `SELECT * FROM healthcheck_entries WHERE entry_id = $1`,
+        [entryId]
+      );
+      fullEntry = {
+        ...entry,
+        healthCheckRating:
+          healthCheckResult.rows[0]?.health_check_rating,
+      } as HealthCheckEntry;
+    } else if (entry.type === 'Hospital') {
+      const hospitalResult = await pool.query(
+        `SELECT * FROM hospital_entries WHERE entry_id = $1`,
+        [entryId]
+      );
+      fullEntry = {
+        ...entry,
+        discharge: {
+          date: hospitalResult.rows[0]?.discharge_date,
+          criteria: hospitalResult.rows[0]?.discharge_criteria,
+        },
+      } as HospitalEntry;
+    } else {
+      const occupationalResult = await pool.query(
+        `SELECT * FROM occupational_healthcare_entries WHERE entry_id = $1`,
+        [entryId]
+      );
+      fullEntry = {
+        ...entry,
+        employerName: occupationalResult.rows[0]?.employer_name,
+        sickLeave:
+          occupationalResult.rows[0]?.sick_leave_start_date &&
+          occupationalResult.rows[0]?.sick_leave_end_date
+            ? {
+                startDate:
+                  occupationalResult.rows[0]?.sick_leave_start_date,
+                endDate:
+                  occupationalResult.rows[0]?.sick_leave_end_date,
+              }
+            : undefined,
+      } as OccupationalHealthcareEntry;
+    }
+
+    // Get diagnosis codes
+    const codesResult = await pool.query(
+      `SELECT diagnosis_code FROM entry_diagnoses WHERE entry_id = $1`,
+      [entryId]
+    );
+    fullEntry.diagnosisCodes = codesResult.rows.map(
+      (row) => row.diagnosis_code
+    );
+
+    return fullEntry;
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+    throw new DatabaseError('Failed to fetch entry by ID', error);
+  }
+};
+
+const getEntryVersions = async (
+  entryId: string
+): Promise<EntryVersion[]> => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM entry_versions WHERE entry_id = $1 ORDER BY created_at DESC`,
+      [entryId]
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      entryId: row.entry_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      editorId: row.editor_id,
+      changeReason: row.change_reason,
+      entryData: row.entry_data,
+    }));
+  } catch (error) {
+    throw new DatabaseError('Failed to fetch entry versions', error);
+  }
+};
+
+const restoreEntryVersion = async (
+  versionId: string,
+  editorId: string,
+  lastUpdated?: string
+): Promise<AnyEntry> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Get the version to restore with entry data validation
+    const versionResult = await client.query(
+      `SELECT * FROM entry_versions WHERE id = $1`,
+      [versionId]
+    );
+
+    if (lastUpdated) {
+      const entryId = versionResult.rows[0]?.entry_id;
+      if (entryId) {
+        const isStale = await EntryVersionService.checkConcurrency(
+          entryId,
+          lastUpdated
+        );
+        if (isStale) {
+          throw new ConcurrencyError(
+            'Entry has been modified since last retrieval',
+            { entryId, lastUpdated }
+          );
+        }
+      }
+    }
+
+    if (versionResult.rowCount === 0) {
+      throw new NotFoundError('Entry version', versionId);
+    }
+
+    const version = versionResult.rows[0];
+    const entryId = version.entry_id;
+
+    // Verify entry exists and matches version
+    const currentEntryResult = await client.query(
+      `SELECT * FROM entries WHERE id = $1`,
+      [entryId]
+    );
+
+    if (currentEntryResult.rowCount === 0) {
+      throw new NotFoundError('Entry', entryId);
+    }
+
+    const currentEntry = currentEntryResult.rows[0];
+
+    // Create version snapshot of current state using EntryVersionService
+    await EntryVersionService.createVersion(
+      entryId,
+      editorId,
+      'Version restored from snapshot'
+    );
+
+    // Restore the version
+    await client.query(
+      `UPDATE entries SET
+        description = $1,
+        date = $2,
+        specialist = $3,
+        updated_at = $4
+      WHERE id = $5`,
+      [
+        version.entry_data.description,
+        version.entry_data.date,
+        version.entry_data.specialist,
+        new Date().toISOString(),
+        entryId,
+      ]
+    );
+
+    // Handle type-specific fields
+    if (version.entry_data.type === 'HealthCheck') {
+      await client.query(
+        `UPDATE healthcheck_entries SET
+          health_check_rating = $1
+        WHERE entry_id = $2`,
+        [version.entry_data.healthCheckRating, entryId]
+      );
+    } else if (version.entry_data.type === 'Hospital') {
+      await client.query(
+        `UPDATE hospital_entries SET
+          discharge_date = $1,
+          discharge_criteria = $2
+        WHERE entry_id = $3`,
+        [
+          version.entry_data.discharge.date,
+          version.entry_data.discharge.criteria,
+          entryId,
+        ]
+      );
+    } else if (version.entry_data.type === 'OccupationalHealthcare') {
+      await client.query(
+        `UPDATE occupational_healthcare_entries SET
+          employer_name = $1,
+          sick_leave_start_date = $2,
+          sick_leave_end_date = $3
+        WHERE entry_id = $4`,
+        [
+          version.entry_data.employerName,
+          version.entry_data.sickLeave?.startDate,
+          version.entry_data.sickLeave?.endDate,
+          entryId,
+        ]
+      );
+    }
+
+    // Restore diagnosis codes
+    await client.query(
+      'DELETE FROM entry_diagnoses WHERE entry_id = $1',
+      [entryId]
+    );
+
+    if (version.entry_data.diagnosisCodes?.length > 0) {
+      for (const code of version.entry_data.diagnosisCodes) {
+        await client.query(
+          'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2)',
+          [entryId, code]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    await pool.query(
+      'REFRESH MATERIALIZED VIEW patient_health_ratings'
+    );
+
+    return {
+      ...version.entry_data,
+      id: entryId,
+      createdAt: currentEntry.created_at,
+      updatedAt: new Date().toISOString(),
+      diagnosisCodes: version.entry_data.diagnosisCodes || [],
+    } as AnyEntry;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+    throw new DatabaseError('Failed to restore entry version', error);
+  } finally {
+    client.release();
+  }
+};
+
+const getEntryVersion = async (
+  versionId: string
+): Promise<EntryVersion> => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM entry_versions WHERE id = $1`,
+      [versionId]
+    );
+
+    if (result.rowCount === 0) {
+      throw new NotFoundError('Entry version', versionId);
+    }
+
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      entryId: row.entry_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      editorId: row.editor_id,
+      changeReason: row.change_reason,
+      entryData: row.entry_data,
+    };
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+    throw new DatabaseError('Failed to fetch entry version', error);
+  }
+};
+
 export const patientService = {
   getPatientEntries,
   getNonSensitiveEntries,
@@ -1384,4 +1671,8 @@ export const patientService = {
   deleteEntry,
   getPatientsSortedByHealthRating,
   getFilteredAndPaginatedPatients,
+  getEntryVersions,
+  getEntryVersion,
+  restoreEntryVersion,
+  getEntryById
 };

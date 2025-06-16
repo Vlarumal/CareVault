@@ -11,8 +11,9 @@ export const errorHandler: ErrorRequestHandler = (
   res: Response,
   _next: NextFunction
 ) => {
-  // Handle custom error types
   if (err instanceof ValidationError) {
+    console.error('Validation error:', err.message);
+    console.error('Validation details:', JSON.stringify(err.details, null, 2));
     res.status(err.status).json({
       error: err.message,
       details: err.details
@@ -57,8 +58,13 @@ export const errorHandler: ErrorRequestHandler = (
     return;
   }
   
-  console.error('Unexpected error:', err);
-  console.error('Error stack:', err.stack);
+  console.error(`[${new Date().toISOString()}] Unexpected error: ${err.message}`);
+  console.error(`Request: ${_req.method} ${_req.originalUrl}`);
+  console.error('Headers:', JSON.stringify(_req.headers, null, 2));
+  if (_req.body && Object.keys(_req.body).length > 0) {
+      console.error('Body:', JSON.stringify(_req.body, null, 2));
+  }
+  console.error('Stack:', err.stack);
   const serverError = new InternalServerError();
   res.status(serverError.status).json({ error: serverError.message });
 };

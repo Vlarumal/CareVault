@@ -1,9 +1,11 @@
 import { OccupationalHealthcareEntry } from '../../types';
 import { getIcon, renderDiagnosisCodes } from '../../utils';
+import { Button } from '@mui/material';
 
 const OccupationalHealthcareEntryComponent: React.FC<{
   entry: OccupationalHealthcareEntry;
-}> = ({ entry }) => {
+  onEditEntry: (entry: OccupationalHealthcareEntry) => void;
+}> = ({ entry, onEditEntry }) => {
   return (
     <section key={entry.id}>
       <div>
@@ -20,6 +22,17 @@ const OccupationalHealthcareEntryComponent: React.FC<{
         </div>
       )}
       {renderDiagnosisCodes(entry.diagnosisCodes)}
+      <Button
+        variant="outlined"
+        color="secondary"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEditEntry(entry);
+        }}
+        sx={{ mt: 1 }}
+      >
+        Edit
+      </Button>
     </section>
   );
 };

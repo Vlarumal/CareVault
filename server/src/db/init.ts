@@ -6,6 +6,7 @@ async function initDatabase() {
     // Run migration
     await migrate();
     console.log('Database initialized successfully');
+    console.log('Entry versioning system initialized with application-layer checksums');
   } catch (error) {
     const err = error as { code?: string };
     if (err.code === '28P01') {

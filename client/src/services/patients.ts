@@ -111,6 +111,21 @@ const updatePatient = async (
   );
 };
 
+const updateEntry = async (
+  patientId: string,
+  entryId: string,
+  values: NewEntryFormValues & { lastUpdated?: string; changeReason?: string }
+) => {
+  return apiRetry(() =>
+    axios
+      .put<Entry>(
+        `${apiBaseUrl}/patients/${patientId}/entries/${entryId}`,
+        values
+      )
+      .then((res) => res.data)
+  );
+};
+
 export default {
   getAll,
   create,
@@ -118,4 +133,5 @@ export default {
   getById,
   getEntriesByPatientId,
   updatePatient,
+  updateEntry,
 };

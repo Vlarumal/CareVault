@@ -15,9 +15,15 @@ export type {
   OccupationalHealthcareEntry,
   HospitalEntry,
   Entry,
+  VersionedEntry,
+  AnyEntry,
   UnionOmit,
   NewEntryWithoutId,
 } from '@shared/src/types/medicalTypes';
+
+export type PatientEntry = medicalTypes.Patient & {
+  entries: medicalTypes.AnyEntry[];
+};
 
 export interface NewEntryFormValues {
   type: 'HealthCheck' | 'Hospital' | 'OccupationalHealthcare';
@@ -35,4 +41,8 @@ export interface NewEntryFormValues {
     startDate: string;
     endDate: string;
   };
+  lastUpdated?: string;
+  changeReason?: string;
 }
+
+export type { EntryVersion, VersionDiff } from '@shared/src/types/medicalTypes';

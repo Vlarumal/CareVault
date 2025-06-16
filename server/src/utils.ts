@@ -57,3 +57,10 @@ const toNewPatientEntry = (object: unknown): NewPatientEntry => {
 };
 
 export default toNewPatientEntry;
+
+export function normalizeEntryDate(entry: any) {
+  if (entry.date && typeof entry.date === 'string' && entry.date.length > 10) {
+    entry.date = entry.date.substring(0, 10);
+  }
+  return entry;
+}

@@ -9,15 +9,17 @@ const safeStringSchema = (fieldName: string) =>
   z.string().min(1, `${fieldName} is required`)
     .regex(/^[^;'"\\]*$/, `${fieldName} contains invalid characters`);
 
-// Base schema for all entries
 const BaseEntrySchema = z.object({
   description: safeStringSchema('Description'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format: YYYY-MM-DD'),
   specialist: safeStringSchema('Specialist name'),
-  diagnosisCodes: z.array(z.string()).optional(),
+  diagnosisCodes: z.array(
+    z.string().regex(/^[a-z0-9\.]{3,}$/i, {
+      message: 'Diagnosis codes must be alphanumeric with optional dots and at least 3 characters'
+    })
+  ).optional(),
 });
 
-// HealthCheck entry schema
 const HealthCheckEntrySchema = BaseEntrySchema.extend({
   type: z.literal('HealthCheck'),
   healthCheckRating: z.nativeEnum(HealthCheckRating, {
@@ -26,7 +28,6 @@ const HealthCheckEntrySchema = BaseEntrySchema.extend({
   }),
 });
 
-// Hospital entry schema
 const HospitalEntrySchema = BaseEntrySchema.extend({
   type: z.literal('Hospital'),
   discharge: z.object({
@@ -35,7 +36,6 @@ const HospitalEntrySchema = BaseEntrySchema.extend({
   }),
 });
 
-// OccupationalHealthcare entry schema
 const OccupationalHealthcareEntrySchema = BaseEntrySchema.extend({
   type: z.literal('OccupationalHealthcare'),
   employerName: safeStringSchema('Employer name'),
@@ -45,14 +45,12 @@ const OccupationalHealthcareEntrySchema = BaseEntrySchema.extend({
   }).optional(),
 });
 
-// Union schema for all entry types
 export const EntrySchema = z.union([
   HealthCheckEntrySchema,
   HospitalEntrySchema,
   OccupationalHealthcareEntrySchema,
 ]);
 
-// Patient schemas
 export const PatientEntrySchema = z.object({
   name: safeStringSchema('Name'),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format: YYYY-MM-DD'),
@@ -73,7 +71,6 @@ export const NonSensitivePatientEntrySchema = PatientEntrySchema.omit({
 export const validate = (schema: z.ZodSchema) =>
   (req: Request, _res: Response, next: NextFunction) => {
     try {
-      // Sanitize input before validation
       if (req.body) {
         req.body = sanitizeObject(req.body);
       }
@@ -87,3 +84,25 @@ export const validate = (schema: z.ZodSchema) =>
       next(error);
     }
   };
+
+export function validateDiagnosisCodes(codes?: string[]) {
+  if (!codes || codes.length === 0) return;
+  
+  const cleanedCodes = codes
+    .filter(code => code !== null)
+    .map(code => code.trim())
+    .filter(code => code !== '');
+  
+  if (cleanedCodes.length === 0) return;
+  
+  const invalidCodes = cleanedCodes.filter(
+    code => !/^[a-z0-9\.]{3,}$/i.test(code)
+  );
+  
+  if (invalidCodes.length > 0) {
+    throw new BadRequestError(
+      `Invalid diagnosis code format: ${invalidCodes.join(', ')}`,
+      { invalidCodes }
+    );
+  }
+}

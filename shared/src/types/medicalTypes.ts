@@ -84,6 +84,49 @@ export type Entry =
   | OccupationalHealthcareEntry
   | HealthCheckEntry;
 
+export interface EntryVersion {
+  id: string;
+  createdAt?: string;
+  updatedAt?: string;
+  editorId: string;
+  changeReason?: string;
+  entryId: string;
+  entryData?: Entry; // Add for server-side use
+}
+
+export type VersionDiff = {
+  [key: string]: {
+    oldValue: unknown;
+    newValue: unknown;
+  };
+};
+
+export type VersionedEntry<T extends Entry = Entry> = T & {
+  versionId: string;
+  versions: EntryVersion[];
+};
+
+export type AnyEntry =
+  | HealthCheckEntry
+  | OccupationalHealthcareEntry
+  | HospitalEntry
+  | VersionedEntry<HealthCheckEntry>
+  | VersionedEntry<OccupationalHealthcareEntry>
+  | VersionedEntry<HospitalEntry>;
+
+
+export function isVersionedEntry(entry: AnyEntry): entry is VersionedEntry {
+  return 'versions' in entry && 'versionId' in entry;
+}
+
+export function getBaseEntry(entry: AnyEntry): Entry {
+  if (isVersionedEntry(entry)) {
+    const { versions, versionId, ...baseEntry } = entry;
+    return baseEntry;
+  }
+  return entry;
+}
+
 export type UnionOmit<T, K extends string | number | symbol> = T extends unknown
   ? Omit<T, K>
   : never;

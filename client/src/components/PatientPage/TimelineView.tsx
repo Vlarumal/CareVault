@@ -16,13 +16,19 @@ import EntryErrorBoundary from './EntryErrorBoundary';
 interface TimelineViewProps {
   entries: Entry[];
   getDiagnosisByCode: (code: string) => string;
+  onEntryClick?: (entryId: string) => void;
+  onEditEntry?: (entry: Entry) => void;
 }
 
-const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode }) => {
+const TimelineView: React.FC<TimelineViewProps> = ({
+  entries,
+  getDiagnosisByCode,
+  onEntryClick,
+  onEditEntry
+}) => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
   
-  // Sort entries by date (newest first)
   const sortedEntries = [...entries].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
@@ -40,7 +46,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
     }
   };
 
-  // New breakpoint for timeline items
   const isXSmallScreen = useMediaQuery(theme.breakpoints.down('xs'));
   
   return (
@@ -70,8 +75,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
                 backgroundColor: theme.palette.action.hover,
                 transform: 'scale(1.02)',
                 transition: 'all 0.3s ease',
+                cursor: 'pointer'
               }
             }}
+            onClick={() => onEntryClick?.(entry.id)}
           >
             <TimelineOppositeContent
               color="text.secondary"
@@ -106,7 +113,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({ entries, getDiagnosisByCode
               }}
             >
               <EntryErrorBoundary entry={entry}>
-                <EntryDetails entry={entry} />
+                <EntryDetails
+                  entry={entry}
+                  onEditEntry={() => onEditEntry?.(entry)}
+                />
                 {entry.diagnosisCodes && entry.diagnosisCodes.length > 0 && (
                   <div style={{ marginTop: '8px' }}>
                     <strong>Diagnoses:</strong>

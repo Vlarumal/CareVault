@@ -2,9 +2,10 @@ import pool from './connection';
 import { v1 as uuid } from 'uuid';
 import patientsData from '../data/patients-full';
 import diagnosesData from '../data/diagnoses';
-import { readFile, readdir } from 'fs/promises';
+import { readFile, readdir, stat } from 'fs/promises';
 import path from 'path';
 import logger from '../src/utils/logger';
+import format from 'pg-format';
 
 async function migrate() {
   const client = await pool.connect();
@@ -78,88 +79,295 @@ async function migrate() {
       );
     `);
 
-    for (const diagnosis of diagnosesData) {
-      await client.query(
-        'INSERT INTO diagnoses (code, name, latin, unique_code) VALUES ($1, $2, $3, $4) ON CONFLICT (code) DO NOTHING',
-        [diagnosis.code, diagnosis.name, diagnosis.latin, true]
-      );
+    if (diagnosesData.length > 0) {
+      const values = diagnosesData.map(d => [
+        d.code,
+        d.name,
+        d.latin || null,
+        true
+      ]);
+      
+      try {
+        await client.query(
+          format(
+            `INSERT INTO diagnoses (code, name, latin, unique_code) VALUES %L ON CONFLICT (code) DO NOTHING`,
+            values
+          )
+        );
+        logger.info(`Inserted ${diagnosesData.length} diagnoses`, {
+          table: 'diagnoses',
+          count: diagnosesData.length
+        });
+      } catch (error) {
+        logger.error('Failed to insert diagnoses', {
+          error,
+          values: values.slice(0, 5),
+          count: values.length
+        });
+        throw error;
+      }
     }
 
-    // Migrate patients and entries
-    for (const patient of patientsData) {
-      // Insert patient (ignore duplicates)
-      const patientId = patient.id || uuid();
+    const patientValues = patientsData.map(p => {
+      const id = p.id || uuid();
+      let dateOfBirth = null;
+      if (p.dateOfBirth) {
+        try {
+          dateOfBirth = new Date(p.dateOfBirth).toISOString();
+        } catch (error) {
+          logger.warn('Invalid date format for patient', {
+            patientId: id,
+            dateOfBirth: p.dateOfBirth
+          });
+        }
+      }
+      
+      return [
+        id,
+        p.name,
+        p.occupation,
+        p.gender,
+        p.ssn || null,
+        dateOfBirth
+      ];
+    });
+    
+    try {
       await client.query(
-        'INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING',
-        [
-          patientId,
-          patient.name,
-          patient.occupation,
-          patient.gender,
-          patient.ssn,
-          patient.dateOfBirth,
-        ]
+        format(
+          `INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth)
+           VALUES %L ON CONFLICT (id) DO NOTHING`,
+          patientValues
+        )
       );
+      logger.info(`Inserted ${patientsData.length} patients`, {
+        table: 'patients',
+        count: patientsData.length
+      });
+    } catch (error) {
+      logger.error('Failed to insert patients', {
+        error,
+        samplePatient: patientValues[0],
+        count: patientValues.length
+      });
+      throw error;
+    }
 
-      if (patient.entries) {
-        for (const entry of patient.entries) {
-          // Insert base entry (ignore duplicates)
+    const entryValues: any[][] = [];
+    const entryDiagnosisValues: any[][] = [];
+    const healthCheckValues: any[][] = [];
+    const hospitalValues: any[][] = [];
+    const occupationalValues: any[][] = [];
+
+    for (const patient of patientsData) {
+      if (!patient.entries) continue;
+      
+      for (const entry of patient.entries) {
+        try {
           const entryId = entry.id || uuid();
-          await client.query(
-            'INSERT INTO entries (id, patient_id, description, date, specialist, type) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING',
-            [
+          const patientId = patient.id || uuid();
+          
+          let entryDate;
+          try {
+            entryDate = new Date(entry.date).toISOString();
+          } catch (error) {
+            logger.warn('Invalid entry date format', {
               entryId,
               patientId,
-              entry.description,
-              entry.date,
-              entry.specialist,
-              entry.type,
-            ]
-          );
+              date: entry.date
+            });
+            throw new Error(`Invalid date format for entry ${entryId}`);
+          }
 
-          // Insert entry-diagnosis relationships
+          entryValues.push([
+            entryId,
+            patientId,
+            entry.description,
+            entryDate,
+            entry.specialist,
+            entry.type
+          ]);
+
           if (entry.diagnosisCodes) {
-            for (const code of entry.diagnosisCodes) {
-              await client.query(
-                'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-                [entryId, code]
-              );
-            }
+            entry.diagnosisCodes.forEach(code => {
+              entryDiagnosisValues.push([entryId, code]);
+            });
           }
 
-          // Insert type-specific data
           if (entry.type === 'HealthCheck') {
-            await client.query(
-              'INSERT INTO healthcheck_entries (entry_id, health_check_rating) VALUES ($1, $2) ON CONFLICT (entry_id) DO NOTHING',
-              [entryId, entry.healthCheckRating]
-            );
+            healthCheckValues.push([entryId, entry.healthCheckRating]);
           } else if (entry.type === 'Hospital') {
-            await client.query(
-              'INSERT INTO hospital_entries (entry_id, discharge_date, discharge_criteria) VALUES ($1, $2, $3) ON CONFLICT (entry_id) DO NOTHING',
-              [
+            let dischargeDate;
+            try {
+              dischargeDate = new Date(entry.discharge.date).toISOString();
+            } catch (error) {
+              logger.warn('Invalid discharge date format', {
                 entryId,
-                entry.discharge.date,
-                entry.discharge.criteria,
-              ]
-            );
+                date: entry.discharge.date
+              });
+              throw error;
+            }
+            hospitalValues.push([
+              entryId,
+              dischargeDate,
+              entry.discharge.criteria
+            ]);
           } else if (entry.type === 'OccupationalHealthcare') {
-            await client.query(
-              'INSERT INTO occupational_healthcare_entries (entry_id, employer_name, sick_leave_start_date, sick_leave_end_date) VALUES ($1, $2, $3, $4) ON CONFLICT (entry_id) DO NOTHING',
-              [
-                entryId,
-                entry.employerName,
-                entry.sickLeave?.startDate,
-                entry.sickLeave?.endDate,
-              ]
-            );
+            let sickLeaveStart = null;
+            let sickLeaveEnd = null;
+            
+            if (entry.sickLeave) {
+              try {
+                sickLeaveStart = new Date(entry.sickLeave.startDate).toISOString();
+                sickLeaveEnd = new Date(entry.sickLeave.endDate).toISOString();
+              } catch (error) {
+                logger.warn('Invalid sick leave date format', {
+                  entryId,
+                  dates: entry.sickLeave
+                });
+              }
+            }
+            
+            occupationalValues.push([
+              entryId,
+              entry.employerName,
+              sickLeaveStart,
+              sickLeaveEnd
+            ]);
           }
+        } catch (error) {
+          logger.error(`Failed to process entry for patient ${patient.id}:`, {
+            error: error instanceof Error ? error.message : String(error),
+            patientId: patient.id,
+            entryId: entry.id,
+            stack: error instanceof Error ? error.stack : undefined
+          });
+          throw error;
         }
       }
     }
 
+    if (entryValues.length > 0) {
+      try {
+        await client.query(
+          format(
+            `INSERT INTO entries (id, patient_id, description, date, specialist, type)
+             VALUES %L ON CONFLICT (id) DO NOTHING`,
+            entryValues
+          )
+        );
+        logger.info(`Inserted ${entryValues.length} entries`, {
+          table: 'entries',
+          count: entryValues.length
+        });
+      } catch (error) {
+        logger.error('Failed to insert entries', {
+          error,
+          sampleEntry: entryValues[0],
+          count: entryValues.length
+        });
+        throw error;
+      }
+    }
+
+    if (entryDiagnosisValues.length > 0) {
+      try {
+        await client.query(
+          format(
+            `INSERT INTO entry_diagnoses (entry_id, diagnosis_code)
+             VALUES %L ON CONFLICT DO NOTHING`,
+            entryDiagnosisValues
+          )
+        );
+        logger.info(`Inserted ${entryDiagnosisValues.length} entry-diagnosis relationships`, {
+          table: 'entry_diagnoses',
+          count: entryDiagnosisValues.length
+        });
+      } catch (error) {
+        logger.error('Failed to insert entry-diagnosis relationships', {
+          error,
+          sampleRelationship: entryDiagnosisValues[0],
+          count: entryDiagnosisValues.length
+        });
+        throw error;
+      }
+    }
+
+    if (healthCheckValues.length > 0) {
+      try {
+        await client.query(
+          format(
+            `INSERT INTO healthcheck_entries (entry_id, health_check_rating)
+             VALUES %L ON CONFLICT (entry_id) DO NOTHING`,
+            healthCheckValues
+          )
+        );
+        logger.info(`Inserted ${healthCheckValues.length} health check entries`, {
+          table: 'healthcheck_entries',
+          count: healthCheckValues.length
+        });
+      } catch (error) {
+        logger.error('Failed to insert health check entries', {
+          error,
+          sampleEntry: healthCheckValues[0],
+          count: healthCheckValues.length
+        });
+        throw error;
+      }
+    }
+
+    if (hospitalValues.length > 0) {
+      try {
+        await client.query(
+          format(
+            `INSERT INTO hospital_entries (entry_id, discharge_date, discharge_criteria)
+             VALUES %L ON CONFLICT (entry_id) DO NOTHING`,
+            hospitalValues
+          )
+        );
+        logger.info(`Inserted ${hospitalValues.length} hospital entries`, {
+          table: 'hospital_entries',
+          count: hospitalValues.length
+        });
+      } catch (error) {
+        logger.error('Failed to insert hospital entries', {
+          error,
+          sampleEntry: hospitalValues[0],
+          count: hospitalValues.length
+        });
+        throw error;
+      }
+    }
+
+    if (occupationalValues.length > 0) {
+      try {
+        await client.query(
+          format(
+            `INSERT INTO occupational_healthcare_entries
+             (entry_id, employer_name, sick_leave_start_date, sick_leave_end_date)
+             VALUES %L ON CONFLICT (entry_id) DO NOTHING`,
+            occupationalValues
+          )
+        );
+        logger.info(`Inserted ${occupationalValues.length} occupational healthcare entries`, {
+          table: 'occupational_healthcare_entries',
+          count: occupationalValues.length
+        });
+      } catch (error) {
+        logger.error('Failed to insert occupational healthcare entries', {
+          error,
+          sampleEntry: occupationalValues[0],
+          count: occupationalValues.length
+        });
+        throw error;
+      }
+    }
+
+    // await runAdditionalMigrations();
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
+    logger.error('Migration failed:', error);
     throw error;
   } finally {
     client.release();
@@ -173,23 +381,53 @@ async function runAdditionalMigrations() {
   try {
     await client.query('BEGIN');
 
+    const migrationsDir = path.join(__dirname, 'migrations');
+    
+    try {
+      await stat(migrationsDir);
+    } catch (error) {
+      logger.info('No migrations directory found, skipping additional migrations');
+      return;
+    }
+
     const migrationFiles = (
-      await readdir(path.join(__dirname, 'migrations'))
+      await readdir(migrationsDir)
     )
       .filter((file) => file.endsWith('.sql'))
       .sort();
 
     // Run each migration in order
     for (const file of migrationFiles) {
-      const migrationPath = path.join(__dirname, 'migrations', file);
-      const migrationSql = await readFile(migrationPath, 'utf8');
-      await client.query(migrationSql);
-      logger.info(`Executed migration: ${file}`);
+      const migrationPath = path.join(migrationsDir, file);
+      let migrationSql = '';
+      
+      try {
+        migrationSql = await readFile(migrationPath, 'utf8');
+      } catch (readError) {
+        logger.error(`Failed to read migration file ${file}:`, {
+          error: readError,
+          migrationFile: file
+        });
+        throw new Error(`Failed to read migration file ${file}: ${readError instanceof Error ? readError.message : String(readError)}`);
+      }
+
+      try {
+        await client.query(migrationSql);
+        logger.info(`Executed migration: ${file}`);
+      } catch (queryError) {
+        logger.error(`Failed to execute migration ${file}:`, {
+          error: queryError,
+          migrationFile: file,
+          sql: migrationSql
+        });
+        throw new Error(`Migration failed for file ${file}: ${queryError instanceof Error ? queryError.message : String(queryError)}`);
+      }
     }
 
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
+    logger.error('Additional migrations transaction failed:', error);
     throw error;
   } finally {
     client.release();
