@@ -1,17 +1,22 @@
+interface ErrorDetails {
+  [key: string]: string | number | boolean | object | undefined;
+  status?: number;
+}
+
 export class ValidationError extends Error {
   status: number;
-  details: object;
+  details: ErrorDetails;
 
-  constructor(message: string, details: object) {
+  constructor(message: string, details: ErrorDetails = {}) {
     super(message);
     this.name = 'ValidationError';
-    this.status = 400;
+    this.status = details.status || 400;
     this.details = details;
   }
 }
 
 export class BadRequestError extends ValidationError {
-  constructor(message: string, details: object) {
+  constructor(message: string, details: ErrorDetails = {}) {
     super(message, details);
     this.name = 'BadRequestError';
   }
@@ -70,5 +75,25 @@ export class ConflictError extends Error {
     this.name = 'ConflictError';
     this.status = 409;
     this.details = details;
+  }
+}
+
+export class UnauthorizedError extends Error {
+  status: number;
+
+  constructor(public code: string, message?: string) {
+    super(message || 'Unauthorized');
+    this.name = 'UnauthorizedError';
+    this.status = 401;
+  }
+}
+
+export class ForbiddenError extends Error {
+  status: number;
+
+  constructor(public code: string, message?: string) {
+    super(message || 'Forbidden');
+    this.name = 'ForbiddenError';
+    this.status = 403;
   }
 }

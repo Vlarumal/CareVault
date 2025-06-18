@@ -9,9 +9,12 @@ services:
       # - NODE_ENV=development
       # - NODE_ENV=test
       - DEBUG=backend_carevault:*
-
       - PORT=3001
       - NODE_PATH=/usr/src/shared
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your_jwt_secret_here
+      - JWT_EXPIRES_IN=3600
+      - REFRESH_TOKEN_EXPIRES_IN=604800
       
     volumes:
       - ./server:/usr/src/app
@@ -66,6 +69,15 @@ services:
       - 5434:5432
     restart: always
 
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
 volumes:
   db_data:
   test_db_data:
+  redis_data:

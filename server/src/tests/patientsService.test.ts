@@ -3,7 +3,6 @@ import pool from '../../db/connection';
 import { clearDatabase, seedDatabase } from './testUtils';
 import { QueryResult } from 'pg';
 import { v1 as uuid } from 'uuid';
-import { DatabaseError } from '../utils/errors';
 
 jest.mock('../services/patientsService', () => {
   const originalModule = jest.requireActual(
@@ -21,6 +20,7 @@ import {
   NewPatientEntryWithoutEntries,
   Gender,
 } from '../types';
+import { NotFoundError } from '../utils/errors';
 
 jest.mock('../../db/connection');
 jest.mock('../utils/queryBuilder');
@@ -265,41 +265,105 @@ describe('PatientService', () => {
   });
 
   describe('deletePatient', () => {
-    it('should delete a patient by ID', async () => {
-      (pool.query as jest.Mock).mockResolvedValueOnce({
-        rows: [{ id: '1' }],
-      } as unknown as QueryResult);
-
-      const result = await patientService.deletePatient('1');
-      expect(result).toEqual({ id: '1' });
-      expect(pool.query).toHaveBeenCalledWith(
-        'DELETE FROM patients WHERE id = $1 RETURNING *',
-        ['1']
-      );
-    });
-
-    it('should return null if patient not found', async () => {
-      (pool.query as jest.Mock).mockResolvedValueOnce({
-        rows: [],
-      } as unknown as QueryResult);
-
-      const result = await patientService.deletePatient('999');
-      expect(result).toBeNull();
-    });
-
-    it('should throw an error when database query fails', async () => {
-      const error = new DatabaseError('Failed to delete patient');
-      (pool.query as jest.Mock).mockRejectedValueOnce(error);
-
+    it('should soft delete a patient and create audit record', async () => {
+      const patientId = 'd2773336-f723-11e9-8f0b-362b9e155667';
+      const deletedBy = 'admin-user-id';
+      const reason = 'Test deletion';
+      
       const mockClient = {
-        query: jest.fn().mockRejectedValue(error),
+        query: jest.fn()
+          .mockResolvedValueOnce({ rowCount: 1 })   // update returns 1 row
+          .mockResolvedValueOnce({}),               // INSERT audit
         release: jest.fn(),
       };
       (pool.connect as jest.Mock).mockResolvedValue(mockClient);
 
-      await expect(patientService.deletePatient('1')).rejects.toThrow(
-        'Failed to delete patient'
+      await patientService.deletePatient(patientId, deletedBy, reason);
+
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE patients'),
+        [patientId, deletedBy]
       );
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO patient_deletion_audit'),
+        [patientId, deletedBy, reason]
+      );
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+    });
+
+    it('should exclude soft-deleted patients from queries', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'active-patient',
+            name: 'Active Patient',
+            date_of_birth: '1990-01-01',
+            gender: 'male',
+            occupation: 'Engineer',
+            health_rating: 90
+          }
+        ]
+      });
+
+      const result = await patientService.getNonSensitiveEntries();
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('active-patient');
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE patients.is_deleted = false')
+      );
+    });
+
+    it('should be idempotent for already deleted patients', async () => {
+      const patientId = 'already-deleted-id';
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce({})                // BEGIN transaction
+          .mockResolvedValueOnce({ rowCount: 0 })   // update returns 0 rows
+          .mockResolvedValueOnce({ rowCount: 1 })   // exists check returns 1 row
+          .mockResolvedValueOnce({}),               // COMMIT transaction
+        release: jest.fn(),
+      };
+      (pool.connect as jest.Mock).mockResolvedValue(mockClient);
+
+      await patientService.deletePatient(patientId, 'user', 'reason');
+      
+      expect(mockClient.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO patient_deletion_audit'),
+        expect.anything()
+      );
+    });
+
+    it('should throw NotFoundError for non-existent patient', async () => {
+      const patientId = 'non-existent-id';
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce({})                // BEGIN transaction
+          .mockResolvedValueOnce({ rowCount: 0 })   // update returns 0 rows
+          .mockResolvedValueOnce({ rowCount: 0 })   // exists check returns 0 rows
+          .mockResolvedValueOnce({}),               // ROLLBACK transaction
+        release: jest.fn(),
+      };
+      (pool.connect as jest.Mock).mockResolvedValue(mockClient);
+
+      await expect(
+        patientService.deletePatient(patientId, 'user', 'reason')
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should handle database errors during deletion', async () => {
+      const error = new Error('Database failure');
+      const mockClient = {
+        query: jest.fn()
+          .mockRejectedValueOnce(error),
+        release: jest.fn(),
+      };
+      (pool.connect as jest.Mock).mockResolvedValue(mockClient);
+
+      await expect(
+        patientService.deletePatient('1', 'user', 'reason')
+      ).rejects.toThrow('Failed to soft delete patient');
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
     });
   });
 
@@ -331,7 +395,7 @@ describe('PatientService', () => {
       expect(queryArgs4[1]).toBeInstanceOf(Array);
       expect(queryArgs4[1].length).toBeGreaterThan(0);
 
-      patientService.deletePatient('1');
+      patientService.deletePatient('1', 'test-user', 'test reason');
       const queryArgs5 = (pool.query as jest.Mock).mock.calls[0];
       expect(queryArgs5[1]).toBeInstanceOf(Array);
       expect(queryArgs5[1].length).toBeGreaterThan(0);

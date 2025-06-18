@@ -3,10 +3,18 @@
  * @module apiUtils
  */
   
-import axios, { AxiosError, AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { QueryClient } from '@tanstack/react-query';
 import DOMPurify from 'dompurify';
 import { apiBaseUrl } from '../constants';
+import { TokenManager } from './tokenUtils';
+
+// Extend AxiosRequestConfig to include _retry flag
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    _retry?: boolean;
+  }
+}
   
 /**
  * Global query client instance for query deduplication
@@ -23,7 +31,7 @@ export const queryClient = new QueryClient({
 /**
  * Axios instance with credentials and base URL configuration
  */
-export const api: AxiosInstance = axios.create({
+const apiInstance = axios.create({
   baseURL: apiBaseUrl,
   withCredentials: true,
   headers: {
@@ -32,20 +40,80 @@ export const api: AxiosInstance = axios.create({
   }
 });
 
-api.interceptors.request.use(config => {
-  console.debug('Sending payload:', config.data);
+apiInstance.interceptors.request.use(config => {
+  const token = TokenManager.getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
-  
-api.interceptors.response.use(
+
+apiInstance.interceptors.response.use(
   response => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+    
+    if (error.response?.status === 401 &&
+        (error.response.data as { code?: string })?.code === 'TOKEN_EXPIRED' &&
+        originalRequest &&
+        !originalRequest._retry) {
+      
+      originalRequest._retry = true;
+      
+      try {
+        const newToken = await TokenManager.refreshAccessToken();
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        }
+        return apiInstance(originalRequest);
+      } catch (refreshError) {
+        TokenManager.clearTokens();
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      }
+    }
+    
+    if (error.response && (error.response.status === 400 || error.response.status >= 500)) {
+      interface ApiErrorResponse {
+        error?: string;
+        userMessage?: string;
+        details?: unknown;
+      }
+      
+      const responseData = error.response.data as ApiErrorResponse;
+      
+      const customError = new Error(
+        responseData.userMessage || responseData.error || 'An error occurred'
+      ) as Error & { isClientError?: boolean; errors?: Record<string, string> };
+      
+      customError.isClientError = (error.response.status === 400);
+      
+      if (responseData.details) {
+        if (typeof responseData.details === 'object' && !Array.isArray(responseData.details)) {
+          const fieldErrors: Record<string, string> = {};
+          Object.entries(responseData.details).forEach(([field, messages]) => {
+            if (Array.isArray(messages)) {
+              fieldErrors[field] = messages.join(', ');
+            } else {
+              fieldErrors[field] = String(messages);
+            }
+          });
+          customError.errors = fieldErrors;
+        }
+      }
+      
+      return Promise.reject(customError);
+    }
+    
     if (error.code === 'ERR_NETWORK') {
       throw new Error('CORS error: Request blocked by browser security policy');
     }
+    
     return Promise.reject(error);
   }
 );
+
+export const api: AxiosInstance = apiInstance;
   
 export const apiRetry = async <T>(
   fn: () => Promise<T>,
@@ -58,10 +126,16 @@ export const apiRetry = async <T>(
     } catch (error) {
       console.error(`API attempt ${attempt} failed:`, error);
   
-      if (error instanceof Error && error.message.includes('CORS error')) {
-        throw new Error(
-          `CORS failure: ${error.message}. Verify backend CORS configuration`
-        );
+      if (error instanceof Error) {
+        if (error.message.includes('CORS error')) {
+          throw new Error(
+            `CORS failure: ${error.message}. Verify backend CORS configuration`
+          );
+        }
+        const clientError = error as { isClientError?: boolean };
+        if (clientError.isClientError) {
+          throw error;
+        }
       }
   
       if (attempt === maxRetries) throw error;

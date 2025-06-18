@@ -381,6 +381,14 @@ async function runAdditionalMigrations() {
   try {
     await client.query('BEGIN');
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     const migrationsDir = path.join(__dirname, 'migrations');
     
     try {
@@ -396,8 +404,19 @@ async function runAdditionalMigrations() {
       .filter((file) => file.endsWith('.sql'))
       .sort();
 
-    // Run each migration in order
+    const appliedMigrationsRes = await client.query(
+      'SELECT name FROM migrations'
+    );
+    const appliedMigrations = new Set(
+      appliedMigrationsRes.rows.map(row => row.name)
+    );
+
     for (const file of migrationFiles) {
+      if (appliedMigrations.has(file)) {
+        logger.info(`Skipping already applied migration: ${file}`);
+        continue;
+      }
+
       const migrationPath = path.join(migrationsDir, file);
       let migrationSql = '';
       
@@ -412,9 +431,18 @@ async function runAdditionalMigrations() {
       }
 
       try {
+        await client.query('BEGIN');
         await client.query(migrationSql);
+        
+        await client.query(
+          'INSERT INTO migrations (name) VALUES ($1)',
+          [file]
+        );
+        await client.query('COMMIT');
+        
         logger.info(`Executed migration: ${file}`);
       } catch (queryError) {
+        await client.query('ROLLBACK');
         logger.error(`Failed to execute migration ${file}:`, {
           error: queryError,
           migrationFile: file,

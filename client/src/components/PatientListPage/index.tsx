@@ -15,6 +15,7 @@ import {
   Avatar,
   Tooltip,
   IconButton,
+  Alert,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -29,12 +30,7 @@ import {
 } from '@tanstack/react-query';
 import { GridFilterModel, GridSortModel } from '@mui/x-data-grid';
 
-import {
-  PatientFormValues,
-  Patient,
-  // HealthCheckEntry,
-  // Entry,
-} from '../../types';
+import { PatientFormValues, Patient } from '../../types';
 import AddPatientModal from '../AddPatientModal';
 import HealthRatingBar from '../HealthRatingBar';
 import patientService, {
@@ -43,6 +39,7 @@ import patientService, {
 import { Link } from 'react-router-dom';
 import { getIcon } from '../../utils';
 import PatientDataGrid from './PatientDataGrid';
+import DeletePatientButton from '../DeletePatientButton';
 import ViewToggle from '../ViewToggle';
 import { getLatestHealthRating } from '../../services/healthRatingService';
 import {
@@ -54,30 +51,35 @@ import { debounce } from '../../utils/debounce';
 const PatientListPage = () => {
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [error, setError] = useState<string>();
+  const [globalError, setGlobalError] = useState<string>();
   const [searchText, setSearchText] = useState<string>('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const refetchPatients = () => setRefreshTrigger((prev) => prev + 1);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSearchCommit = () => {
     const value = inputRef.current?.value || '';
     setSearchText(value);
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const debouncedSearch = useMemo(
-    () => debounce((value: string) => {
-      setSearchText(value);
-      setRefreshTrigger(prev => prev + 1);
-    }, 1000),
+    () =>
+      debounce((value: string) => {
+        setSearchText(value);
+        setRefreshTrigger((prev) => prev + 1);
+      }, 1000),
     []
   );
 
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const value = event.target.value;
     if (!value) {
       debouncedSearch.cancel();
       setSearchText('');
-      setRefreshTrigger(prev => prev + 1);
+      setRefreshTrigger((prev) => prev + 1);
     } else {
       debouncedSearch(value);
     }
@@ -122,7 +124,15 @@ const PatientListPage = () => {
     isLoading,
     error: queryError,
   } = useQuery<PaginatedResponse<Patient[]>, Error>({
-    queryKey: ['patients', page, pageSize, filterModel, sortModel, searchText, refreshTrigger],
+    queryKey: [
+      'patients',
+      page,
+      pageSize,
+      filterModel,
+      sortModel,
+      searchText,
+      refreshTrigger,
+    ],
     queryFn: async () => {
       const response = await patientService.getAll(
         true,
@@ -141,7 +151,6 @@ const PatientListPage = () => {
       if ('metadata' in response) {
         return response as PaginatedResponse<Patient[]>;
       } else {
-        // Convert non-paginated response to paginated format
         return {
           data: response as Patient[],
           metadata: {
@@ -160,8 +169,88 @@ const PatientListPage = () => {
 
   const mutation = useMutation({
     mutationFn: patientService.create,
-    onError: (error: Error) => {
+    onMutate: async (newPatient: PatientFormValues) => {
+      // Cancel any outgoing queries for patients to overwrite optimistic update
+      await queryClient.cancelQueries({
+        queryKey: [
+          'patients',
+          page,
+          pageSize,
+          filterModel,
+          sortModel,
+          searchText,
+          refreshTrigger,
+        ],
+      });
+
+      const previousPatients = queryClient.getQueryData<
+        PaginatedResponse<Patient[]>
+      >([
+        'patients',
+        page,
+        pageSize,
+        filterModel,
+        sortModel,
+        searchText,
+        refreshTrigger,
+      ]);
+
+      const optimisticPatient: Patient = {
+        id: 'optimistic-' + Date.now(),
+        ...newPatient,
+        entries: [],
+        healthRating: null,
+      };
+
+      if (previousPatients) {
+        const newData = {
+          ...previousPatients,
+          data: [optimisticPatient, ...previousPatients.data],
+          metadata: {
+            ...previousPatients.metadata,
+            totalItems: previousPatients.metadata.totalItems + 1,
+          },
+        };
+        queryClient.setQueryData(
+          [
+            'patients',
+            page,
+            pageSize,
+            filterModel,
+            sortModel,
+            searchText,
+            refreshTrigger,
+          ],
+          newData
+        );
+      }
+
+      return { previousPatients };
+    },
+    onError: (error: Error, _, context) => {
+      if (context?.previousPatients) {
+        queryClient.setQueryData(
+          [
+            'patients',
+            page,
+            pageSize,
+            filterModel,
+            sortModel,
+            searchText,
+            refreshTrigger,
+          ],
+          context.previousPatients
+        );
+      }
       setError(error.message);
+      setGlobalError(`Patient creation failed: ${error.message}`);
+    },
+    onSuccess: () => {
+      setPage(0);
+      setModalOpen(false);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
     },
   });
 
@@ -173,119 +262,7 @@ const PatientListPage = () => {
   };
 
   const submitNewPatient = async (values: PatientFormValues) => {
-    // Optimistic update with temporary ID
-    const tempId = `temp-${Date.now()}`;
-    const optimisticPatient: Patient = {
-      ...values,
-      id: tempId,
-      entries: [],
-    };
-
-    // Update cache immediately
-    queryClient.setQueryData(
-      ['patients', page, pageSize],
-      (
-        oldData: Patient[] | PaginatedResponse<Patient[]> | undefined
-      ) => {
-        if (!oldData) {
-          return {
-            data: [optimisticPatient],
-            metadata: {
-              totalItems: 1,
-              totalPages: 1,
-              currentPage: 1,
-              itemsPerPage: 10,
-            },
-          };
-        }
-
-        const oldPatients = Array.isArray(oldData)
-          ? oldData
-          : oldData?.data || [];
-        const newData = [...oldPatients, optimisticPatient];
-
-        return {
-          data: newData,
-          metadata: {
-            totalItems: newData.length,
-            totalPages: Math.ceil(newData.length / pageSize),
-            currentPage: 1,
-            itemsPerPage: pageSize,
-          },
-        };
-      }
-    );
-
-    setModalOpen(false);
-
-    mutation.mutate(values, {
-      onSuccess: (createdPatient) => {
-        // Replace optimistic patient with server response
-        queryClient.setQueryData(
-          ['patients', page, pageSize],
-          (
-            oldData:
-              | Patient[]
-              | PaginatedResponse<Patient[]>
-              | undefined
-          ) => {
-            if (!oldData) return [createdPatient];
-
-            const oldPatients = Array.isArray(oldData)
-              ? oldData
-              : oldData?.data || [];
-            const updatedPatients = oldPatients.map((p: Patient) =>
-              p.id === tempId ? createdPatient : p
-            );
-
-            return {
-              data: updatedPatients,
-              metadata: {
-                totalItems: updatedPatients.length,
-                totalPages: Math.ceil(
-                  updatedPatients.length / pageSize
-                ),
-                currentPage: 1,
-                itemsPerPage: pageSize,
-              },
-            };
-          }
-        );
-      },
-      onError: () => {
-        // Rollback on error
-        queryClient.setQueryData(
-          ['patients', page, pageSize],
-          (
-            oldData:
-              | Patient[]
-              | PaginatedResponse<Patient[]>
-              | undefined
-          ) => {
-            if (!oldData) return [];
-
-            const oldPatients = Array.isArray(oldData)
-              ? oldData
-              : oldData?.data || [];
-            const filteredPatients = oldPatients.filter(
-              (p: Patient) => p.id !== tempId
-            );
-
-            return {
-              data: filteredPatients,
-              metadata: {
-                totalItems: filteredPatients.length,
-                totalPages: Math.ceil(
-                  filteredPatients.length / pageSize
-                ),
-                currentPage: 1,
-                itemsPerPage: pageSize,
-              },
-            };
-          }
-        );
-      },
-    });
+    mutation.mutate(values);
   };
 
   const getGenderColor = (gender: string) => {
@@ -341,14 +318,13 @@ const PatientListPage = () => {
             Patient Directory
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {/* Icon button for xs screens only */}
           <Tooltip title='Add New Patient'>
             <IconButton
               onClick={openModal}
               sx={{
                 display: { xs: 'inline-flex', sm: 'none' },
-                ml: 2,
                 backgroundColor: theme.palette.primary.main,
                 color: theme.palette.primary.contrastText,
                 '&:hover': {
@@ -396,6 +372,15 @@ const PatientListPage = () => {
           </Button>
         </Box>
       </Box>
+      {globalError && (
+        <Alert
+          severity='error'
+          onClose={() => setGlobalError(undefined)}
+          sx={{ mb: 2 }}
+        >
+          {globalError}
+        </Alert>
+      )}
       {queryError && (
         <Box
           sx={{
@@ -414,7 +399,7 @@ const PatientListPage = () => {
         </Box>
       )}
 
-      {!queryError && (isLoading) ? (
+      {!queryError && isLoading ? (
         <Box
           sx={{
             display: 'grid',
@@ -499,14 +484,24 @@ const PatientListPage = () => {
             <Box
               sx={{ display: 'flex', alignItems: 'center', mb: 3 }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', maxWidth: 500 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  width: '100%',
+                  maxWidth: 500,
+                }}
+              >
                 <TextField
                   variant='outlined'
                   placeholder='Search patients by name, occupation or gender...'
                   defaultValue={searchText}
                   onChange={handleSearchChange}
                   onBlur={handleSearchCommit}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearchCommit()}
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' && handleSearchCommit()
+                  }
                   ref={inputRef}
                   sx={{
                     flexGrow: 1,
@@ -533,7 +528,9 @@ const PatientListPage = () => {
                 />
                 <Tooltip title='Refresh results'>
                   <IconButton
-                    onClick={() => setRefreshTrigger(prev => prev + 1)}
+                    onClick={() =>
+                      setRefreshTrigger((prev) => prev + 1)
+                    }
                     sx={{
                       backgroundColor: theme.palette.background.paper,
                       color: theme.palette.text.primary,
@@ -550,7 +547,7 @@ const PatientListPage = () => {
                     }}
                     aria-label='Refresh patient list'
                   >
-                    <RefreshIcon fontSize="small" />
+                    <RefreshIcon fontSize='small' />
                   </IconButton>
                 </Tooltip>
               </Box>
@@ -659,8 +656,23 @@ const PatientListPage = () => {
                             transform: 'translateY(-5px)',
                             boxShadow: theme.shadows[4],
                           },
+                          position: 'relative',
                         }}
                       >
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            zIndex: 1,
+                          }}
+                        >
+                          <DeletePatientButton
+                            patientId={patient.id}
+                            patientName={patient.name}
+                            onSuccess={refetchPatients}
+                          />
+                        </Box>
                         <CardActionArea
                           component={Link}
                           to={patient.id}
@@ -738,7 +750,11 @@ const PatientListPage = () => {
                               <HealthRatingBar
                                 rating={
                                   patient.healthRating ??
-                                  (patient.entries ? getLatestHealthRating(patient.entries) : null)
+                                  (patient.entries
+                                    ? getLatestHealthRating(
+                                        patient.entries
+                                      )
+                                    : null)
                                 }
                                 showText={true}
                               />
@@ -777,6 +793,7 @@ const PatientListPage = () => {
                   ) => {
                     setSortModel(newSortModel);
                   }}
+                  refetchPatients={refetchPatients}
                 />
               )}
             </Box>

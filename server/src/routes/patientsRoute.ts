@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { EntryVersion } from '../../../shared/src/types/medicalTypes';
-import { authenticate } from '../middleware/authentication';
+import { RedisClient } from '../utils/redis';
+import { adminOnly, authenticate } from '../middleware/authentication';
 import { patientService } from '../services/patientsService';
 import {
   NewEntryWithoutId,
@@ -8,6 +9,17 @@ import {
   PatientEntry,
   Entry,
 } from '../types';
+
+// Extend Express Request type to include user property
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+      };
+    }
+  }
+}
 import { validate } from '../utils/validation';
 import { CreatePatientSchema } from '../schemas/patient.schema';
 import { EntrySchema } from '../schemas/entry.schema';
@@ -19,6 +31,7 @@ import {
 } from '../utils/errors';
 import qs from 'qs';
 import { EntryVersionService } from '../services/entryVersionService';
+import pool from '../../db/connection';
 
 interface PaginationQuery {
   page?: string;
@@ -29,6 +42,25 @@ interface PaginationQuery {
 }
 
 const patientsRouter = express.Router();
+/**
+ * Health check endpoint
+ */
+patientsRouter.get('/health', async (_req, res) => {
+  try {
+    const redisHealth = await RedisClient.healthCheck();
+    res.json({
+      status: 'ok',
+      redis: redisHealth.status,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'error',
+      error: 'Service unavailable',
+      details: err instanceof Error ? err.message : 'Unknown error'
+    });
+  }
+});
 
 /**
  * GET all patients (non-sensitive data)
@@ -159,19 +191,21 @@ patientsRouter.post(
   validate(CreatePatientSchema),
   async (
     req: Request<unknown, unknown, NewPatientEntryWithoutEntries>,
-    res: Response<PatientEntry | { error: string; details?: any }>
+    res: Response<{ patient: PatientEntry; token: string } | { error: string; details?: any }>
   ) => {
     try {
-      const addedPatientEntry = await patientService.createPatient(
-        req.body
-      );
-      res.status(201).json(addedPatientEntry);
+      const addedPatient = await patientService.createPatient(req.body);
+      res.status(201).json({
+        patient: addedPatient,
+        token: '' // Maintain interface compatibility
+      });
     } catch (error) {
       if (error instanceof ValidationError) {
         res
           .status(400)
           .json({ error: error.message, details: error.details });
       } else {
+        console.error('Error in POST /patients:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -225,9 +259,13 @@ patientsRouter.get(
   }
 );
 
-patientsRouter.delete('/:id', async (req, res) => {
+patientsRouter.delete('/:id', authenticate, adminOnly, async (req, res) => {
   try {
-    await patientService.deletePatient(req.params.id);
+    const { id } = req.params;
+    const deletedBy = req.user?.id || 'system'; // Use authenticated user ID or 'system'
+    const reason = req.body.reason || 'No reason provided'; // Get reason from request body
+    
+    await patientService.deletePatient(id, deletedBy, reason);
     res.status(204).end();
   } catch (error) {
     if (error instanceof NotFoundError) {
@@ -332,6 +370,12 @@ patientsRouter.put(
         entryId,
         updatePayload,
         req.user?.id || 'system'
+      );
+
+      // Explicitly update base entry timestamp
+      await pool.query(
+        `UPDATE entries SET updated_at = NOW() WHERE id = $1`,
+        [entryId]
       );
 
       res.json(updatedEntry);

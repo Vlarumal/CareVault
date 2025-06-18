@@ -27,7 +27,6 @@ import { Entry, HealthCheckEntry, Patient } from './types';
  * // Returns Hospital icon
  * getIcon('Hospital')
  *
- * @context7 /microsoft/typescript-website
  */
 export const getIcon = (
   icon:
@@ -78,7 +77,6 @@ export const getIcon = (
  *   }
  * }
  *
- * @context7 /microsoft/typescript-website
  */
 export const assertNever = (value: never): never => {
   throw new Error(
@@ -95,25 +93,20 @@ export const assertNever = (value: never): never => {
  * // Returns true
  * isDateValid('2025-06-04')
  * 
- * @context7 /microsoft/typescript-website
  */
 export const isDateValid = (dateString: string): boolean => {
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
   
-  // Parse date components
   const [year, month, day] = dateString.split('-').map(Number);
   
-  // Check for valid month (1-12) and day (1-31)
   if (month < 1 || month > 12 || day < 1 || day > 31) return false;
   
-  // Check for February and leap years
   if (month === 2) {
     const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     if (day > (isLeapYear ? 29 : 28)) return false;
   }
   
-  // Check for months with 30 days
   if ([4, 6, 9, 11].includes(month) && day > 30) return false;
   
   return true;
@@ -128,7 +121,6 @@ export const isDateValid = (dateString: string): boolean => {
  * // Returns 'Health rating must be an integer between 0 and 3'
  * validateHealthRating(5)
  * 
- * @context7 /microsoft/typescript-website
  */
 export const validateHealthRating = (value: number): string => {
   if (!Number.isInteger(value) || value < 0 || value > 3) {
@@ -147,7 +139,6 @@ export const validateHealthRating = (value: number): string => {
  * // Returns 'Name is required'
  * validateRequired('', 'Name')
  * 
- * @context7 /microsoft/typescript-website
  */
 export const validateRequired = (value: string, fieldName: string): string => {
   if (!value.trim()) {
@@ -166,7 +157,6 @@ export const validateRequired = (value: string, fieldName: string): string => {
  * // Returns 'End date must be after start date'
  * validateDateRange('2025-06-10', '2025-06-01')
  * 
- * @context7 /microsoft/typescript-website
  */
 export const validateDateRange = (startDate: string, endDate: string): string => {
   if (!startDate || !endDate) return '';
@@ -198,7 +188,6 @@ export const validateDateRange = (startDate: string, endDate: string): string =>
  * // Returns 'Invalid SSN format. Use XXXXXX-XXXX'
  * validateSSN('123-45-6789')
  *
- * @context7 /microsoft/typescript-website
  */
 export const validateSSN = (ssn: string): string | undefined => {
   if (!/^\d{6}-\d{4}$/.test(ssn)) {

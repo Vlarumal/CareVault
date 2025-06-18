@@ -320,10 +320,10 @@ export class EntryVersionService {
         throw new Error('Entry not found');
       }
 
-      return (
-        new Date(result.rows[0].updated_at).getTime() >
-        new Date(lastUpdated).getTime()
-      );
+      const dbTimestamp = new Date(result.rows[0].updated_at).getTime();
+      const clientTimestamp = new Date(lastUpdated).getTime();
+      
+      return dbTimestamp > clientTimestamp;
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Error in checkConcurrency:`, error);
       throw new DatabaseError('Failed to check concurrency', error);

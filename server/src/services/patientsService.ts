@@ -34,6 +34,13 @@ import {
 } from '../utils/queryBuilder';
 import { AnyEntry } from 'shared/src/types/medicalTypes';
 
+class TransactionError extends DatabaseError {
+  constructor(message: string, details?: Record<string, any>) {
+    super(message, details);
+    this.name = 'TransactionError';
+  }
+}
+
 const SAFE_STRING_REGEX = /^[^;'"\\]*$/;
 
 const validateSafeString = (
@@ -43,8 +50,51 @@ const validateSafeString = (
   if (!SAFE_STRING_REGEX.test(value)) {
     throw new ValidationError(
       `${fieldName} contains invalid characters`,
-      { invalidField: fieldName }
+      {
+        error: 'ValidationError',
+        details: {
+          field: fieldName,
+          value: value,
+          constraints: ['no_special_chars'],
+        },
+      }
     );
+  }
+
+  if (/<[a-z][\s\S]*>/i.test(value)) {
+    throw new ValidationError(`${fieldName} contains HTML tags`, {
+      error: 'ValidationError',
+      details: {
+        field: fieldName,
+        value: value,
+        constraints: ['no_html_tags'],
+      },
+    });
+  }
+
+  const sqlPatterns = [
+    /\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|EXEC)\b/i,
+    /\b(UNION\s+ALL|UNION\s+SELECT)\b/i,
+    /\bOR\s*'?\d+'?\s*=\s*'?\d\b/i,
+    /(--|\/\*|\*\/|;)/,
+    /\b(WAITFOR\s+DELAY)\b/i,
+    /\b(SLEEP\(\d+\))\b/i,
+  ];
+
+  for (const pattern of sqlPatterns) {
+    if (pattern.test(value)) {
+      throw new ValidationError(
+        `${fieldName} contains potentially dangerous content`,
+        {
+          error: 'ValidationError',
+          details: {
+            field: fieldName,
+            value: value,
+            constraints: ['no_sql_injection'],
+          },
+        }
+      );
+    }
   }
 };
 
@@ -110,7 +160,10 @@ const getPatientEntries = async (): Promise<PatientEntry[]> => {
     )) as QueryResult<PatientEntry>;
     return result.rows;
   } catch (error) {
-    throw new DatabaseError('Failed to fetch patient entries', error);
+    throw new DatabaseError('Failed to fetch patient entries', {
+      originalError: error,
+      context: { function: 'getPatientEntries' },
+    });
   }
 };
 
@@ -123,6 +176,7 @@ const getNonSensitiveEntries = async (): Promise<
       SELECT patients.*, patient_health_ratings.health_rating
       FROM patients
       LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
+      WHERE patients.is_deleted = false
     `)) as QueryResult<{
       id: string;
       name: string;
@@ -148,7 +202,10 @@ const getNonSensitiveEntries = async (): Promise<
   } catch (error) {
     throw new DatabaseError(
       'Failed to fetch non-sensitive patient entries',
-      error
+      {
+        originalError: error,
+        context: { function: 'getNonSensitiveEntries' },
+      }
     );
   }
 };
@@ -216,7 +273,11 @@ const getPaginatedNonSensitiveEntries = async (
       Number((page - 1) * pageSize),
     ];
 
-    const { whereClause, params } = buildWhereClause(filter);
+    const { whereClause, params } = buildWhereClause(
+      filter,
+      undefined,
+      true
+    );
     const { orderByClause, params: orderParams } = buildOrderByClause(
       sortArray,
       params
@@ -296,7 +357,14 @@ const getPaginatedNonSensitiveEntries = async (
   } catch (error) {
     throw new DatabaseError(
       'Failed to fetch paginated non-sensitive patient entries',
-      error
+      {
+        originalError: error,
+        context: {
+          function: 'getPaginatedNonSensitiveEntries',
+          page,
+          pageSize,
+        },
+      }
     );
   }
 };
@@ -317,10 +385,10 @@ const getAllPatientsWithEntries = async (): Promise<
     );
     return patientsWithEntries;
   } catch (error) {
-    throw new DatabaseError(
-      'Failed to fetch patients with entries',
-      error
-    );
+    throw new DatabaseError('Failed to fetch patients with entries', {
+      originalError: error,
+      context: { function: 'getAllPatientsWithEntries' },
+    });
   }
 };
 
@@ -341,13 +409,14 @@ const getPaginatedPatientsWithEntries = async (
       `
       SELECT id, name, date_of_birth, gender, occupation, ssn
       FROM patients
+      WHERE patients.is_deleted = false
       LIMIT $1 OFFSET $2
     `,
       [pageSize, offset]
     );
 
     const totalResult = (await pool.query(
-      'SELECT COUNT(*) FROM patients'
+      'SELECT COUNT(*) FROM patients WHERE patients.is_deleted = false'
     )) as QueryResult<{ count: string }>;
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
@@ -383,7 +452,14 @@ const getPaginatedPatientsWithEntries = async (
   } catch (error) {
     throw new DatabaseError(
       'Failed to fetch paginated patients with entries',
-      error
+      {
+        originalError: error,
+        context: {
+          function: 'getPaginatedPatientsWithEntries',
+          page,
+          pageSize,
+        },
+      }
     );
   }
 };
@@ -425,7 +501,10 @@ const getPatientById = async (id: string): Promise<PatientEntry> => {
         error instanceof Error ? error.message : error
       }`
     );
-    throw new DatabaseError('Failed to find patient by ID', error);
+    throw new DatabaseError('Failed to find patient by ID', {
+      originalError: error,
+      context: { function: 'getPatientById', id },
+    });
   }
 };
 
@@ -452,7 +531,27 @@ const createPatient = async (
   if (missingFields.length > 0) {
     throw new ValidationError(
       `Missing required fields: ${missingFields.join(', ')}`,
-      { missingFields }
+      {
+        error: 'MissingFields',
+        details: {
+          missingFields,
+          constraints: ['required'],
+        },
+      }
+    );
+  }
+
+  if (!Object.values(Gender).includes(sanitizedEntry.gender)) {
+    throw new ValidationError(
+      `Invalid gender: ${sanitizedEntry.gender}`,
+      {
+        error: 'InvalidGender',
+        details: {
+          field: 'gender',
+          value: sanitizedEntry.gender,
+          constraints: Object.values(Gender),
+        },
+      }
     );
   }
 
@@ -461,42 +560,195 @@ const createPatient = async (
       throw new ValidationError(
         'Invalid date format. Use YYYY-MM-DD',
         {
-          invalidField: 'dateOfBirth',
-          status: 400,
+          error: 'InvalidDateFormat',
+          details: {
+            field: 'dateOfBirth',
+            value: sanitizedEntry.dateOfBirth,
+            constraints: ['format: YYYY-MM-DD'],
+          },
+        }
+      );
+    }
+
+    const date = new Date(sanitizedEntry.dateOfBirth);
+    const currentYear = new Date().getFullYear();
+
+    if (isNaN(date.getTime())) {
+      throw new ValidationError('Invalid date value', {
+        error: 'ValidationError',
+        details: {
+          field: 'dateOfBirth',
+          value: sanitizedEntry.dateOfBirth,
+          constraints: ['valid_date'],
+        },
+      });
+    }
+
+    // Semantic checks
+    if (date > new Date()) {
+      throw new ValidationError('Date cannot be in the future', {
+        error: 'ValidationError',
+        details: {
+          field: 'dateOfBirth',
+          value: sanitizedEntry.dateOfBirth,
+          constraints: ['past_date'],
+        },
+      });
+    }
+
+    if (
+      date.getFullYear() < 1900 ||
+      date.getFullYear() > currentYear
+    ) {
+      throw new ValidationError(
+        `Year must be between 1900 and ${currentYear}`,
+        {
+          error: 'ValidationError',
+          details: {
+            field: 'dateOfBirth',
+            value: sanitizedEntry.dateOfBirth,
+            constraints: [`year_range:1900-${currentYear}`],
+          },
+        }
+      );
+    }
+
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+
+    if (day > lastDayOfMonth) {
+      throw new ValidationError(
+        `Invalid date: ${month} has only ${lastDayOfMonth} days`,
+        {
+          error: 'ValidationError',
+          details: {
+            field: 'dateOfBirth',
+            value: sanitizedEntry.dateOfBirth,
+            constraints: ['valid_calendar_date'],
+          },
         }
       );
     }
   }
 
-  try {
-    const id: string = uuid();
-    const result = (await pool.query(
-      `
-      INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `,
-      [
-        id,
-        sanitizedEntry.name,
-        sanitizedEntry.occupation,
-        sanitizedEntry.gender,
-        sanitizedEntry.ssn,
-        normalizeEntryDate(sanitizedEntry.dateOfBirth),
-      ]
-    )) as QueryResult<PatientEntry>;
-
-    const patient = result.rows[0];
-    return {
-      ...patient,
-      createdAt: patient.createdAt,
-      updatedAt: patient.updatedAt,
-      dateOfBirth: patient.dateOfBirth,
-      entries: [],
-    } as PatientEntry;
-  } catch (error) {
-    throw new DatabaseError('Failed to add patient', error);
+  if (sanitizedEntry.ssn) {
+    const existing = await pool.query(
+      'SELECT id FROM patients WHERE ssn = $1',
+      [sanitizedEntry.ssn]
+    );
+    if (existing.rows.length > 0) {
+      throw new ValidationError(
+        'Social security number already exists in system',
+        {
+          error: 'DuplicateSSN',
+          userMessage:
+            'This social security number is already registered',
+          details: {
+            field: 'ssn',
+            value: sanitizedEntry.ssn,
+            constraints: ['unique'],
+          },
+        }
+      );
+    }
   }
+
+  const id: string = uuid();
+  let resultPatient: PatientEntry | null = null;
+  let retries = 0;
+  const maxRetries = 3;
+
+  while (retries < maxRetries) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const result = (await client.query(
+        `
+        INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+      `,
+        [
+          id,
+          sanitizedEntry.name,
+          sanitizedEntry.occupation,
+          sanitizedEntry.gender,
+          sanitizedEntry.ssn,
+          normalizeEntryDate(sanitizedEntry.dateOfBirth),
+        ]
+      )) as QueryResult<PatientEntry>;
+
+      await client.query('COMMIT');
+      const patient = result.rows[0];
+      resultPatient = {
+        ...patient,
+        createdAt: patient.createdAt,
+        updatedAt: patient.updatedAt,
+        dateOfBirth: patient.dateOfBirth,
+        entries: [],
+      } as PatientEntry;
+      break;
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+
+      // Classify transaction failures
+      if (error.code === '40001' || error.code === '40P01') {
+        // Serialization failure or deadlock
+        if (retries < maxRetries) {
+          retries++;
+          const delay = Math.pow(2, retries) * 100;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        } else {
+          throw new TransactionError(
+            'Transaction failed after maximum retries',
+            {
+              originalError: error,
+              context: {
+                function: 'createPatient',
+                entry: sanitizedEntry,
+                retries,
+              },
+            }
+          );
+        }
+      } else if (error.code === '23505') {
+        throw new ValidationError(
+          'Social security number conflict during transaction',
+          {
+            error: 'DuplicateSSN',
+            details: {
+              field: 'ssn',
+              value: sanitizedEntry.ssn,
+              constraints: ['unique'],
+              context: 'transaction',
+            },
+          }
+        );
+      } else {
+        throw new DatabaseError('Failed to add patient', {
+          originalError: error,
+          context: {
+            function: 'createPatient',
+            entry: sanitizedEntry,
+          },
+        });
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  if (!resultPatient) {
+    throw new DatabaseError('Failed to add patient after retries', {
+      context: { function: 'createPatient', entry: sanitizedEntry },
+    });
+  }
+
+  return resultPatient;
 };
 
 const editPatient = async (
@@ -510,8 +762,12 @@ const editPatient = async (
       throw new ValidationError(
         'Invalid date format. Use YYYY-MM-DD',
         {
-          invalidField: 'dateOfBirth',
-          status: 400,
+          error: 'ValidationError',
+          details: {
+            field: 'dateOfBirth',
+            value: sanitizedUpdate.dateOfBirth,
+            constraints: ['format'],
+          },
         }
       );
     }
@@ -580,37 +836,96 @@ const editPatient = async (
     if (error instanceof NotFoundError) {
       throw error;
     }
-    throw new DatabaseError('Failed to edit patient', error);
+    throw new DatabaseError('Failed to edit patient', {
+      originalError: error,
+      context: {
+        function: 'editPatient',
+        id,
+        updateData: sanitizedUpdate,
+      },
+    });
   }
 };
 
-const deletePatient = async (id: string): Promise<void> => {
+const deletePatient = async (
+  id: string,
+  deletedBy: string,
+  reason?: string
+): Promise<void> => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    await client.query('DELETE FROM entries WHERE patient_id = $1', [
+    const updateQuery = `
+      UPDATE patients
+      SET is_deleted = TRUE, deleted_at = NOW(), deleted_by = $2
+      WHERE id = $1 AND is_deleted = FALSE
+      RETURNING *;
+    `;
+    const updateResult = await client.query(updateQuery, [
       id,
+      deletedBy,
     ]);
 
-    const result = await client.query(
-      'DELETE FROM patients WHERE id = $1',
-      [id]
-    );
+    if (updateResult.rowCount === 0) {
+      const existsQuery = `SELECT id FROM patients WHERE id = $1`;
+      const existsResult = await client.query(existsQuery, [id]);
 
-    if (result.rowCount === 0) {
-      throw new NotFoundError('Patient', id);
+      if (existsResult.rowCount === 0) {
+        throw new NotFoundError('Patient', id);
+      }
+      // Patient exists but is already deleted - idempotent case
+      await client.query('COMMIT');
+      return;
     }
+
+    const auditQuery = `
+      INSERT INTO patient_deletion_audit (patient_id, deleted_by, reason)
+      VALUES ($1, $2, $3)
+    `;
+    await client.query(auditQuery, [id, deletedBy, reason || null]);
 
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
     if (error instanceof NotFoundError) {
-      throw error;
+      if (error?.name === 'NotFoundError') {
+        throw error;
+      }
     }
-    throw new DatabaseError('Failed to delete patient', error);
+    throw new DatabaseError('Failed to soft delete patient', {
+      originalError:
+        error instanceof Error ? error : new Error(String(error)),
+      context: { function: 'deletePatient', id },
+    });
   } finally {
     client.release();
+  }
+};
+
+const restorePatient = async (id: string): Promise<PatientEntry> => {
+  try {
+    const result = await pool.query(
+      `UPDATE patients
+       SET is_deleted = false, deleted_at = NULL
+       WHERE id = $1 AND is_deleted = true
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      throw new NotFoundError('Soft-deleted patient', id);
+    }
+
+    return result.rows[0] as PatientEntry;
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+    throw new DatabaseError('Failed to restore patient', {
+      originalError: error,
+      context: { function: 'restorePatient', id },
+    });
   }
 };
 
@@ -646,14 +961,25 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
   if (missingBaseFields.length > 0) {
     throw new ValidationError(
       `Missing required fields: ${missingBaseFields.join(', ')}`,
-      { missingBaseFields }
+      {
+        error: 'MissingFields',
+        details: {
+          missingFields: missingBaseFields,
+          constraints: ['required'],
+        },
+      }
     );
   }
 
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(sanitizedEntry.date)) {
     throw new ValidationError('Invalid date format: YYYY-MM-DD', {
-      invalidField: 'date',
+      error: 'InvalidDateFormat',
+      details: {
+        field: 'date',
+        value: sanitizedEntry.date,
+        constraints: ['format'],
+      },
     });
   }
 
@@ -666,7 +992,13 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
         `Invalid diagnosis code format: ${invalidCodes.join(
           ', '
         )}. Must be at least 3 alphanumeric characters.`,
-        { invalidCodes }
+        {
+          error: 'InvalidDiagnosisCode',
+          details: {
+            invalidCodes,
+            constraints: ['format'],
+          },
+        }
       );
     }
   }
@@ -678,7 +1010,14 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
   ) {
     throw new ValidationError(
       `Invalid entry type: ${sanitizedEntry.type}`,
-      { invalidType: sanitizedEntry.type }
+      {
+        error: 'InvalidEntryType',
+        details: {
+          field: 'type',
+          value: sanitizedEntry.type,
+          constraints: ['enum'],
+        },
+      }
     );
   }
 
@@ -686,7 +1025,13 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
     if (sanitizedEntry.healthCheckRating === undefined) {
       throw new ValidationError(
         'Missing healthCheckRating for HealthCheck entry',
-        { missingField: 'healthCheckRating' }
+        {
+          error: 'MissingHealthCheckRating',
+          details: {
+            field: 'healthCheckRating',
+            constraints: ['required'],
+          },
+        }
       );
     }
     if (
@@ -696,7 +1041,14 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
     ) {
       throw new ValidationError(
         'Invalid healthCheckRating: must be 0-3',
-        { invalidField: 'healthCheckRating' }
+        {
+          error: 'InvalidHealthCheckRating',
+          details: {
+            field: 'healthCheckRating',
+            value: sanitizedEntry.healthCheckRating,
+            constraints: ['range:0-3'],
+          },
+        }
       );
     }
   }
@@ -709,7 +1061,13 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
   ) {
     throw new ValidationError(
       'Missing required fields for Hospital entry: discharge.date and discharge.criteria',
-      { missingFields: ['discharge.date', 'discharge.criteria'] }
+      {
+        error: 'MissingDischargeFields',
+        details: {
+          missingFields: ['discharge.date', 'discharge.criteria'],
+          constraints: ['required'],
+        },
+      }
     );
   }
 
@@ -719,7 +1077,13 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
   ) {
     throw new ValidationError(
       'Missing required field for OccupationalHealthcare entry: employerName',
-      { missingField: 'employerName' }
+      {
+        error: 'MissingEmployerName',
+        details: {
+          field: 'employerName',
+          constraints: ['required'],
+        },
+      }
     );
   }
 };
@@ -825,7 +1189,6 @@ const addEntry = async (
         updatedAt: new Date().toISOString(),
       } as Entry;
 
-      // Create version for new entry
       await EntryVersionService.createVersion(
         id,
         'system',
@@ -870,7 +1233,10 @@ const addEntry = async (
     ) {
       throw error;
     }
-    throw new DatabaseError('Failed to add entry', error);
+    throw new DatabaseError('Failed to add entry', {
+      originalError: error,
+      context: { function: 'addEntry', patientId: patient.id, entry },
+    });
   }
 };
 
@@ -883,27 +1249,22 @@ const updateEntry = async (
   },
   editorId: string = 'system'
 ): Promise<AnyEntry> => {
-  // Destructure with defaults
   const {
     changeReason = 'Entry updated',
     lastUpdated,
     ...entryData
   } = updateData;
 
-  // Validate entry
   validateEntry(entryData);
 
-  // Concurrency check
-  // Concurrency check already performed at route level
-  // No need to duplicate the check here
-
-  logger.info(`Updating entry ${entryId} for patient ${patientId} by editor ${editorId}`);
+  logger.info(
+    `Updating entry ${entryId} for patient ${patientId} by editor ${editorId}`
+  );
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Create version snapshot before update
     await EntryVersionService.createVersion(
       entryId,
       editorId,
@@ -928,10 +1289,6 @@ const updateEntry = async (
       );
     }
 
-    // Version creation is done at the route level
-    // No need to create another version here
-
-    // Update entry and related tables
     await client.query(
       `UPDATE entries
        SET
@@ -962,7 +1319,6 @@ const updateEntry = async (
       }
     }
 
-    // Update type-specific fields
     if (entryData.type === 'HealthCheck') {
       await client.query(
         `UPDATE healthcheck_entries
@@ -1018,7 +1374,15 @@ const updateEntry = async (
       `Failed to update entry: ${
         error instanceof Error ? error.message : 'Unknown error'
       }`,
-      error
+      {
+        originalError: error,
+        context: {
+          function: 'updateEntry',
+          patientId,
+          entryId,
+          updateData,
+        },
+      }
     );
   } finally {
     client.release();
@@ -1100,10 +1464,10 @@ const getEntriesByPatientId = async (
         updatedAt: entry.updatedAt || new Date().toISOString(),
       }));
   } catch (error) {
-    throw new DatabaseError(
-      'Failed to fetch entries by patient ID',
-      error
-    );
+    throw new DatabaseError('Failed to fetch entries by patient ID', {
+      originalError: error,
+      context: { function: 'getEntriesByPatientId', patientId },
+    });
   }
 };
 
@@ -1113,14 +1477,12 @@ const deleteEntry = async (
 ): Promise<void> => {
   logger.info(`Deleting entry ${entryId} for patient ${patientId}`);
 
-  // Get entry data for versioning
   const entry = await getEntryById(entryId);
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Create version snapshot before deletion
     await EntryVersionService.createVersion(
       entryId,
       'system', // or pass actual editorId if available
@@ -1197,7 +1559,14 @@ const deleteEntry = async (
       `Failed to delete entry: ${
         error instanceof Error ? error.message : 'Unknown error'
       }. Check foreign key constraints, database connection, and ensure the entry exists.`,
-      error
+      {
+        originalError: error,
+        context: {
+          function: 'deleteEntry',
+          patientId,
+          entryId,
+        },
+      }
     );
   } finally {
     client.release();
@@ -1212,6 +1581,7 @@ const getPatientsSortedByHealthRating = async (): Promise<
       SELECT patients.*, COALESCE(patient_health_ratings.health_rating, -1) AS health_rating
       FROM patients
       LEFT JOIN patient_health_ratings ON patients.id = patient_health_ratings.patient_id
+      WHERE patients.is_deleted = false
       ORDER BY health_rating DESC NULLS LAST
     `)) as QueryResult<{
       id: string;
@@ -1236,7 +1606,10 @@ const getPatientsSortedByHealthRating = async (): Promise<
   } catch (error) {
     throw new DatabaseError(
       'Failed to fetch patients sorted by health rating',
-      error
+      {
+        originalError: error,
+        context: { function: 'getPatientsSortedByHealthRating' },
+      }
     );
   }
 };
@@ -1262,7 +1635,8 @@ const getFilteredAndPaginatedPatients = async (
           ['name', 'occupation', 'gender'].includes(key)
         )
       ),
-      searchText
+      searchText,
+      true
     );
 
     const explicitFilterCount = Object.keys(filters).length;
@@ -1277,7 +1651,13 @@ const getFilteredAndPaginatedPatients = async (
       logger.error('Filter validation failed', errorDetails);
       throw new ValidationError(
         'Maximum of 3 search parameters allowed (name, gender, occupation)',
-        errorDetails
+        {
+          error: 'ValidationError',
+          details: {
+            ...errorDetails,
+            constraints: ['max_search_params:3'],
+          },
+        }
       );
     }
 
@@ -1372,7 +1752,17 @@ const getFilteredAndPaginatedPatients = async (
   } catch (error) {
     throw new DatabaseError(
       'Failed to fetch filtered and paginated patients',
-      error
+      {
+        originalError: error,
+        context: {
+          function: 'getFilteredAndPaginatedPatients',
+          page,
+          pageSize,
+          filters,
+          sortModel,
+          searchText,
+        },
+      }
     );
   }
 };
@@ -1434,7 +1824,6 @@ const getEntryById = async (entryId: string): Promise<AnyEntry> => {
       } as OccupationalHealthcareEntry;
     }
 
-    // Get diagnosis codes
     const codesResult = await pool.query(
       `SELECT diagnosis_code FROM entry_diagnoses WHERE entry_id = $1`,
       [entryId]
@@ -1448,7 +1837,10 @@ const getEntryById = async (entryId: string): Promise<AnyEntry> => {
     if (error instanceof NotFoundError) {
       throw error;
     }
-    throw new DatabaseError('Failed to fetch entry by ID', error);
+    throw new DatabaseError('Failed to fetch entry by ID', {
+      originalError: error,
+      context: { function: 'getEntryById', entryId },
+    });
   }
 };
 
@@ -1471,7 +1863,10 @@ const getEntryVersions = async (
       entryData: row.entry_data,
     }));
   } catch (error) {
-    throw new DatabaseError('Failed to fetch entry versions', error);
+    throw new DatabaseError('Failed to fetch entry versions', {
+      originalError: error,
+      context: { function: 'getEntryVersions', entryId },
+    });
   }
 };
 
@@ -1484,7 +1879,6 @@ const restoreEntryVersion = async (
   try {
     await client.query('BEGIN');
 
-    // Get the version to restore with entry data validation
     const versionResult = await client.query(
       `SELECT * FROM entry_versions WHERE id = $1`,
       [versionId]
@@ -1500,7 +1894,10 @@ const restoreEntryVersion = async (
         if (isStale) {
           throw new ConcurrencyError(
             'Entry has been modified since last retrieval',
-            { entryId, lastUpdated }
+            {
+              error: 'ConcurrencyConflict',
+              details: { entryId, lastUpdated },
+            }
           );
         }
       }
@@ -1513,7 +1910,6 @@ const restoreEntryVersion = async (
     const version = versionResult.rows[0];
     const entryId = version.entry_id;
 
-    // Verify entry exists and matches version
     const currentEntryResult = await client.query(
       `SELECT * FROM entries WHERE id = $1`,
       [entryId]
@@ -1525,14 +1921,12 @@ const restoreEntryVersion = async (
 
     const currentEntry = currentEntryResult.rows[0];
 
-    // Create version snapshot of current state using EntryVersionService
     await EntryVersionService.createVersion(
       entryId,
       editorId,
       'Version restored from snapshot'
     );
 
-    // Restore the version
     await client.query(
       `UPDATE entries SET
         description = $1,
@@ -1549,7 +1943,6 @@ const restoreEntryVersion = async (
       ]
     );
 
-    // Handle type-specific fields
     if (version.entry_data.type === 'HealthCheck') {
       await client.query(
         `UPDATE healthcheck_entries SET
@@ -1585,7 +1978,6 @@ const restoreEntryVersion = async (
       );
     }
 
-    // Restore diagnosis codes
     await client.query(
       'DELETE FROM entry_diagnoses WHERE entry_id = $1',
       [entryId]
@@ -1617,7 +2009,14 @@ const restoreEntryVersion = async (
     if (error instanceof NotFoundError) {
       throw error;
     }
-    throw new DatabaseError('Failed to restore entry version', error);
+    throw new DatabaseError('Failed to restore entry version', {
+      originalError: error,
+      context: {
+        function: 'restoreEntryVersion',
+        versionId,
+        editorId,
+      },
+    });
   } finally {
     client.release();
   }
@@ -1650,7 +2049,10 @@ const getEntryVersion = async (
     if (error instanceof NotFoundError) {
       throw error;
     }
-    throw new DatabaseError('Failed to fetch entry version', error);
+    throw new DatabaseError('Failed to fetch entry version', {
+      originalError: error,
+      context: { function: 'getEntryVersion', versionId },
+    });
   }
 };
 
@@ -1667,6 +2069,7 @@ export const patientService = {
   createPatient,
   editPatient,
   deletePatient,
+  restorePatient,
   updateEntry,
   deleteEntry,
   getPatientsSortedByHealthRating,
@@ -1674,5 +2077,5 @@ export const patientService = {
   getEntryVersions,
   getEntryVersion,
   restoreEntryVersion,
-  getEntryById
+  getEntryById,
 };

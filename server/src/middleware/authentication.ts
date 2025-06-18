@@ -1,41 +1,121 @@
 import { Request, Response, NextFunction } from 'express';
 import { ValidationError } from '../utils/errors';
+import jwt from 'jsonwebtoken';
+import pool from '../../db/connection';
+import { isTokenBlacklisted, verifyToken } from '../utils/jwtUtils';
 
 declare module 'express' {
   interface Request {
     user?: {
       id: string;
+      role?: 'admin' | 'user';
     };
   }
 }
 
-export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
+export const authenticate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   res.header('Access-Control-Allow-Origin', req.headers.origin);
   res.header('Access-Control-Allow-Credentials', 'true');
 
   if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-User-Id');
+    res.header(
+      'Access-Control-Allow-Methods',
+      'GET, POST, PUT, DELETE, OPTIONS'
+    );
+    res.header(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization'
+    );
     res.status(204).end();
     return;
   }
 
-  // In a real app, this would verify JWT or session
-  // For now we'll just require an X-User-Id header
-  let userId = req.headers['x-user-id'];
-  
-  if (!userId || typeof userId !== 'string') {
-    if (process.env.NODE_ENV === 'production') {
-      throw new ValidationError('Missing or invalid X-User-Id header', {
-        missingField: 'X-User-Id'
-      });
-    } else {
-      // Use mock user ID in development
-      userId = 'dev-user-id';
-    }
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    throw new ValidationError('Authorization token required', {
+      status: 401,
+      code: 'MISSING_TOKEN',
+    });
   }
 
-  req.user = { id: userId };
+  try {
+    const header = jwt.decode(token, { complete: true })
+      ?.header as jwt.JwtHeader & { kid?: string };
+    if (header?.kid) {
+      const isBlacklisted = await isTokenBlacklisted(header.kid);
+      if (isBlacklisted) {
+        throw new ValidationError('Token has been revoked', {
+          status: 401,
+          code: 'TOKEN_REVOKED',
+        });
+      }
+    }
+
+    const payload = await verifyToken(token);
+    
+    if (!payload.permissions?.includes('entries:write')) {
+      throw new ValidationError('Insufficient permissions', {
+        status: 403,
+        code: 'INSUFFICIENT_PERMISSIONS',
+      });
+    }
+    
+    const userResult = await pool.query(
+      `SELECT u.id, ur.role
+       FROM users u
+       LEFT JOIN user_roles ur ON u.id = ur.user_id
+       WHERE u.id = $1`,
+      [payload.userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      throw new ValidationError('User not found', {
+        status: 404,
+        code: 'USER_NOT_FOUND',
+      });
+    }
+
+    req.user = {
+      id: userResult.rows[0].id,
+      role: userResult.rows[0].role || 'user',
+    };
+
+    next();
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    
+    if (error instanceof Error && error.name === 'TokenExpiredError') {
+      throw new ValidationError('Token expired', {
+        status: 401,
+        code: 'TOKEN_EXPIRED',
+      });
+    }
+    
+    throw new ValidationError('Invalid token', {
+      status: 401,
+      code: 'INVALID_TOKEN',
+    });
+  }
+};
+
+export const adminOnly = (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user?.role || req.user.role !== 'admin') {
+    throw new ValidationError('Admin privileges required', {
+      status: 403,
+      requiredRole: 'admin',
+    });
+  }
   next();
 };
 

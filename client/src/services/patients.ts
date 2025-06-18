@@ -1,4 +1,3 @@
-import axios from 'axios';
 import qs from 'qs';
 import {
   Entry,
@@ -6,8 +5,7 @@ import {
   Patient,
   PatientFormValues,
 } from '../types';
-import { apiBaseUrl } from '../constants';
-import { apiRetry } from '../utils/apiUtils';
+import { api, apiRetry } from '../utils/apiUtils';
 import { toServerFilter } from '../utils/gridFilterConverter';
 
 export interface PaginatedResponse<T> {
@@ -54,7 +52,7 @@ const getAll = async (
   };
 
   const response = await apiRetry(() =>
-    axios.get(`${apiBaseUrl}/patients`, { params })
+    api.get(`/patients`, { params })
   );
 
   return response.data as PaginatedResponse<Patient[]>;
@@ -62,8 +60,8 @@ const getAll = async (
 
 const getById = async (id: string) => {
   return apiRetry(() =>
-    axios
-      .get<Patient>(`${apiBaseUrl}/patients/${id}`)
+    api
+      .get<Patient>(`/patients/${id}`)
       .then((res) => res.data)
   );
 };
@@ -71,7 +69,7 @@ const getById = async (id: string) => {
 const create = async (object: PatientFormValues) => {
   try {
     const response = await apiRetry(() =>
-      axios.post<Patient>(`${apiBaseUrl}/patients`, object)
+      api.post<Patient>(`/patients`, object)
     );
 
     return response.data;
@@ -86,16 +84,16 @@ const createNewEntry = async (
   object: NewEntryFormValues
 ) => {
   return apiRetry(() =>
-    axios
-      .post<Entry>(`${apiBaseUrl}/patients/${id}/entries`, object)
+    api
+      .post<Entry>(`/patients/${id}/entries`, object)
       .then((res) => res.data)
   );
 };
 
 const getEntriesByPatientId = async (id: string) => {
   return apiRetry(() =>
-    axios
-      .get<Entry[]>(`${apiBaseUrl}/patients/${id}/entries}`)
+    api
+      .get<Entry[]>(`/patients/${id}/entries`)
       .then((res) => res.data)
   );
 };
@@ -105,8 +103,8 @@ const updatePatient = async (
   object: PatientFormValues
 ) => {
   return apiRetry(() =>
-    axios
-      .put<Patient>(`${apiBaseUrl}/patients/${id}`, object)
+    api
+      .put<Patient>(`/patients/${id}`, object)
       .then((res) => res.data)
   );
 };
@@ -117,12 +115,20 @@ const updateEntry = async (
   values: NewEntryFormValues & { lastUpdated?: string; changeReason?: string }
 ) => {
   return apiRetry(() =>
-    axios
+    api
       .put<Entry>(
-        `${apiBaseUrl}/patients/${patientId}/entries/${entryId}`,
+        `/patients/${patientId}/entries/${entryId}`,
         values
       )
       .then((res) => res.data)
+  );
+};
+
+const deletePatient = async (id: string, deletedBy: string, reason?: string) => {
+  return apiRetry(() =>
+    api.delete(`/patients/${id}`, {
+      data: { deletedBy, reason }
+    })
   );
 };
 
@@ -134,4 +140,5 @@ export default {
   getEntriesByPatientId,
   updatePatient,
   updateEntry,
+  deletePatient,
 };

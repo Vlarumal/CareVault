@@ -48,7 +48,8 @@ const coerceFilterValue = (field: string, value: any): any => {
  */
 export const buildWhereClause = (
   filter: Record<string, any>,
-  searchText?: string
+  searchText?: string,
+  includeSoftDelete: boolean = true
 ): { whereClause: string; params: any[] } => {
   try {
     filterSchema.parse(filter);
@@ -151,6 +152,10 @@ export const buildWhereClause = (
       }
 
       params.push(coercedValue);
+    }
+
+    if (includeSoftDelete) {
+      conditions.push('patients.is_deleted = false');
     }
 
     if (conditions.length === 0) {

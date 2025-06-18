@@ -1,14 +1,33 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
-// Mock DOMPurify with basic sanitization for tests
 vi.mock('dompurify', () => ({
   default: {
     sanitize: (input: string) => {
-      // Basic sanitization: remove <script> tags and on* attributes
       return input
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(
+          /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+          ''
+        )
         .replace(/ on\w+="[^"]*"/gi, '');
     },
   },
 }));
+
+// // Create mock API instance
+// const mockApi = axios.create();
+// mockApi.interceptors = {
+//   request: { use: vi.fn() },
+//   response: { use: vi.fn() }
+// };
+
+// // Mock API utils module
+// vi.mock('../utils/apiUtils', () => ({
+//   api: mockApi,
+//   apiRetry: vi.fn(),
+//   sanitizeRequestData: vi.fn(),
+//   createDeduplicatedQuery: vi.fn(),
+//   queryClient: {
+//     fetchQuery: vi.fn()
+//   }
+// }));

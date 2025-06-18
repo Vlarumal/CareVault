@@ -4,7 +4,9 @@ import {
   Route,
   Routes,
   Link,
+  Navigate,
 } from 'react-router-dom';
+import { useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -18,19 +20,29 @@ import {
   ThemeProvider,
   FormControlLabel,
   Switch,
+  Button,
 } from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 
 import { Patient } from './types';
-
 import patientService from './services/patients';
+import LoginForm from './components/Auth/LoginForm';
+import RegisterForm from './components/Auth/RegisterForm';
 import PatientListPage from './components/PatientListPage';
 import { PatientPage } from './components/PatientPage/index.ts';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useAuth } from './context/AuthContext.tsx';
+
+const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+  const auth = useAuth();
+  return auth.token ? children : <Navigate to="/login" replace />;
+};
 
 const App = () => {
+  const auth = useAuth();
+
   const [darkMode, setDarkMode] = useState(() => {
     const savedMode = localStorage.getItem('darkMode');
     if (savedMode !== null) {
@@ -59,7 +71,7 @@ const App = () => {
     error
   } = useQuery<Patient[], Error>({
     queryKey: ['patients'],
-    queryFn: ({ pageParam = 1 }) => patientService.getAll(pageParam as number).then(response => response.data),
+    queryFn: () => patientService.getAll().then(response => response.data),
     staleTime: 300000, // 5 minutes
   });
 
@@ -85,22 +97,33 @@ const App = () => {
               <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                 CareVault
               </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={darkMode}
-                    onChange={(e) => {
-                      const newMode = e.target.checked;
-                      setDarkMode(newMode);
-                      localStorage.setItem('darkMode', newMode.toString());
-                    }}
-                    icon={<Brightness7Icon />}
-                    checkedIcon={<Brightness4Icon />}
-                    aria-label="Toggle dark mode"
-                  />
-                }
-                label={darkMode ? "Dark Mode" : "Light Mode"}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={darkMode}
+                      onChange={(e) => {
+                        const newMode = e.target.checked;
+                        setDarkMode(newMode);
+                        localStorage.setItem('darkMode', newMode.toString());
+                      }}
+                      icon={<Brightness7Icon />}
+                      checkedIcon={<Brightness4Icon />}
+                      aria-label="Toggle dark mode"
+                    />
+                  }
+                  label={darkMode ? "Dark Mode" : "Light Mode"}
+                />
+                {auth.token && (
+                  <Button
+                    color="inherit"
+                    onClick={auth.logout}
+                    aria-label="Logout"
+                  >
+                    Logout
+                  </Button>
+                )}
+              </Box>
             </Toolbar>
           </AppBar>
 
@@ -115,15 +138,24 @@ const App = () => {
               </Alert>
             ) : (
               <Routes>
+                <Route path="/login" element={<LoginForm />} />
+                <Route path="/register" element={<RegisterForm />} />
+                
                 <Route
-                  path='/'
+                  path="/"
                   element={
-                    <PatientListPage />
+                    <ProtectedRoute>
+                      <PatientListPage />
+                    </ProtectedRoute>
                   }
                 />
                 <Route
-                  path='/:id'
-                  element={<PatientPage />}
+                  path="/:id"
+                  element={
+                    <ProtectedRoute>
+                      <PatientPage />
+                    </ProtectedRoute>
+                  }
                 />
               </Routes>
             )}

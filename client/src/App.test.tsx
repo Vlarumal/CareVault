@@ -1,14 +1,15 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { Mock, afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Mock, afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import axios from 'axios';
 import App from './App';
 import patientService from './services/patients';
+import authService from './services/auth';
 import { Gender, Patient } from './types';
 import { apiBaseUrl } from './constants';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// Mock API calls
 vi.mock('./services/patients');
+vi.mock('./services/auth');
 vi.mock('axios');
 
 const mockPatients: Patient[] = [
@@ -16,7 +17,7 @@ const mockPatients: Patient[] = [
     id: '1',
     name: 'John Doe',
     dateOfBirth: '1980-01-01',
-    ssn: '123-45-6789',
+    ssn: '123456-6789',
     gender: Gender.Male,
     occupation: 'Engineer',
     entries: []
@@ -25,7 +26,7 @@ const mockPatients: Patient[] = [
     id: '2',
     name: 'Jane Smith',
     dateOfBirth: '1990-02-02',
-    ssn: '987-65-4321',
+    ssn: '987650-4321',
     gender: Gender.Female,
     occupation: 'Designer',
     entries: []
@@ -36,10 +37,8 @@ const queryClient = new QueryClient();
 
 describe('App', () => {
   beforeEach(() => {
-    // Mock axios ping check
     (axios.get as Mock).mockResolvedValue({});
     
-    // Mock patient service
     (patientService.getAll as Mock).mockResolvedValue(mockPatients);
   });
 
@@ -84,7 +83,6 @@ describe('App', () => {
       expect(patientService.getAll).toHaveBeenCalledTimes(1);
     });
     
-    // Verify patient names are displayed
     expect(await screen.findByText('John Doe')).toBeInTheDocument();
     expect(await screen.findByText('Jane Smith')).toBeInTheDocument();
   });
@@ -100,7 +98,6 @@ test('renders patient links with correct hrefs', async () => {
       expect(patientService.getAll).toHaveBeenCalledTimes(1);
     });
     
-    // Verify patient links contain correct href
     const johnLink = await screen.findByText('John Doe');
     expect(johnLink).toHaveAttribute('href', '/1');
     
@@ -132,6 +129,72 @@ test('renders patient links with correct hrefs', async () => {
     
     await waitFor(() => {
       expect(screen.getByText('No patients found')).toBeInTheDocument();
+    });
+  });
+
+  describe('Logout functionality', () => {
+    beforeEach(() => {
+      localStorage.setItem('token', 'test-token');
+    });
+
+    afterEach(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+      vi.clearAllMocks();
+    });
+
+    it('clears auth state and redirects to login on successful logout', async () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
+
+      expect(await screen.findByText('Logout')).toBeInTheDocument();
+
+      vi.spyOn(authService, 'logout').mockResolvedValue();
+
+      fireEvent.click(screen.getByText('Logout'));
+
+      await waitFor(() => {
+        expect(localStorage.getItem('token')).toBeNull();
+        expect(screen.getByLabelText('Email')).toBeInTheDocument();
+      });
+    });
+
+    it('clears auth state even when logout API fails', async () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
+
+      vi.spyOn(authService, 'logout').mockRejectedValue(new Error('API error'));
+
+      fireEvent.click(screen.getByText('Logout'));
+
+      await waitFor(() => {
+        expect(localStorage.getItem('token')).toBeNull();
+        expect(screen.getByLabelText('Email')).toBeInTheDocument();
+      });
+    });
+
+    it('clears query cache on logout', async () => {
+      queryClient.setQueryData(['patients'], mockPatients);
+      
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
+
+      vi.spyOn(authService, 'logout').mockResolvedValue();
+
+      fireEvent.click(screen.getByText('Logout'));
+
+      await waitFor(() => {
+        expect(queryClient.getQueryData(['patients'])).toBeUndefined();
+      });
     });
   });
 });

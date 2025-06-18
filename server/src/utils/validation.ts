@@ -79,7 +79,14 @@ export const validate = (schema: z.ZodSchema) =>
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        throw new BadRequestError('Validation failed', error.issues);
+        const details = error.issues.reduce((acc, issue) => {
+          const path = issue.path.join('.');
+          return {
+            ...acc,
+            [path]: issue.message
+          };
+        }, {} as Record<string, string>);
+        throw new BadRequestError('Validation failed', details);
       }
       next(error);
     }

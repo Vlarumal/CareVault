@@ -9,6 +9,7 @@ import {
   Entry,
 } from '../../types';
 import { getIcon } from '../../utils';
+import DeletePatientButton from '../DeletePatientButton';
 
 // Debug logging
 if (process.env.NODE_ENV === 'development') {
@@ -298,6 +299,11 @@ const PatientPage = () => {
         >
           Edit
         </Button>
+        <DeletePatientButton
+          patientId={patient.id}
+          patientName={patient.name}
+          onSuccess={() => navigate('/')}
+        />
       </Box>
       <Button
         variant='outlined'

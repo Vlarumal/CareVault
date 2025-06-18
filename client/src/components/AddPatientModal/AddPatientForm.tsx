@@ -1,5 +1,5 @@
-import { useState, SyntheticEvent, useRef, useEffect } from "react";
-import { TextField, InputLabel, MenuItem, Select, Grid, Button, SelectChangeEvent, CircularProgress } from '@mui/material';
+import { useState, SyntheticEvent, useEffect } from "react";
+import { TextField, InputLabel, MenuItem, Select, Grid, Button, SelectChangeEvent, CircularProgress, FormHelperText } from '@mui/material';
 import { isDateValid, validateSSN } from '../../utils';
 
 import { PatientFormValues, Gender } from "../../types";
@@ -8,63 +8,111 @@ interface Props {
   onCancel: () => void;
   onSubmit: (values: PatientFormValues) => void;
   loading?: boolean;
+  serverErrors?: Record<string, string>;
 }
 
-interface GenderOption{  
-  value: Gender;  
-  label: string;  
-}  
+interface GenderOption{
+  value: Gender;
+  label: string;
+}
 
-const genderOptions: GenderOption[] = Object.values(Gender).map(v => ({  
-  value: v, label: v.toString()  
-}));  
+const genderOptions: GenderOption[] = Object.values(Gender).map(v => ({
+  value: v, label: v.toString()
+}));
 
-const AddPatientForm = ({ onCancel, onSubmit, loading }: Props) => {
-  const [name, setName] = useState('');  
-  const [occupation, setOccupation] = useState('');  
-  const [ssn, setSsn] = useState('');  
-  const [dateOfBirth, setDateOfBirth] = useState('');  
-  const [gender, setGender] = useState(Gender.Other);  
+const AddPatientForm = ({ onCancel, onSubmit, loading, serverErrors }: Props) => {
+  const [name, setName] = useState('');
+  const [occupation, setOccupation] = useState('');
+  const [ssn, setSsn] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState(Gender.Other);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const errorRef = useRef<HTMLParagraphElement>(null);
+  const [formError, setFormError] = useState(''); // For form-level errors
 
   useEffect(() => {
-    if (errorRef.current && Object.values(errors).some(e => e)) {
-      errorRef.current.focus();
+    if (serverErrors) {
+      if (serverErrors.form) {
+        setFormError(serverErrors.form);
+      }
+      
+      const fieldErrors = Object.keys(serverErrors).reduce((acc, key) => {
+        if (key !== 'form') {
+          acc[key] = serverErrors[key];
+        }
+        return acc;
+      }, {} as Record<string, string>);
+      
+      setErrors(prev => ({ ...prev, ...fieldErrors }));
     }
-  }, [errors]);
+  }, [serverErrors]);
 
-  // Real-time validation handlers  
-  const validateName = () => {  
-    if (!name.trim()) {  
-      setErrors(prev => ({...prev, name: 'Name is required'}));  
-    } else if (name.trim().length < 3) {  
-      setErrors(prev => ({...prev, name: 'Name must be at least 3 characters'}));  
-    } else {  
-      setErrors(prev => ({...prev, name: ''}));  
-    }  
-  };  
+  const validateName = () => {
+    if (!name.trim()) {
+      setErrors(prev => ({...prev, name: 'Name is required'}));
+    } else if (name.trim().length < 3) {
+      setErrors(prev => ({...prev, name: 'Name must be at least 3 characters'}));
+    } else {
+      setErrors(prev => ({...prev, name: ''}));
+    }
+  };
 
-  const validateSsn = () => {  
-    if (!ssn.trim()) {  
-      setErrors(prev => ({...prev, ssn: 'SSN is required'}));  
-    } else {  
-      const errorMessage = validateSSN(ssn);  
-      setErrors(prev => ({...prev, ssn: errorMessage}));  
-    }  
-  };  
+  const validateGender = () => {
+    if (!gender) {
+      setErrors(prev => ({...prev, gender: 'Gender is required'}));
+    } else if (!Object.values(Gender).includes(gender)) {
+      setErrors(prev => ({...prev, gender: 'Invalid gender'}));
+    } else {
+      setErrors(prev => ({...prev, gender: ''}));
+    }
+  };
 
-  const validateDateOfBirth = () => {  
-    if (!dateOfBirth) {  
-      setErrors(prev => ({...prev, dateOfBirth: 'Date of birth is required'}));  
-    } else if (!isDateValid(dateOfBirth)) {  
-      setErrors(prev => ({...prev, dateOfBirth: 'Invalid date format (use YYYY-MM-DD)'}));  
-    } else if (new Date(dateOfBirth) > new Date()) {  
-      setErrors(prev => ({...prev, dateOfBirth: 'Date cannot be in the future'}));  
-    } else {  
-      setErrors(prev => ({...prev, dateOfBirth: ''}));  
-    }  
-  };  
+  const validateSsn = () => {
+    const trimmedSsn = ssn.trim();
+    if (!trimmedSsn) {
+      setErrors(prev => ({...prev, ssn: 'SSN is required'}));
+    } else {
+      const errorMessage = validateSSN(trimmedSsn) || '';
+      setErrors(prev => ({...prev, ssn: errorMessage}));
+    }
+  };
+
+  const validateDateOfBirth = () => {
+    if (!dateOfBirth) {
+      setErrors(prev => ({...prev, dateOfBirth: 'Date of birth is required'}));
+      return;
+    }
+
+    if (!isDateValid(dateOfBirth)) {
+      setErrors(prev => ({...prev, dateOfBirth: 'Invalid date format (use YYYY-MM-DD)'}));
+      return;
+    }
+
+    const date = new Date(dateOfBirth);
+    const today = new Date();
+
+    if (date > today) {
+      setErrors(prev => ({...prev, dateOfBirth: 'Date cannot be in the future'}));
+      return;
+    }
+
+    const year = date.getFullYear();
+    const currentYear = today.getFullYear();
+    if (year < 1900 || year > currentYear) {
+      setErrors(prev => ({...prev, dateOfBirth: `Year must be between 1900 and ${currentYear}`}));
+      return;
+    }
+
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+
+    if (day > lastDayOfMonth) {
+      setErrors(prev => ({...prev, dateOfBirth: `Invalid date: ${month} has only ${lastDayOfMonth} days`}));
+      return;
+    }
+
+    setErrors(prev => ({...prev, dateOfBirth: ''}));
+  };
 
   const validateOccupation = () => {  
     if (!occupation.trim()) {  
@@ -74,86 +122,132 @@ const AddPatientForm = ({ onCancel, onSubmit, loading }: Props) => {
     }  
   };  
 
-  const onGenderChange = (event: SelectChangeEvent<string>) => {  
-    event.preventDefault();  
-    if (typeof event.target.value === "string") {  
-      const value = event.target.value;  
-      const gender = Object.values(Gender).find(g => g.toString() === value);  
-      if (gender) {  
-        setGender(gender);  
-      }  
-    }  
-  };  
+  const onGenderChange = (event: SelectChangeEvent<string>) => {
+    event.preventDefault();
+    if (typeof event.target.value === "string") {
+      const value = event.target.value;
+      const gender = Object.values(Gender).find(g => g.toString() === value);
+      if (gender) {
+        setGender(gender);
+        setErrors(prev => ({ ...prev, gender: '' }));
+        validateGender();
+      }
+    }
+  };
 
-const validateForm = () => {  
-  // Create a copy of current errors  
-  const newErrors: Record<string, string> = { ...errors };  
+const validateForm = () => {
+  const newErrors: Record<string, string> = {};
   
-  // Validate each field and update newErrors  
-  if (!name.trim()) {  
-    newErrors.name = 'Name is required';  
-  } else if (name.trim().length < 3) {  
-    newErrors.name = 'Name must be at least 3 characters';  
-  } else {  
-    newErrors.name = '';  
-  }  
+  if (!name.trim()) {
+    newErrors.name = 'Name is required';
+  } else if (name.trim().length < 3) {
+    newErrors.name = 'Name must be at least 3 characters';
+  }
 
-    if (!ssn.trim()) {  
-      newErrors.ssn = 'SSN is required';  
-    } else {  
-      newErrors.ssn = validateSSN(ssn);  
-    }  
+  if (!gender) {
+    newErrors.gender = 'Gender is required';
+  } else if (!Object.values(Gender).includes(gender)) {
+    newErrors.gender = 'Invalid gender';
+  }
 
-  if (!dateOfBirth) {  
-    newErrors.dateOfBirth = 'Date of birth is required';  
-  } else if (!isDateValid(dateOfBirth)) {  
-    newErrors.dateOfBirth = 'Invalid date format (use YYYY-MM-DD)';  
-  } else if (new Date(dateOfBirth) > new Date()) {  
-    newErrors.dateOfBirth = 'Date cannot be in the future';  
-  } else {  
-    newErrors.dateOfBirth = '';  
-  }  
+  const trimmedSsn = ssn.trim();
+  if (!trimmedSsn) {
+    newErrors.ssn = 'SSN is required';
+  } else {
+    const ssnError = validateSSN(trimmedSsn);
+    if (ssnError) {
+      newErrors.ssn = ssnError;
+    }
+  }
 
-  if (!occupation.trim()) {  
-    newErrors.occupation = 'Occupation is required';  
-  } else {  
-    newErrors.occupation = '';  
-  }  
+  if (!dateOfBirth) {
+    newErrors.dateOfBirth = 'Date of birth is required';
+  } else if (!isDateValid(dateOfBirth)) {
+    newErrors.dateOfBirth = 'Invalid date format (use YYYY-MM-DD)';
+  } else {
+    const date = new Date(dateOfBirth);
+    const today = new Date();
 
-  // Update state with all errors at once  
-  setErrors(newErrors);  
+    if (date > today) {
+      newErrors.dateOfBirth = 'Date cannot be in the future';
+    } else {
+      const year = date.getFullYear();
+      const currentYear = today.getFullYear();
+      if (year < 1900 || year > currentYear) {
+        newErrors.dateOfBirth = `Year must be between 1900 and ${currentYear}`;
+      } else {
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        if (day > lastDayOfMonth) {
+          newErrors.dateOfBirth = `Invalid date: ${month} has only ${lastDayOfMonth} days`;
+        }
+      }
+    }
+  }
+
+  if (!occupation.trim()) {
+    newErrors.occupation = 'Occupation is required';
+  }
+
+  return {
+    isValid: Object.keys(newErrors).length === 0,
+    errors: newErrors
+  };
+};
+
+const addPatient = (event: SyntheticEvent) => {
+  event.preventDefault();
   
-  // Return validation result  
-  return Object.values(newErrors).every(error => error === '');  
-};  
-
-const addPatient = (event: SyntheticEvent) => {  
-  event.preventDefault();  
+  setFormError('');
+  const { isValid, errors: validationErrors } = validateForm();
   
-  // First validate all fields  
-  const isValid = validateForm();  
+  setErrors(validationErrors);
   
-  // Only submit if valid  
-  if (isValid) {  
-    onSubmit({  
-      name: name.trim(),  
-      occupation: occupation.trim(),  
-      ssn: ssn.trim(),  
-      dateOfBirth,  
-      gender  
-    });  
-  }  
-};  
+  if (isValid) {
+    onSubmit({
+      name: name.trim(),
+      occupation: occupation.trim(),
+      ssn: ssn.trim(),
+      dateOfBirth,
+      gender
+    });
+  }
+};
 
   return (
     <div>
       <form onSubmit={addPatient} aria-label="Add new patient form">
+        {formError && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            style={{
+              backgroundColor: '#ffebee',
+              color: '#b71c1c',
+              padding: '12px',
+              borderRadius: '4px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>{formError}</span>
+          </div>
+        )}
         <TextField
           label="Name"
           fullWidth
           value={name}
           onChange={({ target }) => {
             setName(target.value);
+            setErrors(prev => ({ ...prev, name: '' }));
             validateName();
           }}
           onBlur={validateName}
@@ -179,13 +273,15 @@ const addPatient = (event: SyntheticEvent) => {
               id: 'name-error',
               tabIndex: -1
             }
-          }} />  
+          }} />
         <TextField
           label="Social security number"
           fullWidth
           value={ssn}
           onChange={({ target }) => {
             setSsn(target.value);
+            setErrors(prev => ({ ...prev, ssn: '' }));
+            setFormError('');
             validateSsn();
           }}
           onBlur={validateSsn}
@@ -196,22 +292,25 @@ const addPatient = (event: SyntheticEvent) => {
             input: {
               sx: {
                 '&.Mui-focused fieldset': {
-                  borderColor: 'primary.main',
+                  borderColor: errors.ssn ? 'error.main' : 'primary.main',
                 },
               },
             },
-
             htmlInput: {
               'aria-required': 'true',
               'aria-describedby': errors.ssn ? 'ssn-error' : undefined,
               'aria-invalid': !!errors.ssn || undefined
             },
-
             formHelperText: {
               id: 'ssn-error',
-              tabIndex: -1
+              tabIndex: -1,
+              sx: {
+                color: 'error.main',
+                fontWeight: errors.ssn ? 600 : 'normal'
+              }
             }
-          }} />
+          }}
+        />
         <TextField
           label="Date of birth"
           placeholder="YYYY-MM-DD"
@@ -219,6 +318,7 @@ const addPatient = (event: SyntheticEvent) => {
           value={dateOfBirth}
           onChange={({ target }) => {
             setDateOfBirth(target.value);
+            setErrors(prev => ({ ...prev, dateOfBirth: '' }));
             validateDateOfBirth();
           }}
           onBlur={validateDateOfBirth}
@@ -254,6 +354,7 @@ const addPatient = (event: SyntheticEvent) => {
           value={occupation}
           onChange={({ target }) => {
             setOccupation(target.value);
+            setErrors(prev => ({ ...prev, occupation: '' }));
             validateOccupation();
           }}
           onBlur={validateOccupation}
@@ -281,34 +382,62 @@ const addPatient = (event: SyntheticEvent) => {
             }
           }} />
 
-<InputLabel   
-  id="gender-label"   
-  style={{ marginTop: 20 }}  
->  
-  Gender  
-</InputLabel>  
-<Select
-  labelId="gender-label"
-  label="Gender"
-  fullWidth
-  value={gender}
-  onChange={onGenderChange}
-  inputProps={{
-    "data-testid": "gender-select",
-    'aria-required': 'true',
-    'role': 'combobox'
-  }}
->
-  {genderOptions.map(option =>
-    <MenuItem
-      key={option.label}
-      value={option.value}
-      role="option"
+<div style={{ marginBottom: '24px' }}>
+  <InputLabel
+    id="gender-label"
+    style={{ marginTop: 20, marginBottom: 8 }}
+    error={!!errors.gender}
+  >
+    Gender
+  </InputLabel>
+  <Select
+    labelId="gender-label"
+    label="Gender"
+    fullWidth
+    value={gender}
+    onChange={onGenderChange}
+    inputProps={{
+      "data-testid": "gender-select",
+      'aria-required': 'true',
+      'role': 'combobox',
+      'aria-invalid': !!errors.gender || undefined,
+      'aria-describedby': errors.gender ? 'gender-error' : undefined
+    }}
+    error={!!errors.gender}
+    sx={{
+      '& .MuiOutlinedInput-root': {
+        '&.Mui-focused fieldset': {
+          borderColor: errors.gender ? 'error.main' : 'primary.main',
+        },
+      },
+    }}
+  >
+    {genderOptions.map(option =>
+      <MenuItem
+        key={option.label}
+        value={option.value}
+        role="option"
+      >
+        {option.label}
+      </MenuItem>
+    )}
+  </Select>
+  {errors.gender && (
+    <FormHelperText
+      error
+      id="gender-error"
+      tabIndex={-1}
+      sx={{
+        mt: 1,
+        ml: 1,
+        color: 'error.main',
+        fontWeight: 600
+      }}
     >
-      {option.label
-    }</MenuItem>
+      {errors.gender}
+    </FormHelperText>
   )}
-</Select>
+</div>
 
         <Grid container justifyContent="space-between" sx={{ mt: 2, gap: 2 }}>  
           <Button  
