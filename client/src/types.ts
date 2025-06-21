@@ -23,6 +23,7 @@ export type {
 
 export type PatientEntry = medicalTypes.Patient & {
   entries: medicalTypes.AnyEntry[];
+  deathDate?: string | null;
 };
 
 export interface NewEntryFormValues {
@@ -30,7 +31,7 @@ export interface NewEntryFormValues {
   description: string;
   date: string;
   specialist: string;
-  diagnosisCodes?: string[];
+  diagnosisCodes?: string[] | null;
   healthCheckRating?: number;
   discharge?: {
     date: string;

@@ -18,13 +18,17 @@ interface TimelineViewProps {
   getDiagnosisByCode: (code: string) => string;
   onEntryClick?: (entryId: string) => void;
   onEditEntry?: (entry: Entry) => void;
+  patientId: string;
+  onDeleted: () => void;
 }
 
 const TimelineView: React.FC<TimelineViewProps> = ({
   entries,
   getDiagnosisByCode,
   onEntryClick,
-  onEditEntry
+  onEditEntry,
+  patientId,
+  onDeleted
 }) => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
@@ -116,6 +120,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                 <EntryDetails
                   entry={entry}
                   onEditEntry={() => onEditEntry?.(entry)}
+                  patientId={patientId}
+                  onDeleted={onDeleted}
                 />
                 {entry.diagnosisCodes && entry.diagnosisCodes.length > 0 && (
                   <div style={{ marginTop: '8px' }}>

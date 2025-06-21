@@ -1,0 +1,64 @@
+import request from 'supertest';
+import app from '../index';
+import { patientService } from '../src/services/patientsService';
+import { DatabaseError } from '../src/utils/errors';
+
+// Mock patientService methods
+jest.mock('../src/services/patientsService');
+
+describe('GET /patients', () => {
+  it('should handle query parameters correctly', async () => {
+    // Mock the service response
+    patientService.getPaginatedNonSensitiveEntries.mockResolvedValue({
+      data: [],
+      metadata: {
+        totalItems: 0,
+        totalPages: 0,
+        currentPage: 1,
+        itemsPerPage: 10,
+      },
+    });
+
+    // Test with query parameters
+    const response = await request(app)
+      .get('/patients')
+      .query({ field: 'name', sort: 'asc' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      data: [],
+      metadata: {
+        totalItems: 0,
+        totalPages: 0,
+        currentPage: 1,
+        itemsPerPage: 10,
+      },
+    });
+
+    // Check if the service was called with the correct parameters
+    expect(patientService.getPaginatedNonSensitiveEntries).toHaveBeenCalledWith(
+      1, // page
+      10, // pageSize
+      expect.any(Object), // filterModel
+      expect.any(Object) // sortModel
+    );
+
+    // Check the content of the filterModel and sortModel
+    const [, , filterModel, sortModel] = patientService.getPaginatedNonSensitiveEntries.mock.calls[0];
+    expect(filterModel).toBeNull(); // No filter in this test
+    expect(sortModel).toEqual({ field: 'name', sort: 'asc' });
+  });
+
+  it('should handle JSON parsing errors gracefully', async () => {
+    // Mock the service to throw an error
+    patientService.getPaginatedNonSensitiveEntries.mockRejectedValue(new DatabaseError('Test error'));
+
+    // Test with invalid query parameters
+    const response = await request(app)
+      .get('/patients')
+      .query({ field: 'name', sort: 'asc' });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Internal server error' });
+  });
+});

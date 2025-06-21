@@ -189,7 +189,7 @@ async function migrate() {
           ]);
 
           if (entry.diagnosisCodes) {
-            entry.diagnosisCodes.forEach(code => {
+            entry.diagnosisCodes.forEach((code: any) => {
               entryDiagnosisValues.push([entryId, code]);
             });
           }

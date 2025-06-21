@@ -1,6 +1,6 @@
-import { PatientEntry, Gender } from '../src/types';
+import { Patient, Gender } from '../../shared/src/types/medicalTypes';
 
-const patients: PatientEntry[] = [
+const patients: Patient[] = [
   {
     id: 'd2773336-f723-11e9-8f0b-362b9e155667',
     name: 'John McClane',

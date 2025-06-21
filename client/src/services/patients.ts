@@ -69,7 +69,10 @@ const getById = async (id: string) => {
 const create = async (object: PatientFormValues) => {
   try {
     const response = await apiRetry(() =>
-      api.post<Patient>(`/patients`, object)
+      api.post<Patient>(`/patients`, {
+        ...object,
+        deathDate: object.deathDate || null
+      })
     );
 
     return response.data;
@@ -83,9 +86,13 @@ const createNewEntry = async (
   id: string,
   object: NewEntryFormValues
 ) => {
+  const payload = {
+    ...object,
+    diagnosisCodes: object.diagnosisCodes
+  };
   return apiRetry(() =>
     api
-      .post<Entry>(`/patients/${id}/entries`, object)
+      .post<Entry>(`/patients/${id}/entries`, payload)
       .then((res) => res.data)
   );
 };
@@ -114,11 +121,15 @@ const updateEntry = async (
   entryId: string,
   values: NewEntryFormValues & { lastUpdated?: string; changeReason?: string }
 ) => {
+  const payload = {
+    ...values,
+    diagnosisCodes: values.diagnosisCodes
+  };
   return apiRetry(() =>
     api
       .put<Entry>(
         `/patients/${patientId}/entries/${entryId}`,
-        values
+        payload
       )
       .then((res) => res.data)
   );
@@ -127,6 +138,14 @@ const updateEntry = async (
 const deletePatient = async (id: string, deletedBy: string, reason?: string) => {
   return apiRetry(() =>
     api.delete(`/patients/${id}`, {
+      data: { deletedBy, reason }
+    })
+  );
+};
+
+const deleteEntry = async (patientId: string, entryId: string, deletedBy: string, reason?: string) => {
+  return apiRetry(() =>
+    api.delete(`/patients/${patientId}/entries/${entryId}`, {
       data: { deletedBy, reason }
     })
   );
@@ -141,4 +160,5 @@ export default {
   updatePatient,
   updateEntry,
   deletePatient,
+  deleteEntry,
 };

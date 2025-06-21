@@ -19,6 +19,7 @@ import {
 } from '../../types';
 import { entryToFormValues } from '@shared/src/utils/typeUtils';
 import useEntryForm from '../../hooks/useEntryForm';
+import { prepareEntryData } from '../../utils/entryUtils';
 
 interface Props {
   patientId: string;
@@ -67,36 +68,13 @@ const EntryForm: React.FC<Props> = ({
           healthCheckRating: 0,
         },
     onSuccess: () => {
-      const cleanDiagnosisCodes = (formValues.diagnosisCodes || [])
-        .filter((code) => code != null)
-        .map((code) =>
-          typeof code === 'string' ? code.trim() : code
-        )
-        .filter((code) => code !== '')
-        .filter((code) => /^[a-z0-9.]{3,}$/i.test(code));
-
-      onSubmit({
-        ...formValues,
-        description: formValues.description.trim(),
-        specialist: formValues.specialist.trim(),
-        diagnosisCodes: cleanDiagnosisCodes,
-        ...(formValues.type === 'Hospital' && formValues.discharge
-          ? {
-              discharge: {
-                date: formValues.discharge.date,
-                criteria: formValues.discharge.criteria.trim(),
-              },
-            }
-          : {}),
-        ...(formValues.type === 'OccupationalHealthcare' &&
-        formValues.employerName
-          ? {
-              employerName: formValues.employerName.trim(),
-            }
-          : {}),
-      });
+      // Use prepareEntryData to clean and format the entry data
+      const cleanedData = prepareEntryData(formValues);
+      console.log('[DEBUG] EntryForm - Submitting cleaned data:', cleanedData);
+      onSubmit(cleanedData);
     },
   });
+
 
   useEffect(() => {
     if (firstInputRef.current) {
@@ -143,8 +121,10 @@ const EntryForm: React.FC<Props> = ({
               required
               error={!!errors.dischargeCriteria}
               helperText={
-                errors.dischargeCriteria || 'Criteria for discharge'
+                errors.dischargeCriteria ||
+                'Criteria for discharge (max 500 characters)'
               }
+              inputProps={{ maxLength: 500 }}
             />
           </>
         );
@@ -162,8 +142,10 @@ const EntryForm: React.FC<Props> = ({
               required
               error={!!errors.employerName}
               helperText={
-                errors.employerName || 'Name of the employer'
+                errors.employerName ||
+                'Name of the employer (max 100 characters)'
               }
+              inputProps={{ maxLength: 100 }}
             />
             <TextField
               label='Sick leave start date'
@@ -251,165 +233,186 @@ const EntryForm: React.FC<Props> = ({
 
   return (
     <Box sx={{ p: 2 }}>
-      <Typography variant="h6" gutterBottom>
+      <Typography
+        variant='h6'
+        gutterBottom
+      >
         {title}
       </Typography>
-        {(error || formError) && (
-          <Alert
-            severity='error'
-            sx={{ mb: 3 }}
+      {(error || formError) && (
+        <Alert
+          severity='error'
+          sx={{ mb: 3 }}
+        >
+          {error || formError}
+        </Alert>
+      )}
+
+      <Box
+        component='form'
+        onSubmit={async (e) => {
+          e.preventDefault();
+          await handleFormSubmit();
+        }}
+      >
+        <FormControl
+          fullWidth
+          margin='normal'
+        >
+          <InputLabel>Entry Type</InputLabel>
+          <Select
+            value={formValues.type}
+            onChange={(e) => handleChange('type', e.target.value)}
+            label='Entry Type'
+            disabled={isEditMode}
           >
-            {error || formError}
-          </Alert>
+            <MenuItem value='HealthCheck'>Health Check</MenuItem>
+            <MenuItem value='Hospital'>Hospital</MenuItem>
+            <MenuItem value='OccupationalHealthcare'>
+              Occupational Healthcare
+            </MenuItem>
+          </Select>
+        </FormControl>
+
+        <TextField
+          label='Description'
+          value={formValues.description}
+          onChange={(e) =>
+            handleChange('description', e.target.value)
+          }
+          fullWidth
+          margin='normal'
+          error={!!errors.description}
+          helperText={
+            errors.description ||
+            'Brief description of the entry (max 500 characters)'
+          }
+          required
+          inputRef={firstInputRef}
+          inputProps={{ maxLength: 500 }}
+        />
+
+        <TextField
+          label='Date'
+          type='date'
+          value={formValues.date}
+          onChange={(e) => handleChange('date', e.target.value)}
+          fullWidth
+          margin='normal'
+          InputLabelProps={{ shrink: true }}
+          error={!!errors.date}
+          helperText={errors.date || 'Date of the entry'}
+          required
+        />
+
+        <TextField
+          label='Specialist'
+          value={formValues.specialist}
+          onChange={(e) => handleChange('specialist', e.target.value)}
+          fullWidth
+          margin='normal'
+          error={!!errors.specialist}
+          helperText={
+            errors.specialist ||
+            'Name of the specialist (max 100 characters)'
+          }
+          required
+          inputProps={{ maxLength: 100 }}
+        />
+
+        <Autocomplete
+          options={diagnosisCodesAll.filter((d) => d?.code)}
+          getOptionLabel={(option) => {
+            if (typeof option === 'string') return option;
+            return option?.code || '';
+          }}
+          value={
+            formValues.diagnosisCodes
+              ? formValues.diagnosisCodes
+                  .map(
+                    (code) =>
+                      diagnosisCodesAll.find(
+                        (d) => d?.code === code
+                      ) || code
+                  )
+                  .filter(Boolean)
+              : []
+          }
+          onChange={(_, newValue) => {
+            const filteredNewValue = newValue.filter(v =>
+              v !== null && v !== undefined && v !== ''
+            );
+            
+            const cleaned = filteredNewValue
+              .map((v) => {
+                if (typeof v === 'string') return v.trim();
+                return v?.code?.trim() || '';
+              })
+              .filter((code) => code !== '');
+
+            handleChange('diagnosisCodes', cleaned.length ? cleaned : []);
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label='Diagnosis Codes (Optional)'
+              placeholder='Enter ICD-10 codes'
+              error={!!errors.diagnosisCodes}
+              helperText={
+                errors.diagnosisCodes ||
+                'Search and select one or more diagnosis codes'
+              }
+            />
+          )}
+          multiple
+          freeSolo
+          fullWidth
+          sx={{ mb: 2 }}
+        />
+        {renderEntryTypeFields()}
+
+        {isEditMode && (
+          <TextField
+            label='Change Reason'
+            onChange={(e) => handleReasonChange(e.target.value)}
+            placeholder='Describe what changed and why (min 10 chars)'
+            fullWidth
+            margin='normal'
+            error={!!errors.changeReason}
+            helperText={errors.changeReason}
+            required
+          />
         )}
 
         <Box
-          component='form'
-          onSubmit={handleFormSubmit}
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 2,
+            mt: 3,
+          }}
         >
-          <FormControl
-            fullWidth
-            margin='normal'
+          <Button
+            variant='outlined'
+            onClick={onCancel}
           >
-            <InputLabel>Entry Type</InputLabel>
-            <Select
-              value={formValues.type}
-              onChange={(e) => handleChange('type', e.target.value)}
-              label='Entry Type'
-              disabled={isEditMode}
-            >
-              <MenuItem value='HealthCheck'>Health Check</MenuItem>
-              <MenuItem value='Hospital'>Hospital</MenuItem>
-              <MenuItem value='OccupationalHealthcare'>
-                Occupational Healthcare
-              </MenuItem>
-            </Select>
-          </FormControl>
-
-          <TextField
-            label='Description'
-            value={formValues.description}
-            onChange={(e) =>
-              handleChange('description', e.target.value)
-            }
-            fullWidth
-            margin='normal'
-            error={!!errors.description}
-            helperText={
-              errors.description || 'Brief description of the entry'
-            }
-            required
-            inputRef={firstInputRef}
-          />
-
-          <TextField
-            label='Date'
-            type='date'
-            value={formValues.date}
-            onChange={(e) => handleChange('date', e.target.value)}
-            fullWidth
-            margin='normal'
-            InputLabelProps={{ shrink: true }}
-            error={!!errors.date}
-            helperText={errors.date || 'Date of the entry'}
-            required
-          />
-
-          <TextField
-            label='Specialist'
-            value={formValues.specialist}
-            onChange={(e) =>
-              handleChange('specialist', e.target.value)
-            }
-            fullWidth
-            margin='normal'
-            error={!!errors.specialist}
-            helperText={errors.specialist || 'Name of the specialist'}
-            required
-          />
-
-          <Autocomplete
-            options={diagnosisCodesAll.filter((d) => d?.code)}
-            getOptionLabel={(option) => {
-              if (typeof option === 'string') return option;
-              return option?.code || '';
-            }}
-            value={
-              formValues.diagnosisCodes
-                ?.map(
-                  (code) =>
-                    diagnosisCodesAll.find((d) => d?.code === code) ||
-                    code
-                )
-                ?.filter(Boolean) || []
-            }
-            onChange={(_, newValue) => {
-              const cleaned = newValue
-                .map((v) => (typeof v === 'string' ? v : v.code))
-                .filter((v) => v !== null && v.trim() !== '');
-              handleChange('diagnosisCodes', cleaned);
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Diagnosis Codes (Optional)'
-                placeholder='Enter ICD-10 codes'
-                error={!!errors.diagnosisCodes}
-                helperText={
-                  errors.diagnosisCodes ||
-                  'Search and select one or more diagnosis codes'
-                }
-              />
+            Cancel
+          </Button>
+          <Button
+            variant='contained'
+            type='submit'
+            disabled={formLoading}
+          >
+            {formLoading ? (
+              <CircularProgress size={24} />
+            ) : isEditMode ? (
+              'Update Entry'
+            ) : (
+              'Add Entry'
             )}
-            multiple
-            freeSolo
-            fullWidth
-            sx={{ mb: 2 }}
-          />
-          {renderEntryTypeFields()}
-
-          {isEditMode && (
-            <TextField
-              label='Change Reason'
-              onChange={(e) => handleReasonChange(e.target.value)}
-              placeholder='Describe what changed and why (min 10 chars)'
-              fullWidth
-              margin='normal'
-              error={!!errors.changeReason}
-              helperText={errors.changeReason}
-              required
-            />
-          )}
-
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: 2,
-              mt: 3,
-            }}
-          >
-            <Button
-              variant='outlined'
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant='contained'
-              type='submit'
-              disabled={formLoading}
-            >
-              {formLoading ? (
-                <CircularProgress size={24} />
-              ) : isEditMode ? (
-                'Update Entry'
-              ) : (
-                'Add Entry'
-              )}
-            </Button>
-          </Box>
+          </Button>
         </Box>
+      </Box>
     </Box>
   );
 };

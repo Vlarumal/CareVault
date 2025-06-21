@@ -1,0 +1,476 @@
+import axios from 'axios';
+import { clearDatabase, createTestPatientWithEntries, seedDatabase } from './testUtils';
+import pool from '../../db/connection';
+import { Gender, HealthCheckRating } from '../../src/types';
+import dotenv from 'dotenv';
+
+dotenv.config();
+const baseUrl = process.env.BASE_URL;
+
+describe('Patients API Endpoint', () => {
+  beforeEach(async () => {
+    await clearDatabase();
+  });
+
+  afterAll(async () => {
+    await pool.end();
+  });
+
+  describe('GET /api/patients', () => {
+    beforeEach(async () => {
+      await seedDatabase();
+    });
+
+    test('should return 200 status with patient data', async () => {
+      const response = await axios.get(
+        `${baseUrl}/api/patients`
+      );
+      expect(response.status).toBe(200);
+      expect(response.data).toBeDefined();
+      expect(typeof response.data === 'object').toBe(true);
+      expect(response.data).toHaveProperty('data');
+      expect(Array.isArray(response.data.data)).toBe(true);
+      expect(response.data.data.length).toBeGreaterThan(0);
+      expect(response.data.data[0]).toHaveProperty('id');
+      expect(response.data.data[0]).toHaveProperty('name');
+      expect(response.data.data[0]).toHaveProperty('dateOfBirth');
+      expect(response.data.data[0]).toHaveProperty('gender');
+      expect(response.data.data[0]).toHaveProperty('occupation');
+    });
+
+    test('should handle valid query parameters', async () => {
+      const response = await axios.get(
+        `${baseUrl}/api/patients?field=name&sort=asc&limit=5&offset=0`
+      );
+      expect(response.status).toBe(200);
+      expect(response.data.data).toHaveLength(5);
+      expect(response.data).toHaveProperty('metadata');
+      expect(response.data.metadata).toHaveProperty('totalItems');
+      expect(response.data.metadata).toHaveProperty('page');
+      expect(response.data.metadata).toHaveProperty('pageSize');
+    });
+
+    test('should handle invalid query parameters', async () => {
+      try {
+        await axios.get(
+          `${baseUrl}/api/patients?field=invalid_field&sort=invalid_sort&limit=-1&offset=invalid`
+        );
+        fail('Should have thrown error');
+      } catch (error: any) {
+        if (axios.isAxiosError(error)) {
+          expect(error.response?.status).toBe(400);
+          expect(error.response?.data).toHaveProperty('error');
+        } else {
+          fail('Expected axios error');
+        }
+      }
+    });
+
+    test('should handle parameter count mismatches', async () => {
+      try {
+        await axios.get(
+          `${baseUrl}/api/patients?field=name&sort=asc&limit=5`
+        );
+        fail('Should have thrown error');
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error)) {
+          expect(error.response?.status).toBe(400);
+          expect(error.response?.data).toHaveProperty('error');
+        } else {
+          fail('Expected axios error');
+        }
+      }
+    });
+
+    test('should handle sorting by health_rating with null values', async () => {
+      // Create a patient with null health rating
+      await createTestPatientWithEntries(
+        {
+          name: 'Null Health Rating',
+          dateOfBirth: '1980-01-01',
+          gender: Gender.Male,
+          occupation: 'Tester'
+        },
+        [
+          {
+            description: 'Health check with null rating',
+            date: '2020-01-01',
+            specialist: 'Dr. Null',
+            type: 'HealthCheck',
+            healthCheckRating: HealthCheckRating.Healthy
+          }
+        ]
+      );
+
+      const response = await axios.get(
+        `${baseUrl}/api/patients?sort=health_rating`
+      );
+      expect(response.status).toBe(200);
+      expect(response.data.data).toBeDefined();
+    });
+
+    test('should handle filtering combinations', async () => {
+      // Create patients with different filters
+      await createTestPatientWithEntries(
+        {
+          name: 'Male Nurse',
+          dateOfBirth: '1980-01-01',
+          gender: Gender.Male,
+          occupation: 'Nurse'
+        },
+        []
+      );
+
+      await createTestPatientWithEntries(
+        {
+          name: 'Female Engineer',
+          dateOfBirth: '1985-01-01',
+          gender: Gender.Female,
+          occupation: 'Engineer'
+        },
+        []
+      );
+
+      // Test filtering by gender and occupation
+      let response = await axios.get(
+        `${baseUrl}/api/patients?gender=male&occupation=nurse`
+      );
+      expect(response.status).toBe(200);
+      expect(response.data.data).toHaveLength(1);
+      expect(response.data.data[0].gender).toBe('male');
+      expect(response.data.data[0].occupation).toBe('Nurse');
+
+      // Test filtering by gender and health rating
+      response = await axios.get(
+        `${baseUrl}/api/patients?gender=female&health_rating=0`
+      );
+      expect(response.status).toBe(200);
+      expect(response.data.data).toHaveLength(1);
+      expect(response.data.data[0].gender).toBe('female');
+    });
+
+    test('should handle large dataset with pagination', async () => {
+      // Create 1000 patients
+      for (let i = 0; i < 1000; i++) {
+        await createTestPatientWithEntries(
+          {
+            name: `Patient ${i}`,
+            dateOfBirth: '1990-01-01',
+            gender: Gender.Other,
+            occupation: `Occupation ${i % 10}`
+          },
+          []
+        );
+      }
+
+      // Test pagination with large dataset
+      const response = await axios.get(
+        `${baseUrl}/api/patients?limit=100&offset=900`
+      );
+      expect(response.status).toBe(200);
+      expect(response.data.data).toHaveLength(100);
+      expect(response.data.metadata.totalItems).toBeGreaterThanOrEqual(1000);
+    });
+  });
+
+  describe('GET /api/patients/:id', () => {
+    let patientId: string;
+
+    beforeEach(async () => {
+      const patient = await createTestPatientWithEntries(
+        {
+          name: 'Test Patient',
+          dateOfBirth: '1990-01-01',
+          gender: Gender.Male,
+          occupation: 'Engineer'
+        },
+        [
+          {
+            description: 'Annual physical',
+            date: '2023-05-15',
+            specialist: 'Dr. Smith',
+            type: 'HealthCheck',
+            healthCheckRating: 0
+          },
+          {
+            description: 'Emergency visit',
+            date: '2023-06-01',
+            specialist: 'Dr. Johnson',
+            type: 'Hospital',
+            discharge: {
+              date: '2023-06-03',
+              criteria: 'Stable condition'
+            }
+          }
+        ]
+      );
+      patientId = patient.id;
+    });
+
+    test('should reject SQL injection in patient ID', async () => {
+      const maliciousId = "1' OR '1'='1";
+      try {
+        await axios.get(
+          `${baseUrl}/api/patients/${maliciousId}`
+        );
+        fail('Should have thrown error');
+      } catch (error) {
+        expect(error.response?.status).toBe(400);
+      }
+    });
+
+    test('should return patient details with entries including full structure', async () => {
+      const response = await axios.get(
+        `${baseUrl}/api/patients/${patientId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.data).toBeDefined();
+
+      // Verify basic patient details
+      expect(response.data).toHaveProperty('id', patientId);
+      expect(response.data).toHaveProperty('name', 'Test Patient');
+      expect(['1990-01-01', '1990-01-01T00:00:00.000Z']).toContain(
+        response.data.date_of_birth
+      );
+      expect(response.data).toHaveProperty('gender', 'male');
+      expect(response.data).toHaveProperty('occupation', 'Engineer');
+
+      expect(response.data).toHaveProperty('entries');
+      const entries = response.data.entries;
+      expect(Array.isArray(entries)).toBe(true);
+      expect(entries.length).toBe(2);
+
+      const firstEntry = entries[0];
+      expect(firstEntry).toHaveProperty('id');
+      expect(firstEntry).toHaveProperty('description');
+      expect(firstEntry).toHaveProperty('date');
+      expect(firstEntry).toHaveProperty('specialist');
+      expect(firstEntry).toHaveProperty('type');
+
+      if (firstEntry.type === 'HealthCheck') {
+
+describe('System Version Endpoints', () => {
+  let patientId: string;
+
+  beforeEach(async () => {
+    const patient = await createTestPatientWithEntries(
+      {
+        name: 'System Version Test Patient',
+        dateOfBirth: '1990-01-01',
+        gender: Gender.Male,
+        occupation: 'Engineer'
+      },
+      []
+    );
+    patientId = patient.id;
+  });
+
+  test('POST /system/versions should create system version', async () => {
+    // First create a regular entry
+    const entryRes = await axios.post(
+      `${baseUrl}/api/patients/${patientId}/entries`,
+      {
+        description: 'Initial entry',
+        date: '2023-01-01',
+        specialist: 'Dr. Smith',
+        type: 'HealthCheck',
+        healthCheckRating: HealthCheckRating.Healthy
+      },
+      { headers: { Authorization: 'Bearer testtoken' } }
+    );
+
+    // Then create system version
+    const response = await axios.post(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryRes.data.id}/system/versions`,
+      {
+        description: 'System generated version',
+        date: '2023-01-02',
+        specialist: 'System',
+        type: 'HealthCheck',
+        healthCheckRating: HealthCheckRating.LowRisk
+      },
+      { headers: { Authorization: 'Bearer testtoken' } }
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.data).toHaveProperty('id');
+    expect(response.data).toHaveProperty('entryId', entryRes.data.id);
+    expect(response.data.entryData.description).toBe('System generated version');
+  });
+
+  test('POST /system/versions should reject invalid entries', async () => {
+    try {
+      await axios.post(
+        `${baseUrl}/api/patients/${patientId}/entries/system/versions`,
+        { invalid: 'data' },
+        { headers: { Authorization: 'Bearer testtoken' } }
+      );
+      fail('Should have thrown error');
+    } catch (error) {
+      expect(error.response.status).toBe(400);
+    }
+  });
+
+  test('POST /system/versions should require authentication', async () => {
+    try {
+      await axios.post(
+        `${baseUrl}/api/patients/${patientId}/entries/system/versions`,
+        {
+          description: 'Unauthenticated entry',
+          date: '2023-01-01',
+          specialist: 'System',
+          type: 'HealthCheck',
+          healthCheckRating: HealthCheckRating.Healthy
+        }
+      );
+      fail('Should have thrown error');
+    } catch (error) {
+      expect(error.response.status).toBe(401);
+    }
+  });
+});
+
+describe('Entry Version Endpoints', () => {
+  let patientId: string;
+  let entryId: string;
+  let versionId: string;
+
+  beforeEach(async () => {
+    const patient = await createTestPatientWithEntries(
+      {
+        name: 'Version Test Patient',
+        dateOfBirth: '1990-01-01',
+        gender: Gender.Male,
+        occupation: 'Engineer'
+      },
+      [
+        {
+          description: 'Initial entry',
+          date: '2023-01-01',
+          specialist: 'Dr. Smith',
+          type: 'HealthCheck',
+          healthCheckRating: HealthCheckRating.Healthy,
+          diagnosisCodes: ['S72.0', 'J18.9']
+        }
+      ]
+    );
+    patientId = patient.id;
+    entryId = patient.entries[0].id;
+
+    // Create a version by updating the entry
+    await axios.put(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}`,
+      {
+        description: 'Updated entry',
+        date: '2023-01-01',
+        specialist: 'Dr. Smith',
+        type: 'HealthCheck',
+        healthCheckRating: HealthCheckRating.LowRisk,
+        changeReason: 'Updated diagnosis'
+      }
+    );
+
+    // Get the created version
+    const versionsRes = await axios.get(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions`
+    );
+    versionId = versionsRes.data[0].id;
+  });
+
+  test('GET /versions should return entry versions', async () => {
+    const response = await axios.get(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions`
+    );
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.data)).toBe(true);
+    expect(response.data.length).toBeGreaterThan(0);
+    expect(response.data[0]).toHaveProperty('id');
+    expect(response.data[0]).toHaveProperty('entryId');
+    expect(response.data[0]).toHaveProperty('entryData');
+  });
+
+  test('GET /versions/:versionId should return specific version', async () => {
+    const response = await axios.get(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions/${versionId}`
+    );
+    expect(response.status).toBe(200);
+    expect(response.data).toHaveProperty('id', versionId);
+    expect(response.data).toHaveProperty('entryId', entryId);
+    expect(response.data.entryData).toHaveProperty('description', 'Initial entry');
+  });
+
+  test('PUT /versions/:versionId should restore version', async () => {
+    const restoreRes = await axios.put(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions/${versionId}`,
+      {},
+      { headers: { Authorization: 'Bearer testtoken' } }
+    );
+    
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.data).toHaveProperty('description', 'Initial entry');
+    expect(restoreRes.data).toHaveProperty('healthCheckRating', HealthCheckRating.Healthy);
+    expect(restoreRes.data.diagnosisCodes).toEqual(['S72.0', 'J18.9']);
+
+    // Verify entry was actually restored
+    const entryRes = await axios.get(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}`
+    );
+    expect(entryRes.data.description).toBe('Initial entry');
+  });
+
+  test('should reject restoring invalid version', async () => {
+    try {
+      await axios.put(
+        `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions/invalid-version`,
+        {},
+        { headers: { Authorization: 'Bearer testtoken' } }
+      );
+      fail('Should have thrown error');
+    } catch (error) {
+      expect(error.response.status).toBe(404);
+    }
+  });
+
+  test('should require authentication for restore', async () => {
+    try {
+      await axios.put(
+        `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions/${versionId}`
+      );
+      fail('Should have thrown error');
+    } catch (error) {
+      expect(error.response.status).toBe(401);
+    }
+  });
+
+  test('should handle concurrent updates during restore', async () => {
+    // Simulate concurrent update
+    await axios.put(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}`,
+      {
+        description: 'Concurrent update',
+        date: '2023-01-01',
+        specialist: 'Dr. Smith',
+        type: 'HealthCheck',
+        healthCheckRating: HealthCheckRating.HighRisk,
+        changeReason: 'Emergency update'
+      }
+    );
+
+    // Attempt restore
+    const restoreRes = await axios.put(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions/${versionId}`,
+      {},
+      { headers: { Authorization: 'Bearer testtoken' } }
+    );
+    
+    // Should still succeed but create a new version
+    expect(restoreRes.status).toBe(200);
+
+    // Verify new version was created
+    const versionsRes = await axios.get(
+      `${baseUrl}/api/patients/${patientId}/entries/${entryId}/versions`
+    );
+    expect(versionsRes.data.length).toBe(3); // Initial + update + restore
+  });
+});

@@ -190,8 +190,8 @@ export const validateDateRange = (startDate: string, endDate: string): string =>
  *
  */
 export const validateSSN = (ssn: string): string | undefined => {
-  if (!/^\d{6}-\d{4}$/.test(ssn)) {
-    return 'SSN must be in format 123456-7890';
+  if (!/^\d{3}-\d{2}-\d{4}$/.test(ssn)) {
+    return 'SSN must be in format 123-45-7890';
   }
   return undefined;
 };
@@ -201,12 +201,11 @@ export const validateSSN = (ssn: string): string | undefined => {
  * @param diagnosisCodes - Array of diagnosis codes
  * @returns JSX element with diagnosis codes or null if no codes
  */
-export const renderDiagnosisCodes = (diagnosisCodes?: string[]) => {
+export const renderDiagnosisCodes = (diagnosisCodes?: string[] | null) => {
   if (!diagnosisCodes || diagnosisCodes.length === 0) {
     return null;
   }
 
-  // Filter out duplicate diagnosis codes
   const uniqueDiagnosisCodes = Array.from(new Set(diagnosisCodes));
 
   return (

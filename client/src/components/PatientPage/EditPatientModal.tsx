@@ -31,13 +31,14 @@ const EditPatientModal = ({ patient, open, onClose }: Props) => {
         queryKey: ['patient', patient.id],
       });
       showNotification('Patient updated successfully', 'success');
-      setTimeout(onClose, 1500);
+      onClose();
     },
     onError: (error: Error) => {
       showNotification(
         `Failed to update patient: ${error.message}`,
         'error'
       );
+      updatePatientMutation.reset();
     },
   });
 
@@ -114,6 +115,10 @@ const EditPatientModal = ({ patient, open, onClose }: Props) => {
                 dateOfBirth:
                   (
                     patient.date_of_birth || patient.dateOfBirth
+                  )?.split('T')[0] || '',
+                deathDate:
+                  (
+                    patient.death_date || patient.deathDate
                   )?.split('T')[0] || '',
               }}
               loading={updatePatientMutation.isPending}

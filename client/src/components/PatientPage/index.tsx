@@ -68,8 +68,15 @@ const PatientPage = () => {
   });
 
   const { showNotification } = useNotification();
+
   const updateMutation = useMutation({
-    mutationFn: ({ entryId, values }: { entryId: string; values: NewEntryFormValues }) => {
+    mutationFn: ({
+      entryId,
+      values,
+    }: {
+      entryId: string;
+      values: NewEntryFormValues;
+    }) => {
       if (!validatedId) {
         throw new Error('Patient ID is required');
       }
@@ -87,14 +94,16 @@ const PatientPage = () => {
       ]);
 
       if (previousPatient) {
-        const updatedEntries = previousPatient.entries?.map(entry => {
-          if (entry.id === entryId) {
-            // Create deep merge of existing entry and new values
-            return mergeEntryUpdates(entry, values);
+        const updatedEntries = previousPatient.entries?.map(
+          (entry) => {
+            if (entry.id === entryId) {
+              // Create deep merge of existing entry and new values
+              return mergeEntryUpdates(entry, values);
+            }
+            return entry;
           }
-          return entry;
-        });
-        
+        );
+
         queryClient.setQueryData<Patient>(['patient', validatedId], {
           ...previousPatient,
           entries: updatedEntries,
@@ -107,6 +116,8 @@ const PatientPage = () => {
       handleDrawerClose();
       setEditingEntry(null);
       showNotification('Entry updated successfully!', 'success');
+      queryClient.invalidateQueries({ queryKey: ['patient', validatedId], exact: true });
+      queryClient.invalidateQueries({ queryKey: ['patients'], exact: true });
     },
     onError: (_err, _variables, context) => {
       if (context?.previousPatient) {
@@ -118,7 +129,7 @@ const PatientPage = () => {
       showNotification(
         'Failed to refresh patient data after update',
         'warning'
-        );
+      );
     },
   });
 
@@ -182,8 +193,9 @@ const PatientPage = () => {
         'error'
       );
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({
+    onSettled: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await queryClient.invalidateQueries({
         queryKey: ['patient', validatedId],
         exact: true,
       });
@@ -213,6 +225,11 @@ const PatientPage = () => {
   const handleEntryClick = useCallback((entryId: string) => {
     setSelectedEntryId(entryId);
     setIsEntryHistoryModalOpen(true);
+  }, []);
+
+  const handleEntryHistoryModalClose = useCallback(() => {
+    setIsEntryHistoryModalOpen(false);
+    setSelectedEntryId(null);
   }, []);
 
   const handleEditEntry = (entry: Entry) => {
@@ -281,21 +298,32 @@ const PatientPage = () => {
 
   return (
     <div>
-      <Box display="flex" alignItems="center" gap={2} marginBottom={2}>
+      <Box
+        display='flex'
+        alignItems='center'
+        gap={2}
+        marginBottom={2}
+      >
         <h2 data-testid='patient-name'>
           {patient.name}
+          {patient.deathDate && (
+            <span aria-label="Deceased" role="img" style={{ marginLeft: '8px' }}>
+              ☠️
+            </span>
+          )}
           <span
             aria-label={`Gender: ${patient.gender}`}
             role='img'
+            style={{ marginLeft: '8px' }}
           >
             {getIcon(patient.gender)}
           </span>
         </h2>
         <Button
-          variant="contained"
-          color="primary"
+          variant='contained'
+          color='primary'
           onClick={() => setIsEditModalOpen(true)}
-          aria-label="Edit patient details"
+          aria-label='Edit patient details'
         >
           Edit
         </Button>
@@ -313,8 +341,12 @@ const PatientPage = () => {
       >
         Back to Patient List
       </Button>
-      <div>ssn: {patient.ssn}</div>
-      <div>occupation: {patient.occupation}</div>
+      <div>SSN: {patient.ssn}</div>
+      <div>Occupation: {patient.occupation}</div>
+      <div>Date of birth: {patient.date_of_birth?.split('T')[0]}</div>
+      {patient.death_date && (
+        <div>Date of death: {patient.death_date?.split('T')[0]}</div>
+      )}
       <div
         style={{ margin: '10px 0' }}
         aria-label='Latest health rating'
@@ -325,7 +357,6 @@ const PatientPage = () => {
           showText={true}
         />
       </div>
-
       <Button
         variant='contained'
         color='primary'
@@ -348,6 +379,7 @@ const PatientPage = () => {
       >
         Add new medical entries here
       </Typography>
+
       <section>
         <Fab
           color='primary'
@@ -359,7 +391,7 @@ const PatientPage = () => {
             right: 16,
             animation: 'pulse 2s infinite',
             zIndex: 1200,
-            display: isDrawerOpen ? 'none' : 'inline-flex'
+            display: isDrawerOpen ? 'none' : 'inline-flex',
           }}
         >
           <AddIcon />
@@ -374,23 +406,34 @@ const PatientPage = () => {
             patientId={validatedId}
             onSubmit={(values) => {
               if (editingEntry) {
-                updateMutation.mutate({
-                  entryId: editingEntry.id,
-                  values
-                }, {
-                  onSuccess: (updatedEntry) => {
-                    console.log('Update successful', updatedEntry);
+                updateMutation.mutate(
+                  {
+                    entryId: editingEntry.id,
+                    values,
                   },
-                  onError: (error) => {
-                    console.error('Update failed', error);
+                  {
+                    onSuccess: (updatedEntry) => {
+                      console.log('Update successful', updatedEntry);
+                    },
+                    onError: (error) => {
+                      console.error('Update failed', error);
+                    },
                   }
-                });
+                );
               } else {
                 addMutation.mutate(values);
               }
             }}
-            error={editingEntry ? updateMutation.error?.message : addMutation.error?.message}
-            loading={editingEntry ? updateMutation.isPending : addMutation.isPending}
+            error={
+              editingEntry
+                ? updateMutation.error?.message
+                : addMutation.error?.message
+            }
+            loading={
+              editingEntry
+                ? updateMutation.isPending
+                : addMutation.isPending
+            }
             diagnosisCodesAll={diagnosisCodesAll}
             onCancel={() => {
               handleDrawerClose();
@@ -405,7 +448,7 @@ const PatientPage = () => {
       {selectedEntryId && (
         <EntryHistoryModal
           open={isEntryHistoryModalOpen}
-          onClose={() => setIsEntryHistoryModalOpen(false)}
+          onClose={handleEntryHistoryModalClose}
           entryId={selectedEntryId}
           patientId={validatedId}
         />
@@ -428,6 +471,11 @@ const PatientPage = () => {
             getDiagnosisByCode={getDiagnosisByCode}
             onEntryClick={handleEntryClick}
             onEditEntry={handleEditEntry}
+            patientId={validatedId}
+            onDeleted={() => {
+              handleEntryHistoryModalClose();
+              refetch();
+            }}
           />
         </Box>
       )}

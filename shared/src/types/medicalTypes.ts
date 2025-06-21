@@ -20,6 +20,8 @@ export interface Patient {
   gender: Gender;
   ssn?: string;
   dateOfBirth?: string;
+  deathDate?: string | null;
+  death_date?: string | null;
   date_of_birth?: string; // API response format
   createdAt?: string;
   updatedAt?: string;
@@ -27,14 +29,25 @@ export interface Patient {
   healthRating?: number | null; // Precomputed health rating from backend
 }
 
-export type PatientFormValues = Omit<Patient, 'id' | 'entries'>;
+export type PatientFormValues = Omit<Patient, 'id' | 'entries'> & {
+  deathDate?: string | null;
+  death_date?: string;
+  
+};
 
 export interface BaseEntry {
   id: string;
   description: string;
   date: string;
   specialist: string;
-  diagnosisCodes?: string[]; // Changed to string[] to match data
+  /**
+   * Array of diagnosis codes associated with this entry
+   * - Must be in format [A-Za-z0-9.-] (letters, numbers, dots, hyphens)
+   * - Empty arrays are allowed and will be treated as no diagnoses
+   * - Undefined indicates no diagnosis codes provided
+   * - Empty array [] indicates no diagnoses
+   */
+  diagnosisCodes?: string[] | undefined;
   isOptimistic?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -131,4 +144,11 @@ export type UnionOmit<T, K extends string | number | symbol> = T extends unknown
   ? Omit<T, K>
   : never;
 
-export type NewEntryWithoutId = UnionOmit<Entry, 'id'>;
+/**
+ * Represents a new medical entry without the auto-generated ID
+ * - Used for creating new entries before they receive a database ID
+ * - All properties except 'id' are required
+ */
+export type NewEntryWithoutId = UnionOmit<Entry, 'id'> & {
+ diagnosisCodes?: string[] | null | undefined;
+};

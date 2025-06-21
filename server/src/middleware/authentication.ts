@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ValidationError } from '../utils/errors';
-import jwt from 'jsonwebtoken';
 import pool from '../../db/connection';
-import { isTokenBlacklisted, verifyToken } from '../utils/jwtUtils';
+import { verifyToken } from '../utils/jwtUtils';
 
 declare module 'express' {
   interface Request {
@@ -44,19 +43,7 @@ export const authenticate = async (
   }
 
   try {
-    const header = jwt.decode(token, { complete: true })
-      ?.header as jwt.JwtHeader & { kid?: string };
-    if (header?.kid) {
-      const isBlacklisted = await isTokenBlacklisted(header.kid);
-      if (isBlacklisted) {
-        throw new ValidationError('Token has been revoked', {
-          status: 401,
-          code: 'TOKEN_REVOKED',
-        });
-      }
-    }
-
-    const payload = await verifyToken(token);
+    const payload = verifyToken(token);
     
     if (!payload.permissions?.includes('entries:write')) {
       throw new ValidationError('Insufficient permissions', {

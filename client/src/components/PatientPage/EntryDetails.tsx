@@ -7,14 +7,37 @@ import { Entry } from '../../types';
 const EntryDetails: React.FC<{
   entry: Entry;
   onEditEntry: (entry: Entry) => void;
-}> = ({ entry, onEditEntry }) => {
+  patientId: string;
+  onDeleted: () => void;
+}> = ({ entry, onEditEntry, patientId, onDeleted }) => {
   switch (entry.type) {
     case 'Hospital':
-      return <HospitalEntryComponent entry={entry} onEditEntry={onEditEntry} />;
+      return (
+        <HospitalEntryComponent
+          entry={entry}
+          onEditEntry={onEditEntry}
+          patientId={patientId}
+          onDeleted={onDeleted}
+        />
+      );
     case 'OccupationalHealthcare':
-      return <OccupationalHealthcareEntryComponent entry={entry} onEditEntry={onEditEntry} />;
+      return (
+        <OccupationalHealthcareEntryComponent
+          entry={entry}
+          onEditEntry={onEditEntry}
+          patientId={patientId}
+          onDeleted={onDeleted}
+        />
+      );
     case 'HealthCheck':
-      return <HealthCheckEntryComponent entry={entry} onEditEntry={onEditEntry} />;
+      return (
+        <HealthCheckEntryComponent
+          entry={entry}
+          onEditEntry={onEditEntry}
+          patientId={patientId}
+          onDeleted={onDeleted}
+        />
+      );
     default:
       return assertNever(entry);
   }

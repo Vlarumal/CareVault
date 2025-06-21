@@ -32,7 +32,7 @@ import {
   buildWhereClause,
   buildOrderByClause,
 } from '../utils/queryBuilder';
-import { AnyEntry } from 'shared/src/types/medicalTypes';
+import { AnyEntry } from '../../../shared/src/types/medicalTypes';
 
 class TransactionError extends DatabaseError {
   constructor(message: string, details?: Record<string, any>) {
@@ -40,6 +40,13 @@ class TransactionError extends DatabaseError {
     this.name = 'TransactionError';
   }
 }
+
+function isValidDiagnosisCodes(codes: any): codes is string[] | null | undefined {
+  return codes === null || codes === undefined ||
+         (Array.isArray(codes) && codes.every(c => c === null || typeof c === 'string'));
+}
+
+import { normalizeDiagnosisCodes } from '../../../shared/src/utils/normalize';
 
 const SAFE_STRING_REGEX = /^[^;'"\\]*$/;
 
@@ -187,6 +194,10 @@ const getNonSensitiveEntries = async (): Promise<
       updated_at: string;
       health_rating: number | null;
     }>;
+
+    if (!result) {
+      throw new DatabaseError('Query returned no result');
+    }
 
     return result.rows.map((row) => ({
       id: row.id,
@@ -373,6 +384,7 @@ const getAllPatientsWithEntries = async (): Promise<
   PatientEntry[]
 > => {
   try {
+    await pool.query('REFRESH MATERIALIZED VIEW patient_health_ratings');
     const patients = await getPatientEntries();
     const patientsWithEntries = await Promise.all(
       patients.map(async (patient) => {
@@ -404,6 +416,7 @@ const getPaginatedPatientsWithEntries = async (
   }
 
   try {
+    await pool.query('REFRESH MATERIALIZED VIEW patient_health_ratings');
     const offset = (page - 1) * pageSize;
     const result = await pool.query(
       `
@@ -490,6 +503,7 @@ const getPatientById = async (id: string): Promise<PatientEntry> => {
       createdAt: patient.createdAt,
       updatedAt: patient.updatedAt,
       dateOfBirth: patient.dateOfBirth,
+      deathDate: patient.deathDate ? normalizeEntryDate(patient.deathDate) : null,
       entries: entries,
     } as PatientEntry;
   } catch (error) {
@@ -584,7 +598,6 @@ const createPatient = async (
       });
     }
 
-    // Semantic checks
     if (date > new Date()) {
       throw new ValidationError('Date cannot be in the future', {
         error: 'ValidationError',
@@ -632,6 +645,55 @@ const createPatient = async (
       );
     }
   }
+if (sanitizedEntry.deathDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedEntry.deathDate)) {
+      throw new ValidationError('Invalid date format. Use YYYY-MM-DD', {
+        error: 'InvalidDateFormat',
+        details: {
+          field: 'deathDate',
+          value: sanitizedEntry.deathDate,
+          constraints: ['format: YYYY-MM-DD'],
+        },
+      });
+    }
+    
+    const deathDate = new Date(sanitizedEntry.deathDate);
+    if (isNaN(deathDate.getTime())) {
+      throw new ValidationError('Invalid deathDate value', {
+        error: 'ValidationError',
+        details: {
+          field: 'deathDate',
+          value: sanitizedEntry.deathDate,
+          constraints: ['valid_date'],
+        },
+      });
+    }
+    
+    if (deathDate > new Date()) {
+      throw new ValidationError('deathDate cannot be in the future', {
+        error: 'ValidationError',
+        details: {
+          field: 'deathDate',
+          value: sanitizedEntry.deathDate,
+          constraints: ['past_date'],
+        },
+      });
+    }
+    
+    if (sanitizedEntry.dateOfBirth) {
+      const birthDate = new Date(sanitizedEntry.dateOfBirth);
+      if (deathDate < birthDate) {
+        throw new ValidationError('deathDate must be after dateOfBirth', {
+          error: 'ValidationError',
+          details: {
+            field: 'deathDate',
+            value: sanitizedEntry.deathDate,
+            constraints: ['after_dateOfBirth'],
+          },
+        });
+      }
+    }
+  }
 
   if (sanitizedEntry.ssn) {
     const existing = await pool.query(
@@ -667,8 +729,8 @@ const createPatient = async (
 
       const result = (await client.query(
         `
-        INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO patients (id, name, occupation, gender, ssn, date_of_birth, death_date)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *
       `,
         [
@@ -678,6 +740,7 @@ const createPatient = async (
           sanitizedEntry.gender,
           sanitizedEntry.ssn,
           normalizeEntryDate(sanitizedEntry.dateOfBirth),
+          sanitizedEntry.deathDate ? normalizeEntryDate(sanitizedEntry.deathDate) : null,
         ]
       )) as QueryResult<PatientEntry>;
 
@@ -688,15 +751,14 @@ const createPatient = async (
         createdAt: patient.createdAt,
         updatedAt: patient.updatedAt,
         dateOfBirth: patient.dateOfBirth,
+        deathDate: patient.deathDate ? normalizeEntryDate(patient.deathDate) : null,
         entries: [],
       } as PatientEntry;
       break;
     } catch (error: any) {
       await client.query('ROLLBACK');
 
-      // Classify transaction failures
       if (error.code === '40001' || error.code === '40P01') {
-        // Serialization failure or deadlock
         if (retries < maxRetries) {
           retries++;
           const delay = Math.pow(2, retries) * 100;
@@ -773,6 +835,19 @@ const editPatient = async (
     }
   }
 
+  if (sanitizedUpdate.deathDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedUpdate.deathDate)) {
+      throw new ValidationError('Invalid date format. Use YYYY-MM-DD', {
+        error: 'ValidationError',
+        details: {
+          field: 'deathDate',
+          value: sanitizedUpdate.deathDate,
+          constraints: ['format'],
+        },
+      });
+    }
+  }
+
   try {
     const existingResult = await pool.query(
       'SELECT * FROM patients WHERE id = $1',
@@ -782,6 +857,48 @@ const editPatient = async (
       throw new NotFoundError('Patient', id);
     }
     const existingPatient = existingResult.rows[0] as any;
+  if (sanitizedUpdate.deathDate || (sanitizedUpdate.dateOfBirth && existingPatient.death_date)) {
+    const deathDate = sanitizedUpdate.deathDate 
+      ? new Date(sanitizedUpdate.deathDate) 
+      : new Date(existingPatient.death_date);
+    
+    if (isNaN(deathDate.getTime())) {
+      throw new ValidationError('Invalid deathDate value', {
+        error: 'ValidationError',
+        details: {
+          field: 'deathDate',
+          value: sanitizedUpdate.deathDate || existingPatient.death_date,
+          constraints: ['valid_date'],
+        },
+      });
+    }
+
+    if (deathDate > new Date()) {
+      throw new ValidationError('deathDate cannot be in the future', {
+        error: 'ValidationError',
+        details: {
+          field: 'deathDate',
+          value: sanitizedUpdate.deathDate || existingPatient.death_date,
+          constraints: ['past_date'],
+        },
+      });
+    }
+
+    const birthDate = sanitizedUpdate.dateOfBirth 
+      ? new Date(sanitizedUpdate.dateOfBirth) 
+      : new Date(existingPatient.date_of_birth);
+    
+    if (deathDate < birthDate) {
+      throw new ValidationError('deathDate must be after dateOfBirth', {
+        error: 'ValidationError',
+        details: {
+          field: 'deathDate',
+          value: sanitizedUpdate.deathDate || existingPatient.death_date,
+          constraints: ['after_dateOfBirth'],
+        },
+      });
+    }
+  }
 
     const updatedFields = {
       name: sanitizedUpdate.name ?? existingPatient.name,
@@ -791,6 +908,12 @@ const editPatient = async (
       ssn: sanitizedUpdate.ssn ?? existingPatient.ssn,
       date_of_birth:
         sanitizedUpdate.dateOfBirth ?? existingPatient.date_of_birth,
+      death_date:
+        'deathDate' in sanitizedUpdate
+          ? (sanitizedUpdate.deathDate
+              ? normalizeEntryDate(sanitizedUpdate.deathDate)
+              : null)
+          : existingPatient.death_date,
       updated_at: new Date().toISOString(),
     };
 
@@ -803,8 +926,9 @@ const editPatient = async (
         gender = $3,
         ssn = $4,
         date_of_birth = $5,
-        updated_at = $6
-      WHERE id = $7
+        death_date = $6,
+        updated_at = $7
+      WHERE id = $8
       RETURNING *
     `,
       [
@@ -813,6 +937,7 @@ const editPatient = async (
         updatedFields.gender,
         updatedFields.ssn,
         updatedFields.date_of_birth,
+        updatedFields.death_date,
         updatedFields.updated_at,
         id,
       ]
@@ -825,6 +950,7 @@ const editPatient = async (
       id: row.id,
       name: row.name,
       dateOfBirth: normalizeEntryDate(row.date_of_birth),
+      deathDate: row.death_date ? normalizeEntryDate(row.death_date) : null,
       gender: row.gender,
       occupation: row.occupation,
       ssn: row.ssn,
@@ -859,7 +985,7 @@ const deletePatient = async (
     const updateQuery = `
       UPDATE patients
       SET is_deleted = TRUE, deleted_at = NOW(), deleted_by = $2
-      WHERE id = $1 AND is_deleted = FALSE
+      WHERE id = $1 AND is_deleted = false
       RETURNING *;
     `;
     const updateResult = await client.query(updateQuery, [
@@ -983,8 +1109,11 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
     });
   }
 
-  if (sanitizedEntry.diagnosisCodes) {
-    const invalidCodes = sanitizedEntry.diagnosisCodes.filter(
+  const nonEmptyCodes = (sanitizedEntry.diagnosisCodes || [])
+    .filter(code => code != null && code.trim() !== '');
+
+  if (nonEmptyCodes.length > 0) {
+    const invalidCodes = nonEmptyCodes.filter(
       (code) => !/^[A-Z0-9]{3,}(?:\.[0-9]+)?$/.test(code)
     );
     if (invalidCodes.length > 0) {
@@ -1001,7 +1130,11 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
         }
       );
     }
+  } else {
+    console.log('[DEBUG] No valid diagnosis codes to validate');
   }
+  
+  console.log('[DEBUG] Validated diagnosisCodes:', sanitizedEntry.diagnosisCodes);
 
   if (
     !['Hospital', 'OccupationalHealthcare', 'HealthCheck'].includes(
@@ -1069,6 +1202,18 @@ const validateEntry = (entry: NewEntryWithoutId): void => {
         },
       }
     );
+  } else if (sanitizedEntry.type === 'OccupationalHealthcare' && !sanitizedEntry.employerName) {
+    console.log('[DEBUG] OccupationalHealthcare entry missing employerName');
+    throw new ValidationError(
+      'Missing required field for OccupationalHealthcare entry: employerName',
+      {
+        error: 'MissingEmployerName',
+        details: {
+          field: 'employerName',
+          constraints: ['required'],
+        },
+      }
+    );
   }
 
   if (
@@ -1093,7 +1238,10 @@ const addEntry = async (
   entry: NewEntryWithoutId
 ): Promise<Entry> => {
   validateEntry(entry);
-
+  console.log('[DEBUG] Raw entry data:', entry);
+  
+  const diagnosisCodes = (entry.diagnosisCodes || [])
+    .filter(code => code != null && code.trim() !== '');
   try {
     const patientResult = await pool.query(
       'SELECT id FROM patients WHERE id = $1',
@@ -1125,13 +1273,11 @@ const addEntry = async (
         ]
       )) as QueryResult<Entry>;
 
-      if (entry.diagnosisCodes) {
-        for (const code of entry.diagnosisCodes) {
-          await client.query(
-            'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [id, code]
-          );
-        }
+      for (const code of diagnosisCodes) {
+        await client.query(
+          'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [id, code]
+        );
       }
 
       if (entry.type === 'HealthCheck') {
@@ -1305,18 +1451,33 @@ const updateEntry = async (
       ]
     );
 
-    await client.query(
-      'DELETE FROM entry_diagnoses WHERE entry_id = $1',
-      [entryId]
-    );
-
-    if (entryData.diagnosisCodes) {
-      for (const code of entryData.diagnosisCodes) {
+    const diagnosisCodes = entryData.diagnosisCodes || [];
+    
+    const cleanedCodes = diagnosisCodes
+      .flatMap(code =>
+        Array.isArray(code)
+          ? code.filter(c => c != null && c.trim() !== '')
+          : [code]
+      )
+      .filter(code => code != null && code.trim() !== '')
+      .map(code => code.trim());
+    
+    if (cleanedCodes.length > 0 && !isValidDiagnosisCodes(cleanedCodes)) {
+      throw new Error('Invalid diagnosis codes format');
+    }
+    
+    await client.query('DELETE FROM entry_diagnoses WHERE entry_id = $1', [entryId]);
+    
+    if (cleanedCodes.length > 0) {
+      for (const code of cleanedCodes) {
         await client.query(
           'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2)',
           [entryId, code]
         );
       }
+      logger.debug(`Updated diagnosis codes for entry ${entryId}: ${cleanedCodes.join(', ')}`);
+    } else {
+      logger.debug(`Cleared diagnosis codes for entry ${entryId}`);
     }
 
     if (entryData.type === 'HealthCheck') {
@@ -1402,7 +1563,7 @@ const getEntriesByPatientId = async (
       LEFT JOIN healthcheck_entries he ON e.id = he.entry_id
       LEFT JOIN entry_diagnoses ed ON e.id = ed.entry_id
       LEFT JOIN diagnoses d ON ed.diagnosis_code = d.code
-      WHERE e.patient_id = $1 AND e.type = 'HealthCheck'
+      WHERE e.patient_id = $1 AND e.type = 'HealthCheck' AND e.is_deleted = false
       GROUP BY e.id, he.health_check_rating
     `;
 
@@ -1415,7 +1576,7 @@ const getEntriesByPatientId = async (
       LEFT JOIN hospital_entries h ON e.id = h.entry_id
       LEFT JOIN entry_diagnoses ed ON e.id = ed.entry_id
       LEFT JOIN diagnoses d ON ed.diagnosis_code = d.code
-      WHERE e.patient_id = $1 AND e.type = 'Hospital'
+      WHERE e.patient_id = $1 AND e.type = 'Hospital' AND e.is_deleted = false
       GROUP BY e.id, h.discharge_date, h.discharge_criteria
     `;
 
@@ -1428,7 +1589,7 @@ const getEntriesByPatientId = async (
       LEFT JOIN occupational_healthcare_entries oh ON e.id = oh.entry_id
       LEFT JOIN entry_diagnoses ed ON e.id = ed.entry_id
       LEFT JOIN diagnoses d ON ed.diagnosis_code = d.code
-      WHERE e.patient_id = $1 AND e.type = 'OccupationalHealthcare'
+      WHERE e.patient_id = $1 AND e.type = 'OccupationalHealthcare' AND e.is_deleted = false
       GROUP BY e.id, oh.employer_name, oh.sick_leave_start_date, oh.sick_leave_end_date
     `;
 
@@ -1473,103 +1634,168 @@ const getEntriesByPatientId = async (
 
 const deleteEntry = async (
   patientId: string,
-  entryId: string
+  entryId: string,
+  userId: string,
+  reason: string
 ): Promise<void> => {
-  logger.info(`Deleting entry ${entryId} for patient ${patientId}`);
+  logger.info(`Soft deleting entry ${entryId} for patient ${patientId} by user ${userId}`);
 
-  const entry = await getEntryById(entryId);
+  if (!reason || reason.trim() === '') {
+    throw new ValidationError('Deletion reason is required', {
+      error: 'ValidationError',
+      details: {
+        field: 'reason',
+        constraints: ['required'],
+      },
+    });
+  }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
+    if (!client) {
+      throw new DatabaseError('Failed to acquire database client');
+    }
+    
     await client.query('BEGIN');
 
-    await EntryVersionService.createVersion(
+    const versionQuery = `
+      INSERT INTO entry_versions (
+        id,
+        entry_id,
+        editor_id,
+        change_reason,
+        entry_data,
+        data_checksum,
+        operation_type,
+        created_at,
+        updated_at
+      )
+      SELECT
+        gen_random_uuid(),
+        id,
+        $1,
+        $2,
+        to_jsonb(entries),
+        md5(to_jsonb(entries)::text),
+        'DELETE',
+        NOW(),
+        NOW()
+      FROM entries
+      WHERE id = $3
+    `;
+    await client.query(versionQuery, [userId, `Entry deleted: ${reason}`, entryId]);
+
+    const updateEntryQuery = `
+      UPDATE entries
+      SET is_deleted = true, deleted_at = NOW(), deleted_by = $3
+      WHERE id = $1 AND patient_id = $2 AND is_deleted = false
+    `;
+    const updateResult = await client.query(updateEntryQuery, [entryId, patientId, userId]);
+    if (updateResult.rowCount === 0) {
+      const existsResult = await client.query('SELECT 1 FROM entries WHERE id = $1 AND patient_id = $2', [entryId, patientId]);
+      if (existsResult.rowCount === 0) {
+        throw new NotFoundError('Entry', entryId);
+      }
+      // If it exists but update rowCount is 0, it means it was already deleted -> idempotent, do nothing
+      await client.query('COMMIT');
+      return;
+    }
+
+    const insertAuditQuery = `
+      INSERT INTO entry_deletion_audit (entry_id, deleted_by, reason)
+      VALUES ($1, $2, $3)
+    `;
+    await client.query(insertAuditQuery, [entryId, userId, reason]);
+
+    const updatedEntry = await client.query(
+      `SELECT is_deleted FROM entries WHERE id = $1`,
+      [entryId]
+    );
+    console.log('DEBUG-FORCED-PRE-COMMIT:', {
       entryId,
-      'system', // or pass actual editorId if available
-      'Entry deleted',
-      entry,
-      'DELETE'
-    );
-
-    const patientCheck = await client.query(
-      'SELECT id FROM patients WHERE id = $1',
-      [patientId]
-    );
-
-    if (patientCheck.rowCount === 0) {
-      logger.warn(`Patient not found: ${patientId}`);
-      throw new NotFoundError('Patient', patientId);
-    }
-
-    const entryCheck = await client.query(
-      'SELECT id FROM entries WHERE id = $1 AND patient_id = $2',
-      [entryId, patientId]
-    );
-
-    if (entryCheck.rowCount === 0) {
-      logger.warn(
-        `Entry not found: ${entryId} for patient ${patientId}`
-      );
-      throw new NotFoundError('Entry', entryId);
-    }
-
-    await client.query(
-      'DELETE FROM healthcheck_entries WHERE entry_id = $1',
-      [entryId]
-    );
-    await client.query(
-      'DELETE FROM hospital_entries WHERE entry_id = $1',
-      [entryId]
-    );
-    await client.query(
-      'DELETE FROM occupational_healthcare_entries WHERE entry_id = $1',
-      [entryId]
-    );
-
-    await client.query(
-      'DELETE FROM entry_diagnoses WHERE entry_id = $1',
-      [entryId]
-    );
-
-    const result = await client.query(
-      'DELETE FROM entries WHERE id = $1 AND patient_id = $2',
-      [entryId, patientId]
-    );
-
-    if (result.rowCount === 0) {
-      logger.error(
-        `Failed to delete entry ${entryId} for patient ${patientId}`
-      );
-      throw new NotFoundError('Entry', entryId);
-    }
+      isDeleted: updatedEntry.rows[0]?.is_deleted,
+      query: `SELECT is_deleted FROM entries WHERE id = $1`,
+      params: [entryId]
+    });
+    logger.debug('Pre-commit state:', {
+      entryId,
+      isDeleted: updatedEntry.rows[0]?.is_deleted
+    });
 
     await client.query('COMMIT');
-    await pool.query(
-      'REFRESH MATERIALIZED VIEW patient_health_ratings'
+    
+    const postCommitEntry = await pool.query(
+      `SELECT is_deleted FROM entries WHERE id = $1`,
+      [entryId]
     );
+    console.log('DEBUG-FORCED-POST-COMMIT:', {
+      entryId,
+      isDeleted: postCommitEntry.rows[0]?.is_deleted,
+      query: `SELECT is_deleted FROM entries WHERE id = $1`,
+      params: [entryId]
+    });
+    logger.debug('Post-commit state:', {
+      entryId,
+      isDeleted: postCommitEntry.rows[0]?.is_deleted
+    });
+
+    try {
+      await pool.query(
+        'REFRESH MATERIALIZED VIEW patient_health_ratings'
+      );
+      logger.debug('Materialized view refreshed successfully');
+    } catch (refreshError) {
+      logger.error(
+        `Failed to refresh materialized view: ${
+          refreshError instanceof Error ? refreshError.message : 'Unknown error'
+        }`
+      );
+    }
+    
     logger.info(
-      `Successfully deleted entry ${entryId} for patient ${patientId}`
+      `Successfully soft deleted entry ${entryId} for patient ${patientId}`,
+      {
+        entryId,
+        patientId,
+        userId,
+        reason
+      }
     );
   } catch (error) {
-    await client.query('ROLLBACK');
-    if (error instanceof NotFoundError) {
+    try {
+      if (client) {
+        await client.query('ROLLBACK');
+      }
+    } catch (rollbackError) {
+      logger.error(
+        `Rollback failed during deleteEntry: ${
+          rollbackError instanceof Error ? rollbackError.message : 'Unknown error'
+        }`
+      );
+    }
+    if (error instanceof NotFoundError || error instanceof ValidationError) {
       throw error;
     }
     throw new DatabaseError(
-      `Failed to delete entry: ${
+      `Failed to soft delete entry: ${
         error instanceof Error ? error.message : 'Unknown error'
-      }. Check foreign key constraints, database connection, and ensure the entry exists.`,
+      }`,
       {
         originalError: error,
         context: {
           function: 'deleteEntry',
           patientId,
           entryId,
+          userId,
+          reason,
         },
       }
     );
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 
@@ -1770,7 +1996,7 @@ const getFilteredAndPaginatedPatients = async (
 const getEntryById = async (entryId: string): Promise<AnyEntry> => {
   try {
     const entryResult = await pool.query(
-      `SELECT * FROM entries WHERE id = $1`,
+      `SELECT * FROM entries WHERE id = $1 AND is_deleted = false`,
       [entryId]
     );
 
@@ -1825,12 +2051,12 @@ const getEntryById = async (entryId: string): Promise<AnyEntry> => {
     }
 
     const codesResult = await pool.query(
-      `SELECT diagnosis_code FROM entry_diagnoses WHERE entry_id = $1`,
+      `SELECT COALESCE(array_agg(diagnosis_code) FILTER (WHERE diagnosis_code IS NOT NULL), '{}') AS diagnosis_codes
+       FROM entry_diagnoses
+       WHERE entry_id = $1`,
       [entryId]
     );
-    fullEntry.diagnosisCodes = codesResult.rows.map(
-      (row) => row.diagnosis_code
-    );
+    fullEntry.diagnosisCodes = codesResult.rows[0]?.diagnosis_codes || [];
 
     return fullEntry;
   } catch (error) {
@@ -1983,13 +2209,13 @@ const restoreEntryVersion = async (
       [entryId]
     );
 
-    if (version.entry_data.diagnosisCodes?.length > 0) {
-      for (const code of version.entry_data.diagnosisCodes) {
-        await client.query(
-          'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2)',
-          [entryId, code]
-        );
-      }
+    const normalizedCodes = normalizeDiagnosisCodes(version.entry_data.diagnosisCodes);
+    logger.debug(`Normalized diagnosisCodes for version restore: ${JSON.stringify(normalizedCodes)}`);
+    for (const code of normalizedCodes) {
+      await client.query(
+        'INSERT INTO entry_diagnoses (entry_id, diagnosis_code) VALUES ($1, $2)',
+        [entryId, code]
+      );
     }
 
     await client.query('COMMIT');
@@ -2002,7 +2228,7 @@ const restoreEntryVersion = async (
       id: entryId,
       createdAt: currentEntry.created_at,
       updatedAt: new Date().toISOString(),
-      diagnosisCodes: version.entry_data.diagnosisCodes || [],
+      diagnosisCodes: normalizedCodes,
     } as AnyEntry;
   } catch (error) {
     await client.query('ROLLBACK');

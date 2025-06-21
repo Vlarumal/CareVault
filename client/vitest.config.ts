@@ -12,6 +12,7 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts', './src/__mocks__/dompurify.ts'],
+    globals: true,
     css: true,
     server: {
       deps: {

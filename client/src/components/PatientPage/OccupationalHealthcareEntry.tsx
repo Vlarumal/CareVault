@@ -1,11 +1,15 @@
 import { OccupationalHealthcareEntry } from '../../types';
 import { getIcon, renderDiagnosisCodes } from '../../utils';
+import { getEntryDescription } from '../../utils/entryUtils';
 import { Button } from '@mui/material';
+import DeleteEntryButton from '../DeleteEntryButton';
 
 const OccupationalHealthcareEntryComponent: React.FC<{
+  patientId: string;
   entry: OccupationalHealthcareEntry;
   onEditEntry: (entry: OccupationalHealthcareEntry) => void;
-}> = ({ entry, onEditEntry }) => {
+  onDeleted: () => void;
+}> = ({ patientId, entry, onEditEntry, onDeleted }) => {
   return (
     <section key={entry.id}>
       <div>
@@ -22,17 +26,25 @@ const OccupationalHealthcareEntryComponent: React.FC<{
         </div>
       )}
       {renderDiagnosisCodes(entry.diagnosisCodes)}
-      <Button
-        variant="outlined"
-        color="secondary"
-        onClick={(e) => {
-          e.stopPropagation();
-          onEditEntry(entry);
-        }}
-        sx={{ mt: 1 }}
-      >
-        Edit
-      </Button>
+      <div>
+        <Button
+          variant="outlined"
+          color="secondary"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditEntry(entry);
+          }}
+          sx={{ mt: 1 }}
+        >
+          Edit
+        </Button>
+        <DeleteEntryButton
+          patientId={patientId}
+          entryId={entry.id}
+          entryDescription={getEntryDescription(entry)}
+          onDeleted={onDeleted}
+        />
+      </div>
     </section>
   );
 };

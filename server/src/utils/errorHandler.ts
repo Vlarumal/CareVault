@@ -1,10 +1,7 @@
 import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import {
-  ValidationError,
-  NotFoundError,
-  InternalServerError,
-  UnauthorizedError,
-  ForbiddenError
+  OperationalError,
+  ProgrammerError
 } from './errors';
 
 export const errorHandler: ErrorRequestHandler = (
@@ -13,39 +10,38 @@ export const errorHandler: ErrorRequestHandler = (
   res: Response,
   _next: NextFunction
 ) => {
-  if (err instanceof ValidationError) {
-    console.error('Validation error:', err.message);
-    console.error('Validation details:', JSON.stringify(err.details, null, 2));
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
+  // Always log full error details for debugging
+  console.error(`[${new Date().toISOString()}] Error: ${err.message}`);
+  console.error(`Request: ${_req.method} ${_req.originalUrl}`);
+  console.error('Headers:', JSON.stringify(_req.headers, null, 2));
+  if (_req.body && Object.keys(_req.body).length > 0) {
+    console.error('Body:', JSON.stringify(_req.body, null, 2));
+  }
+  console.error('Stack:', err.stack);
+
+  if (err instanceof OperationalError) {
     res.status(err.status).json({
       error: err.message,
-      details: err.details
+      ...(err.details && { details: err.details })
     });
     return;
   }
-  
-  if (err instanceof NotFoundError) {
-    res.status(err.status).json({ error: err.message });
+
+  if (err instanceof ProgrammerError) {
+    if (isDevelopment) {
+      res.status(err.status).json({
+        error: err.message,
+        type: 'ProgrammerError'
+      });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
     return;
   }
-  
-  if (err instanceof UnauthorizedError) {
-    res.status(401).json({
-      error: err.message,
-      code: err.code
-    });
-    return;
-  }
-  
-  if (err instanceof ForbiddenError) {
-    res.status(403).json({
-      error: err.message,
-      code: err.code
-    });
-    return;
-  }
-  
+
   if ('isAxiosError' in err) {
-    // Use a minimal interface to avoid axios dependency
     const axiosError = err as any;
     let errorDetails: any = {
       message: axiosError.message,
@@ -68,21 +64,24 @@ export const errorHandler: ErrorRequestHandler = (
       };
     }
     
-    console.error('Axios error metadata:', errorDetails);
-    res.status(500).json({
-      error: 'External API request failed',
-      details: errorDetails
-    });
+    if (isDevelopment) {
+      res.status(500).json({
+        error: 'External API request failed',
+        details: errorDetails
+      });
+    } else {
+      res.status(500).json({ error: 'External API request failed' });
+    }
     return;
   }
-  
-  console.error(`[${new Date().toISOString()}] Unexpected error: ${err.message}`);
-  console.error(`Request: ${_req.method} ${_req.originalUrl}`);
-  console.error('Headers:', JSON.stringify(_req.headers, null, 2));
-  if (_req.body && Object.keys(_req.body).length > 0) {
-      console.error('Body:', JSON.stringify(_req.body, null, 2));
+
+  // Handle all other errors
+  if (isDevelopment) {
+    res.status(500).json({
+      error: err.message,
+      stack: err.stack
+    });
+  } else {
+    res.status(500).json({ error: 'Internal server error' });
   }
-  console.error('Stack:', err.stack);
-  const serverError = new InternalServerError();
-  res.status(serverError.status).json({ error: serverError.message });
 };

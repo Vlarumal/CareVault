@@ -23,6 +23,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP FUNCTION IF EXISTS create_trigger_if_column_exists(text,text);
+
 CREATE OR REPLACE FUNCTION create_trigger_if_column_exists(
   target_table TEXT,
   trigger_name TEXT

@@ -41,6 +41,15 @@ const apiInstance = axios.create({
 });
 
 apiInstance.interceptors.request.use(config => {
+  console.debug('[DEBUG] API Request:', {
+    url: config.url,
+    method: config.method,
+    data: config.data
+  });
+  return config;
+});
+
+apiInstance.interceptors.request.use(config => {
   const token = TokenManager.getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -49,8 +58,21 @@ apiInstance.interceptors.request.use(config => {
 });
 
 apiInstance.interceptors.response.use(
-  response => response,
+  response => {
+    console.debug('[DEBUG] API Response:', {
+      url: response.config.url,
+      status: response.status,
+      data: response.data
+    });
+    return response;
+  },
   async (error: AxiosError) => {
+    console.debug('[DEBUG] API Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
     
     if (error.response?.status === 401 &&

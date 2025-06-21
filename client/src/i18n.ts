@@ -11,6 +11,15 @@ const resources = {
         "confirmMessage": "Are you sure you want to delete patient {{name}}? This action cannot be undone.",
         "error": "Failed to delete patient"
       },
+      "deleteEntryButton": {
+        "ariaLabel": "Delete entry {{description}}",
+        "label": "Delete Entry",
+        "confirmTitle": "Confirm Entry Deletion",
+        "confirmMessage": "Are you sure you want to delete entry: {{description}}? This action cannot be undone.",
+        "error": "Failed to delete entry",
+        "reasonLabel": "Reason for deletion",
+        "reasonRequired": "Please provide a reason for deletion"
+      },
       "common": {
         "cancel": "Cancel",
         "delete": "Delete"

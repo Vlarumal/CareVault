@@ -18,6 +18,12 @@ interface EntryHistoryModalProps {
 const EntryHistoryModal = ({ open, onClose, entryId, patientId }: EntryHistoryModalProps) => {
   const [selectedVersion, setSelectedVersion] = useState<string>();
   const { versions, loading, error, refresh } = useEntryVersions(patientId, entryId);
+  
+  useEffect(() => {
+    if (!open) {
+      setSelectedVersion(undefined);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open) {

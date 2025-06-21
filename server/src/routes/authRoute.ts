@@ -8,10 +8,13 @@ import {
 import crypto from 'crypto';
 import {
   generateToken,
+} from '../utils/jwtUtils';
+
+import {
   generateRefreshToken,
   verifyRefreshToken,
   invalidateToken
-} from '../utils/jwtUtils';
+} from '../utils/refreshTokenUtils';
 import pool from '../../db/connection';
 import { ValidationError } from '../utils/errors';
 import { validatePassword } from '../middleware/passwordValidator';

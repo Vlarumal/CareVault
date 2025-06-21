@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "noEmitOnError": false,
+    // "paths": {
+    //   "shared/*": ["../shared/*"],
+    //   "@shared": ["../shared"],
+    //   "@shared/*": ["../shared/*"]
+    // },
+  }
+}

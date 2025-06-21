@@ -10,7 +10,6 @@ import {
   Entry,
 } from '../types';
 
-// Extend Express Request type to include user property
 declare global {
   namespace Express {
     interface Request {
@@ -225,9 +224,11 @@ patientsRouter.post(
     const patient = await patientService.getPatientById(
       req.params.id
     );
+    const entryData: NewEntryWithoutId = req.body;
+    
     const addedEntry = await patientService.addEntry(
       patient,
-      req.body
+      entryData
     );
     
     await EntryVersionService.createVersion(
@@ -372,7 +373,6 @@ patientsRouter.put(
         req.user?.id || 'system'
       );
 
-      // Explicitly update base entry timestamp
       await pool.query(
         `UPDATE entries SET updated_at = NOW() WHERE id = $1`,
         [entryId]
@@ -585,17 +585,38 @@ patientsRouter.put(
 
 patientsRouter.delete(
   '/:patientId/entries/:entryId',
+  authenticate,
+  adminOnly,
   async (req, res) => {
     try {
+      const { patientId, entryId } = req.params;
+      const deletedBy = req.user?.id;
+      const { reason } = req.body;
+
+      if (!deletedBy) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+
+      if (!reason || typeof reason !== 'string' || reason.trim() === '') {
+        res.status(400).json({ error: 'Deletion reason is required' });
+        return;
+      }
+
       await patientService.deleteEntry(
-        req.params.patientId,
-        req.params.entryId
+        patientId,
+        entryId,
+        deletedBy,
+        reason.trim()
       );
-      res.status(204).end();
+    res.status(204).end();
     } catch (error) {
       if (error instanceof NotFoundError) {
         res.status(404).json({ error: error.message });
+      } else if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message });
       } else {
+        console.error('Error deleting entry:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     }

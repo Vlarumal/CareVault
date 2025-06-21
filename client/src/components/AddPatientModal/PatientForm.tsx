@@ -29,6 +29,7 @@ interface FormValues {
   name: string;
   ssn: string;
   dateOfBirth: string;
+  deathDate?: string;
   occupation: string;
   gender: Gender;
 }
@@ -59,6 +60,7 @@ const PatientForm = ({
       name: initialValues?.name || '',
       ssn: initialValues?.ssn || '',
       dateOfBirth: initialValues?.dateOfBirth || '',
+      deathDate: initialValues?.deathDate || '',
       occupation: initialValues?.occupation || '',
       gender: initialValues?.gender || Gender.Other,
     },
@@ -86,6 +88,14 @@ const PatientForm = ({
         errors.dateOfBirth = 'Date cannot be in the future';
       }
 
+      if (values.deathDate && values.deathDate.trim() !== '') {
+        if (!isDateValid(values.deathDate)) {
+          errors.deathDate = 'Invalid date format (use YYYY-MM-DD)';
+        } else if (new Date(values.deathDate) <= new Date(values.dateOfBirth)) {
+          errors.deathDate = 'Death date must be after birth date';
+        }
+      }
+
       if (!values.occupation.trim()) {
         errors.occupation = 'Occupation is required';
       }
@@ -102,6 +112,7 @@ const PatientForm = ({
           occupation: values.occupation.trim(),
           ssn: values.ssn.trim(),
           dateOfBirth: values.dateOfBirth,
+          deathDate: values.deathDate?.trim() ? values.deathDate.trim() : null,
           gender: values.gender,
         });
         showNotification(
@@ -224,7 +235,7 @@ const PatientForm = ({
           error={formik.touched.ssn && Boolean(formik.errors.ssn)}
           helperText={
             (formik.touched.ssn && formik.errors.ssn) ||
-            'Format: 123456-7890 (6 digits, hyphen, 4 digits)'
+            'Format: 123-45-7890 (3 digits, hyphen, 2 digits, hyphen, 4 digits)'
           }
           sx={{ mb: 3 }}
           slotProps={{
@@ -360,6 +371,47 @@ const PatientForm = ({
           ))}
         </Select>
 
+        <TextField
+          label='Death Date (optional)'
+          fullWidth
+          id='deathDate'
+          type='date'
+          {...formik.getFieldProps('deathDate')}
+          error={
+            formik.touched.deathDate &&
+            Boolean(formik.errors.deathDate)
+          }
+          helperText={
+            formik.touched.deathDate && formik.errors.deathDate
+          }
+          sx={{ mb: 3, mt: 3 }}
+          slotProps={{
+            input: {
+              sx: {
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
+              },
+            },
+            htmlInput: {
+              'aria-describedby':
+                formik.touched.deathDate &&
+                formik.errors.deathDate
+                  ? 'death-date-error'
+                  : undefined,
+              'aria-invalid':
+                (formik.touched.deathDate &&
+                  !!formik.errors.deathDate) ||
+                undefined,
+            },
+            inputLabel: { shrink: true },
+            formHelperText: {
+              id: 'death-date-error',
+              tabIndex: -1,
+            },
+          }}
+        />
+
         <Grid
           container
           justifyContent='space-between'
@@ -384,7 +436,7 @@ const PatientForm = ({
           <Button
             type='submit'
             variant='contained'
-            disabled={loading}
+            disabled={loading || !formik.isValid}
             onClick={() => formik.handleSubmit()}
             sx={{
               minWidth: 100,

@@ -91,7 +91,7 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
     {
       field: 'healthRating',
       headerName: 'Health Rating',
-      width: 280,
+      width: 240,
       renderCell: (params) => (
         <HealthRatingBar
           rating={params.value}

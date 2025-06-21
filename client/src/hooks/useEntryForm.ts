@@ -53,6 +53,10 @@ const useEntryForm = ({
     field: K,
     value: NewEntryFormValues[K]
   ) => {
+    if (field === 'diagnosisCodes' && Array.isArray(value)) {
+      value = value.filter(code => code !== null) as NewEntryFormValues[K];
+    }
+    
     setFormValues((prev) => ({
       ...prev,
       [field]: value,

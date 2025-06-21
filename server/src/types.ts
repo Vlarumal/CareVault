@@ -49,15 +49,23 @@ export type EntryVersion = {
   entryData: Entry;
 };
 
-export type PatientEntry = Patient;
+export type PatientEntry = Patient & {
+  deathDate?: Date | null;
+  death_date?: Date | null;
+};
 export type NewPatientEntry = z.infer<typeof NewPatientEntrySchema>;
-export type NewPatientEntryWithoutEntries = UnionOmit<NewPatientEntry, 'entries'>;
+export type NewPatientEntryWithoutEntries = UnionOmit<NewPatientEntry, 'entries'> & {
+  deathDate?: string | null;
+};
 export type NonSensitivePatientEntry = UnionOmit<PatientEntry, 'ssn' | 'entries'> & {
   healthRating: number | null;
+  deathDate?: string | null;
+  death_date?: Date | null;
 };
 export type NewEntryWithoutId = UnionOmit<z.infer<typeof EntrySchema>, 'id'> & {
   changeReason?: string;
   lastUpdated?: string;
+  diagnosisCodes?: string[] | null;
 };
 
 /**

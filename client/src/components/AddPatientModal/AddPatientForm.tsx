@@ -1,7 +1,7 @@
 import { useState, SyntheticEvent, useEffect } from "react";
 import { TextField, InputLabel, MenuItem, Select, Grid, Button, SelectChangeEvent, CircularProgress, FormHelperText } from '@mui/material';
-import { isDateValid, validateSSN } from '../../utils';
-
+import { isDateValid } from '../../utils';
+import { validateSSN } from '@shared/src/utils/validation';
 import { PatientFormValues, Gender } from "../../types";
 
 interface Props {
@@ -25,6 +25,7 @@ const AddPatientForm = ({ onCancel, onSubmit, loading, serverErrors }: Props) =>
   const [occupation, setOccupation] = useState('');
   const [ssn, setSsn] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [deathDate, setDeathDate] = useState('');
   const [gender, setGender] = useState(Gender.Other);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState(''); // For form-level errors
@@ -71,8 +72,8 @@ const AddPatientForm = ({ onCancel, onSubmit, loading, serverErrors }: Props) =>
     if (!trimmedSsn) {
       setErrors(prev => ({...prev, ssn: 'SSN is required'}));
     } else {
-      const errorMessage = validateSSN(trimmedSsn) || '';
-      setErrors(prev => ({...prev, ssn: errorMessage}));
+      const validationResult = validateSSN(trimmedSsn);
+      setErrors(prev => ({...prev, ssn: validationResult.message || ''}));
     }
   };
 
@@ -112,6 +113,34 @@ const AddPatientForm = ({ onCancel, onSubmit, loading, serverErrors }: Props) =>
     }
 
     setErrors(prev => ({...prev, dateOfBirth: ''}));
+  };
+
+  const validateDeathDate = () => {
+    if (!deathDate) {
+      setErrors(prev => ({ ...prev, deathDate: '' }));
+      return;
+    }
+
+    if (!isDateValid(deathDate)) {
+      setErrors(prev => ({...prev, deathDate: 'Invalid date format (use YYYY-MM-DD)'}));
+      return;
+    }
+
+    const death = new Date(deathDate);
+    const birth = new Date(dateOfBirth);
+    
+    if (death < birth) {
+      setErrors(prev => ({...prev, deathDate: 'Death date must be after birth date'}));
+      return;
+    }
+
+    const today = new Date();
+    if (death > today) {
+      setErrors(prev => ({...prev, deathDate: 'Death date cannot be in the future'}));
+      return;
+    }
+
+    setErrors(prev => ({...prev, deathDate: ''}));
   };
 
   const validateOccupation = () => {  
@@ -154,9 +183,9 @@ const validateForm = () => {
   if (!trimmedSsn) {
     newErrors.ssn = 'SSN is required';
   } else {
-    const ssnError = validateSSN(trimmedSsn);
-    if (ssnError) {
-      newErrors.ssn = ssnError;
+    const validationResult = validateSSN(trimmedSsn);
+    if (!validationResult.valid) {
+      newErrors.ssn = validationResult.message || 'Invalid SSN';
     }
   }
 
@@ -165,20 +194,22 @@ const validateForm = () => {
   } else if (!isDateValid(dateOfBirth)) {
     newErrors.dateOfBirth = 'Invalid date format (use YYYY-MM-DD)';
   } else {
-    const date = new Date(dateOfBirth);
-    const today = new Date();
-
-    if (date > today) {
+    // Create UTC dates for accurate comparison
+    const date = new Date(dateOfBirth + 'T00:00:00Z');
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0,0,0,0);
+    
+    if (date > todayUTC) {
       newErrors.dateOfBirth = 'Date cannot be in the future';
     } else {
-      const year = date.getFullYear();
-      const currentYear = today.getFullYear();
+      const year = date.getUTCFullYear();
+      const currentYear = todayUTC.getUTCFullYear();
       if (year < 1900 || year > currentYear) {
         newErrors.dateOfBirth = `Year must be between 1900 and ${currentYear}`;
       } else {
-        const day = date.getDate();
-        const month = date.getMonth() + 1;
-        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        const day = date.getUTCDate();
+        const month = date.getUTCMonth() + 1;
+        const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
         if (day > lastDayOfMonth) {
           newErrors.dateOfBirth = `Invalid date: ${month} has only ${lastDayOfMonth} days`;
         }
@@ -188,6 +219,15 @@ const validateForm = () => {
 
   if (!occupation.trim()) {
     newErrors.occupation = 'Occupation is required';
+  }
+
+  if (deathDate) {
+    const death = new Date(deathDate);
+    const birth = new Date(dateOfBirth);
+    
+    if (death < birth) {
+      newErrors.deathDate = 'Death date must be after birth date';
+    }
   }
 
   return {
@@ -210,7 +250,8 @@ const addPatient = (event: SyntheticEvent) => {
       occupation: occupation.trim(),
       ssn: ssn.trim(),
       dateOfBirth,
-      gender
+      gender,
+      deathDate: deathDate ? deathDate : null
     });
   }
 };
@@ -252,8 +293,9 @@ const addPatient = (event: SyntheticEvent) => {
           }}
           onBlur={validateName}
           error={!!errors.name}
-          helperText={errors.name}
+          helperText={errors.name || 'Full name (max 100 characters)'}
           sx={{ mb: 3 }}
+          inputProps={{ maxLength: 100 }}
           slotProps={{
             input: {
               sx: {
@@ -286,7 +328,7 @@ const addPatient = (event: SyntheticEvent) => {
           }}
           onBlur={validateSsn}
           error={!!errors.ssn}
-          helperText={errors.ssn}
+          helperText={errors.ssn || 'Format: XXX-XX-XXXX with valid checksum'}
           sx={{ mb: 3 }}
           slotProps={{
             input: {
@@ -305,7 +347,7 @@ const addPatient = (event: SyntheticEvent) => {
               id: 'ssn-error',
               tabIndex: -1,
               sx: {
-                color: 'error.main',
+                color: errors.ssn ? 'error.main' : 'text.secondary',
                 fontWeight: errors.ssn ? 600 : 'normal'
               }
             }
@@ -349,6 +391,42 @@ const addPatient = (event: SyntheticEvent) => {
             }
           }} />
         <TextField
+          label="Date of death (optional)"
+          placeholder="YYYY-MM-DD"
+          fullWidth
+          value={deathDate}
+          onChange={({ target }) => {
+            setDeathDate(target.value);
+            setErrors(prev => ({ ...prev, deathDate: '' }));
+            validateDeathDate();
+          }}
+          onBlur={validateDeathDate}
+          type='date'
+          error={!!errors.deathDate}
+          helperText={errors.deathDate}
+          sx={{ mb: 3 }}
+          slotProps={{
+            input: {
+              sx: {
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                },
+              },
+            },
+
+            htmlInput: {
+              'aria-describedby': errors.deathDate ? 'death-error' : undefined,
+              'aria-invalid': !!errors.deathDate || undefined
+            },
+
+            inputLabel: { shrink: true },
+
+            formHelperText: {
+              id: 'death-error',
+              tabIndex: -1
+            }
+          }} />
+        <TextField
           label="Occupation"
           fullWidth
           value={occupation}
@@ -359,8 +437,9 @@ const addPatient = (event: SyntheticEvent) => {
           }}
           onBlur={validateOccupation}
           error={!!errors.occupation}
-          helperText={errors.occupation}
+          helperText={errors.occupation || 'Occupation (max 100 characters)'}
           sx={{ mb: 3 }}
+          inputProps={{ maxLength: 100 }}
           slotProps={{
             input: {
               sx: {
@@ -382,62 +461,62 @@ const addPatient = (event: SyntheticEvent) => {
             }
           }} />
 
-<div style={{ marginBottom: '24px' }}>
-  <InputLabel
-    id="gender-label"
-    style={{ marginTop: 20, marginBottom: 8 }}
-    error={!!errors.gender}
-  >
-    Gender
-  </InputLabel>
-  <Select
-    labelId="gender-label"
-    label="Gender"
-    fullWidth
-    value={gender}
-    onChange={onGenderChange}
-    inputProps={{
-      "data-testid": "gender-select",
-      'aria-required': 'true',
-      'role': 'combobox',
-      'aria-invalid': !!errors.gender || undefined,
-      'aria-describedby': errors.gender ? 'gender-error' : undefined
-    }}
-    error={!!errors.gender}
-    sx={{
-      '& .MuiOutlinedInput-root': {
-        '&.Mui-focused fieldset': {
-          borderColor: errors.gender ? 'error.main' : 'primary.main',
-        },
-      },
-    }}
-  >
-    {genderOptions.map(option =>
-      <MenuItem
-        key={option.label}
-        value={option.value}
-        role="option"
-      >
-        {option.label}
-      </MenuItem>
-    )}
-  </Select>
-  {errors.gender && (
-    <FormHelperText
-      error
-      id="gender-error"
-      tabIndex={-1}
-      sx={{
-        mt: 1,
-        ml: 1,
-        color: 'error.main',
-        fontWeight: 600
-      }}
-    >
-      {errors.gender}
-    </FormHelperText>
-  )}
-</div>
+        <div style={{ marginBottom: '24px' }}>
+          <InputLabel
+            id="gender-label"
+            style={{ marginTop: 20, marginBottom: 8 }}
+            error={!!errors.gender}
+          >
+            Gender
+          </InputLabel>
+          <Select
+            labelId="gender-label"
+            label="Gender"
+            fullWidth
+            value={gender}
+            onChange={onGenderChange}
+            inputProps={{
+              "data-testid": "gender-select",
+              'aria-required': 'true',
+              'role': 'combobox',
+              'aria-invalid': !!errors.gender || undefined,
+              'aria-describedby': errors.gender ? 'gender-error' : undefined
+            }}
+            error={!!errors.gender}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                '&.Mui-focused fieldset': {
+                  borderColor: errors.gender ? 'error.main' : 'primary.main',
+                },
+              },
+            }}
+          >
+            {genderOptions.map(option =>
+              <MenuItem
+                key={option.label}
+                value={option.value}
+                role="option"
+              >
+                {option.label}
+              </MenuItem>
+            )}
+          </Select>
+          {errors.gender && (
+            <FormHelperText
+              error
+              id="gender-error"
+              tabIndex={-1}
+              sx={{
+                mt: 1,
+                ml: 1,
+                color: 'error.main',
+                fontWeight: 600
+              }}
+            >
+              {errors.gender}
+            </FormHelperText>
+          )}
+        </div>
 
         <Grid container justifyContent="space-between" sx={{ mt: 2, gap: 2 }}>  
           <Button  
@@ -478,3 +557,4 @@ const addPatient = (event: SyntheticEvent) => {
 };  
 
 export default AddPatientForm;
+

@@ -1,7 +1,6 @@
 import express from 'express';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { initJwtSecrets } from './utils/jwtUtils';
 import { RedisClient } from './utils/redis';
 import { validateEnv } from './utils/validateEnv';
 
@@ -73,7 +72,6 @@ const PORT = process.env.PORT || 3001;
 
 async function initServices() {
   await RedisClient.healthCheck();
-  await initJwtSecrets();
 }
 
 app.get('/api/ping', (_req, res) => {
