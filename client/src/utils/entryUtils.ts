@@ -97,7 +97,7 @@ export function prepareEntryData(
 
   const result = {
     ...values,
-    diagnosisCodes: diagnosisCodes.length > 0 ? diagnosisCodes : undefined,
+    diagnosisCodes: diagnosisCodes.length > 0 ? diagnosisCodes : [],
   } as NewEntryWithoutId;
 
   console.debug('[DEBUG] prepareEntryData - Result:', result);
