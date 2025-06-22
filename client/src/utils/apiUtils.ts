@@ -9,7 +9,6 @@ import DOMPurify from 'dompurify';
 import { apiBaseUrl } from '../constants';
 import { TokenManager } from './tokenUtils';
 
-// Extend AxiosRequestConfig to include _retry flag
 declare module 'axios' {
   interface AxiosRequestConfig {
     _retry?: boolean;
@@ -147,7 +146,7 @@ export const apiRetry = async <T>(
       return await fn();
     } catch (error) {
       console.error(`API attempt ${attempt} failed:`, error);
-  
+
       if (error instanceof Error) {
         if (error.message.includes('CORS error')) {
           throw new Error(
@@ -159,9 +158,16 @@ export const apiRetry = async <T>(
           throw error;
         }
       }
-  
+
+      const isNetworkError = !(error instanceof AxiosError) || error.code === 'ERR_NETWORK';
+      const isServerError = error instanceof AxiosError && error.response && error.response.status >= 500;
+      
+      if (!isNetworkError && !isServerError) {
+        throw error;
+      }
+
       if (attempt === maxRetries) throw error;
-  
+
       const delay = initialDelay * Math.pow(2, attempt - 1);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

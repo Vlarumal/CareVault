@@ -6,7 +6,7 @@ import {
   DiagnosisEntry,
   NewEntryFormValues,
   Patient,
-  Entry,
+  AnyEntry,
 } from '../../types';
 import { getIcon } from '../../utils';
 import DeletePatientButton from '../DeletePatientButton';
@@ -33,6 +33,7 @@ import { createDeduplicatedQuery } from '../../utils/apiUtils';
 import AddIcon from '@mui/icons-material/Add';
 import EntryHistoryModal from './EntryHistoryModal';
 import EntryForm from './EntryForm';
+import { AxiosError } from 'axios';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -75,7 +76,7 @@ const PatientPage = () => {
       values,
     }: {
       entryId: string;
-      values: NewEntryFormValues;
+      values: NewEntryFormValues & { updatedAt: string };
     }) => {
       if (!validatedId) {
         throw new Error('Patient ID is required');
@@ -96,8 +97,10 @@ const PatientPage = () => {
       if (previousPatient) {
         const updatedEntries = previousPatient.entries?.map(
           (entry) => {
+            if (entry.id.startsWith('temp-')) return entry;
+            
             if (entry.id === entryId) {
-              // Create deep merge of existing entry and new values
+              if (!entry) return entry;
               return mergeEntryUpdates(entry, values);
             }
             return entry;
@@ -112,24 +115,40 @@ const PatientPage = () => {
 
       return { previousPatient };
     },
-    onSuccess: (_updatedEntry) => {
+    onSuccess: (updatedEntry) => {
       handleDrawerClose();
       setEditingEntry(null);
       showNotification('Entry updated successfully!', 'success');
-      queryClient.invalidateQueries({ queryKey: ['patient', validatedId], exact: true });
-      queryClient.invalidateQueries({ queryKey: ['patients'], exact: true });
+      
+      queryClient.setQueryData<Patient>(['patient', validatedId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          entries: old.entries?.map(entry =>
+            entry.id === updatedEntry.id ? updatedEntry : entry
+          )
+        };
+      });
     },
-    onError: (_err, _variables, context) => {
+    onError: (error, _variables, context) => {
       if (context?.previousPatient) {
         queryClient.setQueryData<Patient>(
           ['patient', validatedId],
           context.previousPatient
         );
       }
-      showNotification(
-        'Failed to refresh patient data after update',
-        'warning'
-      );
+      
+      let errorMessage = 'Failed to update entry';
+      if (error instanceof AxiosError) {
+        if (error.response?.status === 409) {
+          errorMessage = 'Entry was modified by another user. Please refresh and try again.';
+          queryClient.invalidateQueries({ queryKey: ['patient', validatedId], exact: true });
+        } else {
+          errorMessage = error.response?.data?.error || error.message || errorMessage;
+        }
+      }
+      
+      showNotification(errorMessage, 'error');
     },
   });
 
@@ -165,7 +184,7 @@ const PatientPage = () => {
           ...newEntry,
           id: tempId,
           isOptimistic: true,
-        } as Entry;
+        } as AnyEntry;
 
         // Update the query cache with optimistic entry
         queryClient.setQueryData<Patient>(['patient', validatedId], {
@@ -220,7 +239,7 @@ const PatientPage = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEntryHistoryModalOpen, setIsEntryHistoryModalOpen] = useState(false);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
-  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<AnyEntry | null>(null);
 
   const handleEntryClick = useCallback((entryId: string) => {
     setSelectedEntryId(entryId);
@@ -232,7 +251,7 @@ const PatientPage = () => {
     setSelectedEntryId(null);
   }, []);
 
-  const handleEditEntry = (entry: Entry) => {
+  const handleEditEntry = (entry: AnyEntry) => {
     setEditingEntry(entry);
     setIsDrawerOpen(true);
   };
@@ -406,14 +425,25 @@ const PatientPage = () => {
             patientId={validatedId}
             onSubmit={(values) => {
               if (editingEntry) {
+                if (!editingEntry.updatedAt) {
+                  console.error('Entry updatedAt missing, cannot update');
+                  showNotification('Entry updatedAt missing, cannot update', 'error');
+                  return;
+                }
+                
                 updateMutation.mutate(
                   {
                     entryId: editingEntry.id,
-                    values,
+                    values: {
+                      ...values,
+                      updatedAt: new Date().toISOString(),
+                    },
                   },
                   {
                     onSuccess: (updatedEntry) => {
                       console.log('Update successful', updatedEntry);
+                      handleDrawerClose();
+                      setEditingEntry(null);
                     },
                     onError: (error) => {
                       console.error('Update failed', error);

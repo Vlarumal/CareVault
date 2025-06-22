@@ -64,7 +64,7 @@ export type NonSensitivePatientEntry = UnionOmit<PatientEntry, 'ssn' | 'entries'
 };
 export type NewEntryWithoutId = UnionOmit<z.infer<typeof EntrySchema>, 'id'> & {
   changeReason?: string;
-  lastUpdated?: string;
+  updatedAt?: string;
   diagnosisCodes?: string[] | null;
 };
 

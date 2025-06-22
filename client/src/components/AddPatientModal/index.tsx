@@ -34,11 +34,7 @@ const AddPatientModal = ({ modalOpen, onClose, onSubmit, error }: Props) => {
     <Dialog
       fullWidth
       open={modalOpen}
-      onClose={(_, reason) => {
-        if (reason !== 'backdropClick') {
-          onClose();
-        }
-      }}
+      onClose={onClose}
       aria-labelledby="add-patient-dialog-title"
       aria-describedby="add-patient-form"
       sx={{

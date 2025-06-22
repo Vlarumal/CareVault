@@ -151,4 +151,5 @@ export type UnionOmit<T, K extends string | number | symbol> = T extends unknown
  */
 export type NewEntryWithoutId = UnionOmit<Entry, 'id'> & {
  diagnosisCodes?: string[] | null | undefined;
+ version?: number;
 };

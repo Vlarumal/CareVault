@@ -119,7 +119,7 @@ const updatePatient = async (
 const updateEntry = async (
   patientId: string,
   entryId: string,
-  values: NewEntryFormValues & { lastUpdated?: string; changeReason?: string }
+  values: NewEntryFormValues & { updatedAt: string; changeReason?: string }
 ) => {
   const payload = {
     ...values,

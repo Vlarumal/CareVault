@@ -1437,18 +1437,9 @@ const updateEntry = async (
 
     await client.query(
       `UPDATE entries
-       SET
-         description = $1,
-         date = $2,
-         specialist = $3,
-         updated_at = NOW()
-       WHERE id = $4`,
-      [
-        entryData.description,
-        entryData.date,
-        entryData.specialist,
-        entryId,
-      ]
+        SET description = $1, date = $2, specialist = $3, updated_at = NOW()
+        WHERE id = $4`,
+      [entryData.description, entryData.date, entryData.specialist, entryId]
     );
 
     const diagnosisCodes = entryData.diagnosisCodes || [];
@@ -1558,39 +1549,45 @@ const getEntriesByPatientId = async (
       SELECT
         e.id, e.description, e.date, e.specialist, e.type,
         he.health_check_rating,
-        ARRAY_AGG(d.code) AS diagnosis_codes
+        ARRAY_AGG(d.code) AS diagnosis_codes,
+        TO_CHAR(e.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+        TO_CHAR(e.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "updatedAt"
       FROM entries e
       LEFT JOIN healthcheck_entries he ON e.id = he.entry_id
       LEFT JOIN entry_diagnoses ed ON e.id = ed.entry_id
       LEFT JOIN diagnoses d ON ed.diagnosis_code = d.code
       WHERE e.patient_id = $1 AND e.type = 'HealthCheck' AND e.is_deleted = false
-      GROUP BY e.id, he.health_check_rating
+      GROUP BY e.id, he.health_check_rating, e.created_at, e.updated_at
     `;
 
     const hospitalQuery = `
       SELECT
         e.id, e.description, e.date, e.specialist, e.type,
         h.discharge_date, h.discharge_criteria,
-        ARRAY_AGG(d.code) AS diagnosis_codes
+        ARRAY_AGG(d.code) AS diagnosis_codes,
+        TO_CHAR(e.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+        TO_CHAR(e.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "updatedAt"
       FROM entries e
       LEFT JOIN hospital_entries h ON e.id = h.entry_id
       LEFT JOIN entry_diagnoses ed ON e.id = ed.entry_id
       LEFT JOIN diagnoses d ON ed.diagnosis_code = d.code
       WHERE e.patient_id = $1 AND e.type = 'Hospital' AND e.is_deleted = false
-      GROUP BY e.id, h.discharge_date, h.discharge_criteria
+      GROUP BY e.id, h.discharge_date, h.discharge_criteria, e.created_at, e.updated_at
     `;
 
     const occupationalQuery = `
       SELECT
         e.id, e.description, e.date, e.specialist, e.type,
         oh.employer_name, oh.sick_leave_start_date, oh.sick_leave_end_date,
-        ARRAY_AGG(d.code) AS diagnosis_codes
+        ARRAY_AGG(d.code) AS diagnosis_codes,
+        TO_CHAR(e.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+        TO_CHAR(e.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "updatedAt"
       FROM entries e
       LEFT JOIN occupational_healthcare_entries oh ON e.id = oh.entry_id
       LEFT JOIN entry_diagnoses ed ON e.id = ed.entry_id
       LEFT JOIN diagnoses d ON ed.diagnosis_code = d.code
       WHERE e.patient_id = $1 AND e.type = 'OccupationalHealthcare' AND e.is_deleted = false
-      GROUP BY e.id, oh.employer_name, oh.sick_leave_start_date, oh.sick_leave_end_date
+      GROUP BY e.id, oh.employer_name, oh.sick_leave_start_date, oh.sick_leave_end_date, e.created_at, e.updated_at
     `;
 
     const [healthCheckResult, hospitalResult, occupationalResult] =
@@ -1996,7 +1993,16 @@ const getFilteredAndPaginatedPatients = async (
 const getEntryById = async (entryId: string): Promise<AnyEntry> => {
   try {
     const entryResult = await pool.query(
-      `SELECT * FROM entries WHERE id = $1 AND is_deleted = false`,
+      `SELECT
+          id,
+          description,
+          date,
+          specialist,
+          type,
+          TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+          TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "updatedAt"
+       FROM entries
+       WHERE id = $1 AND is_deleted = false`,
       [entryId]
     );
 

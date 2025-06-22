@@ -42,7 +42,7 @@ export interface NewEntryFormValues {
     startDate: string;
     endDate: string;
   };
-  lastUpdated?: string;
+  updatedAt: string;
   changeReason?: string;
 }
 

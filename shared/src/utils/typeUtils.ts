@@ -13,7 +13,7 @@ export const entryToFormValues = (entry: Entry): NewEntryFormValues => {
     specialist: entry.specialist,
     diagnosisCodes: entry.diagnosisCodes || [],
     type: entry.type,
-    lastUpdated: entry.updatedAt
+    updatedAt: entry.updatedAt as string  // Use updatedAt for concurrency checks
   };
 
   switch (entry.type) {

@@ -8,8 +8,8 @@ interface UseEntryFormProps {
   patientId: string;
   entryId?: string;
   initialValues?: NewEntryFormValues;
-  onSuccess: () => void;
-  diagnosisCodes?: DiagnosisEntry[]; // Optional and unused
+  onSuccess: (values: NewEntryFormValues) => void;
+  diagnosisCodes?: DiagnosisEntry[];
 }
 
 interface UseEntryFormReturn {
@@ -23,7 +23,6 @@ interface UseEntryFormReturn {
   ) => void;
   handleSubmit: () => Promise<void>;
   handleReasonChange: (reason: string) => void;
-  handleLastUpdatedChange: (date: string) => void;
 }
 
 const useEntryForm = ({
@@ -40,7 +39,7 @@ const useEntryForm = ({
       date: '',
       specialist: '',
       type: 'HealthCheck',
-      lastUpdated: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       changeReason: '',
     }
   );
@@ -67,6 +66,9 @@ const useEntryForm = ({
   };
 
   const handleSubmit = async () => {
+    // Prevent multiple submissions
+    if (loading) return;
+    
     try {
       setLoading(true);
       setErrors({});
@@ -83,13 +85,15 @@ const useEntryForm = ({
         await patientsService.updateEntry(
           patientId,
           entryId,
-          formValues
+          {
+            ...formValues,
+            changeReason: changeReason
+          }
         );
       } else {
         await patientsService.createNewEntry(patientId, formValues);
       }
-
-      onSuccess();
+      onSuccess(formValues);
     } catch (e: unknown) {
       if (e instanceof AxiosError) {
         if (e.response?.data.error === 'INVALID_CHANGE_REASON') {
@@ -115,12 +119,6 @@ const useEntryForm = ({
     handleChange,
     handleSubmit,
     handleReasonChange: setChangeReason,
-    handleLastUpdatedChange: (date: string) => {
-      setFormValues((prev) => ({
-        ...prev,
-        lastUpdated: date,
-      }));
-    },
   };
 };
 

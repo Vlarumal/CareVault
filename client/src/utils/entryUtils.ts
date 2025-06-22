@@ -5,7 +5,7 @@ import {
   HospitalEntry,
   OccupationalHealthcareEntry,
 } from '../types';
-import type { NewEntryWithoutId } from '@shared/src/types/medicalTypes';
+import { HealthCheckRating, type NewEntryWithoutId } from '@shared/src/types/medicalTypes';
 
 /**
  * Deep merge for entry updates while preserving type-specific structure
@@ -22,29 +22,37 @@ export const mergeEntryUpdates = (
 
   switch (existing.type) {
     case 'HealthCheck':
+      const healthCheckRating =
+        updates.healthCheckRating ??
+        (existing.type === 'HealthCheck' ? existing.healthCheckRating : HealthCheckRating.Healthy);
+        
       return {
         ...mergedBase,
-        healthCheckRating:
-          updates.healthCheckRating ??
-          (existing as HealthCheckEntry).healthCheckRating,
+        healthCheckRating,
       } as HealthCheckEntry;
 
     case 'Hospital':
+      const discharge =
+        updates.discharge ??
+        (existing.type === 'Hospital' ? existing.discharge : null);
+        
       return {
         ...mergedBase,
-        discharge:
-          updates.discharge ?? (existing as HospitalEntry).discharge,
+        discharge,
       } as HospitalEntry;
 
     case 'OccupationalHealthcare':
+      const employerName =
+        updates.employerName ??
+        (existing.type === 'OccupationalHealthcare' ? existing.employerName : '');
+      const sickLeave =
+        updates.sickLeave ??
+        (existing.type === 'OccupationalHealthcare' ? existing.sickLeave : null);
+        
       return {
         ...mergedBase,
-        employerName:
-          updates.employerName ??
-          (existing as OccupationalHealthcareEntry).employerName,
-        sickLeave:
-          updates.sickLeave ??
-          (existing as OccupationalHealthcareEntry).sickLeave,
+        employerName,
+        sickLeave,
       } as OccupationalHealthcareEntry;
 
     default:

@@ -325,60 +325,65 @@ patientsRouter.put(
   ) => {
     try {
       const { patientId, entryId } = req.params;
-      const { changeReason, lastUpdated, ...updateData } = req.body;
+      const { changeReason, updatedAt, ...updateData } = req.body as NewEntryWithoutId;
       const editorId = req.user?.id;
-
-      const updatePayload = {
-        ...updateData,
-        changeReason,
-        lastUpdated
-      };
 
       if (!editorId) {
         throw new Error('Authenticated user ID missing');
       }
 
-      if (lastUpdated) {
-        const isConflict = await EntryVersionService.checkConcurrency(
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        if (updatedAt) {
+          const isConflict = await EntryVersionService.checkConcurrency(
+            entryId,
+            updatedAt,
+            client
+          );
+
+          if (isConflict) {
+            throw new ConcurrencyError(
+              'Entry has been updated by another user. Please refresh and try again.',
+              {
+                currentVersion:
+                  await EntryVersionService.getLatestVersion(entryId, client),
+                code: 'CONCURRENCY_CONFLICT',
+              }
+            );
+          }
+        }
+
+        const versionEntry: Entry = {
+          ...req.body,
+          id: entryId
+        } as Entry;
+        
+        await EntryVersionService.createVersion(
           entryId,
-          lastUpdated
+          editorId,
+          changeReason || 'Entry updated',
+          versionEntry,
+          'UPDATE',
+          client
         );
 
-        if (isConflict) {
-          throw new ConcurrencyError(
-            'Entry has been updated by another user. Please refresh and try again.',
-            {
-              currentVersion:
-                await EntryVersionService.getLatestVersion(entryId),
-              code: 'CONCURRENCY_CONFLICT',
-            }
-          );
-        }
+        const updatedEntry = await patientService.updateEntry(
+          patientId,
+          entryId,
+          updateData,
+          req.user?.id || 'system'
+        );
+        
+        await client.query('COMMIT');
+        res.json(updatedEntry);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-
-      const currentEntry: Entry = await patientService.getEntryById(entryId);
-
-      await EntryVersionService.createVersion(
-        entryId,
-        editorId,
-        changeReason || 'Entry updated',
-        currentEntry,
-        'UPDATE'
-      );
-
-      const updatedEntry = await patientService.updateEntry(
-        patientId,
-        entryId,
-        updatePayload,
-        req.user?.id || 'system'
-      );
-
-      await pool.query(
-        `UPDATE entries SET updated_at = NOW() WHERE id = $1`,
-        [entryId]
-      );
-
-      res.json(updatedEntry);
     } catch (error) {
       if (error instanceof NotFoundError) {
         res.status(404).json({ error: error.message });

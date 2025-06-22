@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { formatDateUTC } from '../../utils/dateUtils';
 import {
   TextField,
   Button,
@@ -19,7 +20,6 @@ import {
 } from '../../types';
 import { entryToFormValues } from '@shared/src/utils/typeUtils';
 import useEntryForm from '../../hooks/useEntryForm';
-import { prepareEntryData } from '../../utils/entryUtils';
 
 interface Props {
   patientId: string;
@@ -63,15 +63,13 @@ const EntryForm: React.FC<Props> = ({
       : {
           type: 'HealthCheck',
           description: '',
-          date: new Date().toISOString().split('T')[0],
+          date: formatDateUTC(new Date()),
           specialist: '',
           healthCheckRating: 0,
+          updatedAt: new Date().toISOString(),
         },
-    onSuccess: () => {
-      // Use prepareEntryData to clean and format the entry data
-      const cleanedData = prepareEntryData(formValues);
-      console.log('[DEBUG] EntryForm - Submitting cleaned data:', cleanedData);
-      onSubmit(cleanedData);
+    onSuccess: (values: NewEntryFormValues) => {
+      onSubmit(values);
     },
   });
 
@@ -89,13 +87,15 @@ const EntryForm: React.FC<Props> = ({
           <>
             <TextField
               label='Discharge date'
-              value={formValues.discharge?.date || ''}
-              onChange={(e) =>
+              value={formValues.discharge?.date?.split('T')[0] || ''}
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                const isoDate = dateValue ? new Date(dateValue + 'T00:00:00Z').toISOString() : '';
                 handleChange('discharge', {
-                  date: e.target.value,
+                  date: isoDate,
                   criteria: formValues.discharge?.criteria || '',
-                })
-              }
+                });
+              }}
               fullWidth
               margin='normal'
               type='date'
@@ -149,13 +149,15 @@ const EntryForm: React.FC<Props> = ({
             />
             <TextField
               label='Sick leave start date'
-              value={formValues.sickLeave?.startDate || ''}
-              onChange={(e) =>
+              value={formValues.sickLeave?.startDate?.split('T')[0] || ''}
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                const isoDate = dateValue ? new Date(dateValue + 'T00:00:00Z').toISOString() : '';
                 handleChange('sickLeave', {
-                  startDate: e.target.value,
+                  startDate: isoDate,
                   endDate: formValues.sickLeave?.endDate || '',
-                })
-              }
+                });
+              }}
               fullWidth
               margin='normal'
               type='date'
@@ -168,13 +170,15 @@ const EntryForm: React.FC<Props> = ({
             />
             <TextField
               label='Sick leave end date'
-              value={formValues.sickLeave?.endDate || ''}
-              onChange={(e) =>
+              value={formValues.sickLeave?.endDate?.split('T')[0] || ''}
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                const isoDate = dateValue ? new Date(dateValue + 'T00:00:00Z').toISOString() : '';
                 handleChange('sickLeave', {
                   startDate: formValues.sickLeave?.startDate || '',
-                  endDate: e.target.value,
-                })
-              }
+                  endDate: isoDate,
+                });
+              }}
               fullWidth
               margin='normal'
               type='date'
@@ -252,7 +256,9 @@ const EntryForm: React.FC<Props> = ({
         component='form'
         onSubmit={async (e) => {
           e.preventDefault();
-          await handleFormSubmit();
+          if (!formLoading) {
+            await handleFormSubmit();
+          }
         }}
       >
         <FormControl
@@ -295,8 +301,12 @@ const EntryForm: React.FC<Props> = ({
         <TextField
           label='Date'
           type='date'
-          value={formValues.date}
-          onChange={(e) => handleChange('date', e.target.value)}
+          value={formValues.date.split('T')[0]}
+          onChange={(e) => {
+            const dateValue = e.target.value;
+            const isoDate = dateValue ? new Date(dateValue + 'T00:00:00Z').toISOString() : '';
+            handleChange('date', isoDate);
+          }}
           fullWidth
           margin='normal'
           InputLabelProps={{ shrink: true }}

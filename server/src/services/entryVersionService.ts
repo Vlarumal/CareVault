@@ -13,6 +13,7 @@ import {
   VersionDiff,
 } from '../../../shared/src/types/medicalTypes';
 import { EntrySchema } from '../schemas/entry.schema';
+import { PoolClient } from 'pg';
 
 export class EntryVersionService {
   private static validateEntryData(data: any): boolean {
@@ -196,7 +197,8 @@ export class EntryVersionService {
     editorId: string,
     changeReason: string = 'Entry updated',
     entryData?: Entry,
-    operationType: string = 'UPDATE'
+    operationType: string = 'UPDATE',
+    client?: PoolClient
   ): Promise<EntryVersion> {
     if (changeReason.trim().length < 10) {
       throw new Error('INVALID_CHANGE_REASON: Change reason must be at least 10 characters');
@@ -206,9 +208,9 @@ export class EntryVersionService {
       throw new Error('Invalid JSON in entryData');
     }
 
-    const client = await pool.connect();
+    const useClient = client || await pool.connect();
     try {
-      await client.query('BEGIN');
+      if (!client) await useClient.query('BEGIN');
 
       const cleanedEntry = entryData
         ? this.validateAndCleanEntry(entryData)
@@ -221,7 +223,7 @@ export class EntryVersionService {
         .update(JSON.stringify(cleanedEntry))
         .digest('hex');
 
-      const result = await client.query(
+      const result = await useClient.query(
         `INSERT INTO entry_versions (
           id, entry_id, created_at, updated_at,
           editor_id, change_reason, entry_data,
@@ -239,9 +241,10 @@ export class EntryVersionService {
         ]
       );
 
-      await client.query('COMMIT');
+      if (!client) await useClient.query('COMMIT');
       return result.rows[0];
     } catch (error) {
+      if (!client) await useClient.query('ROLLBACK');
       console.error(`[${new Date().toISOString()}] Error in createVersion:`, error);
       console.error('Parameters:', {
         entryId,
@@ -250,13 +253,12 @@ export class EntryVersionService {
         entryData: entryData ? JSON.stringify(entryData) : 'undefined'
       });
       console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
-      await client.query('ROLLBACK');
       throw new DatabaseError(
         'Failed to create entry version',
         error
       );
     } finally {
-      client.release();
+      if (!client) useClient.release();
     }
   }
 
@@ -308,10 +310,12 @@ export class EntryVersionService {
 
   static async checkConcurrency(
     entryId: string,
-    lastUpdated: string
+    lastUpdated: string,
+    client?: PoolClient
   ): Promise<boolean> {
+    const useClient = client || pool;
     try {
-      const result = await pool.query(
+      const result = await useClient.query(
         `SELECT updated_at FROM entries WHERE id = $1`,
         [entryId]
       );
@@ -320,10 +324,16 @@ export class EntryVersionService {
         throw new Error('Entry not found');
       }
 
-      const dbTimestamp = new Date(result.rows[0].updated_at).getTime();
-      const clientTimestamp = new Date(lastUpdated).getTime();
+      const dbTimestamp = result.rows[0].updated_at;
+      const clientTimestamp = new Date(lastUpdated);
       
-      return dbTimestamp > clientTimestamp;
+      console.log(`[CONCURRENCY DEBUG] Entry: ${entryId}, ` +
+        `DB UTC: ${dbTimestamp.toISOString()}, ` +
+        `Client: ${clientTimestamp.toISOString()}, ` +
+        `Client Local: ${clientTimestamp.toString()}, ` +
+        `Offset: ${clientTimestamp.getTimezoneOffset()}min`);
+      
+      return dbTimestamp > new Date(clientTimestamp);
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Error in checkConcurrency:`, error);
       throw new DatabaseError('Failed to check concurrency', error);
@@ -356,10 +366,12 @@ export class EntryVersionService {
   }
 
   static async getLatestVersion(
-    entryId: string
+    entryId: string,
+    client?: PoolClient
   ): Promise<EntryVersion> {
+    const useClient = client || pool;
     try {
-      const result = await pool.query(
+      const result = await useClient.query(
         `SELECT
                id,
                entry_id as "entryId",

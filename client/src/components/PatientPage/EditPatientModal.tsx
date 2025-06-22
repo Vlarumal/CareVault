@@ -50,11 +50,7 @@ const EditPatientModal = ({ patient, open, onClose }: Props) => {
     <ErrorBoundary>
       <Dialog
         open={open}
-        onClose={(_, reason) => {
-          if (reason !== 'backdropClick') {
-            onClose();
-          }
-        }}
+        onClose={onClose}
         fullWidth
         maxWidth='sm'
         aria-labelledby='edit-patient-dialog-title'
@@ -117,9 +113,9 @@ const EditPatientModal = ({ patient, open, onClose }: Props) => {
                     patient.date_of_birth || patient.dateOfBirth
                   )?.split('T')[0] || '',
                 deathDate:
-                  (
-                    patient.death_date || patient.deathDate
-                  )?.split('T')[0] || '',
+                  (patient.death_date || patient.deathDate)?.split(
+                    'T'
+                  )[0] || '',
               }}
               loading={updatePatientMutation.isPending}
             />
