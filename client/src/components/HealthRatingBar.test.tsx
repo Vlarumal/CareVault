@@ -64,6 +64,38 @@ describe('HealthRatingBar Component', () => {
     render(<HealthRatingBar rating={0} showText={false} />);
     expect(screen.queryByTestId('health-rating-text')).not.toBeInTheDocument();
   });
+
+  test('shows tooltip on hover when text is hidden', async () => {
+    render(<HealthRatingBar rating={0} showText={false} />);
+    const healthBar = screen.getByRole('img');
+    fireEvent.mouseOver(healthBar);
+    expect(await screen.findByText('The patient is in great shape')).toBeInTheDocument();
+  });
+
+  test('shows tooltip on focus when text is hidden', async () => {
+    render(<HealthRatingBar rating={0} showText={false} />);
+    const healthBar = screen.getByRole('img');
+    fireEvent.focus(healthBar);
+    expect(await screen.findByText('The patient is in great shape')).toBeInTheDocument();
+  });
+
+  test('tooltip contains correct text for each rating', async () => {
+    const ratings = [0, 1, 2, 3];
+    const texts = [
+      'The patient is in great shape',
+      'The patient has a low risk of getting sick',
+      'The patient has a high risk of getting sick',
+      'The patient has a diagnosed condition'
+    ];
+
+    for (let i = 0; i < ratings.length; i++) {
+      render(<HealthRatingBar rating={ratings[i]} showText={false} />);
+      const healthBar = screen.getByRole('img');
+      fireEvent.mouseOver(healthBar);
+      expect(await screen.findByText(texts[i])).toBeInTheDocument();
+      cleanup();
+    }
+  });
 });
 
 // Snapshot tests

@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import ErrorBoundary from '../ErrorBoundary';
-import { Modal, Box, Typography, Stack, Button, CircularProgress, Alert, Tabs, Tab } from '@mui/material';
+import { Modal, Box, Typography, Stack, Button, Alert, Tabs, Tab } from '@mui/material';
+
 import { useEntryVersions } from '../../features/versioning/hooks/useEntryVersions';
-import { useVersionDiff } from '../../features/versioning/hooks/useVersionDiff';
 import { useVersionRestore } from '../../features/versioning/hooks/useVersionRestore';
-import VersionDiffViewer from '../../features/versioning/components/VersionDiffViewer';
 import VersionPreview from '../../features/versioning/components/VersionPreview';
 import VersionList from '../../features/versioning/components/VersionList';
 import RestoreIcon from '@mui/icons-material/Restore';
@@ -18,16 +17,13 @@ interface EntryHistoryModalProps {
 
 const EntryHistoryModal = ({ open, onClose, entryId, patientId }: EntryHistoryModalProps) => {
   const [selectedVersion, setSelectedVersion] = useState<string>();
-  const [activeTab, setActiveTab] = useState(0);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [activeTab] = useState(0);
   
   const { versions, error, refresh } = useEntryVersions(patientId, entryId);
   
   useEffect(() => {
     if (!open) {
       setSelectedVersion(undefined);
-      setActiveTab(0);
-      setPreviewLoading(false);
     }
   }, [open]);
 
@@ -37,14 +33,10 @@ const EntryHistoryModal = ({ open, onClose, entryId, patientId }: EntryHistoryMo
     }
   }, [open, refresh]);
   
-  const { diff, loading: diffLoading, error: diffError, fetchDiff } = useVersionDiff();
   const { loading: restoreLoading, error: restoreError, restoreVersion } = useVersionRestore();
 
   const handleVersionSelect = (versionId: string) => {
     setSelectedVersion(versionId);
-    fetchDiff(patientId, entryId, versionId, 'current');
-    setActiveTab(0); // Switch to Diff tab when selecting a new version
-    setPreviewLoading(true); // Reset preview loading state
   };
 
   const handleRestore = async (versionId: string) => {
@@ -117,51 +109,21 @@ const EntryHistoryModal = ({ open, onClose, entryId, patientId }: EntryHistoryMo
                 </Button>
               )}
               
-              <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)} sx={{ mb: 2 }}>
-                <Tab label="Diff" />
+              <Tabs value={activeTab} sx={{ mb: 2 }}>
                 <Tab label="Preview" />
               </Tabs>
               
-              {activeTab === 0 ? (
-                // Diff tab
-                <>
-                  {diffLoading ? (
-                    <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
-                      <CircularProgress />
-                      <Typography variant="body2" ml={2}>Loading diff...</Typography>
-                    </Box>
-                  ) : diffError ? (
-                    <Alert severity="error">{diffError.message}</Alert>
-                  ) : diff ? (
-                    <ErrorBoundary>
-                      <Box sx={{ minHeight: 300 }}>
-                        <VersionDiffViewer diff={diff} />
-                      </Box>
-                    </ErrorBoundary>
-                  ) : (
-                    <Typography variant="body2">Select a version to view the diff</Typography>
-                  )}
-                </>
+              {/* Preview tab content */}
+              {selectedVersionData ? (
+                <ErrorBoundary>
+                  <VersionPreview
+                    entry={selectedVersionData.entryData}
+                    patientId={patientId}
+                    onLoad={() => {}}
+                  />
+                </ErrorBoundary>
               ) : (
-                // Preview tab
-                <>
-                  {previewLoading && (
-                    <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
-                      <CircularProgress />
-                    </Box>
-                  )}
-                  {selectedVersionData ? (
-                    <ErrorBoundary>
-                      <VersionPreview
-                        entry={selectedVersionData.entryData}
-                        patientId={patientId}
-                        onLoad={() => setPreviewLoading(false)}
-                      />
-                    </ErrorBoundary>
-                  ) : (
-                    <Typography variant="body2">Select a version to preview</Typography>
-                  )}
-                </>
+                <Typography variant="body2">Select a version to preview</Typography>
               )}
             </Box>
           </Box>

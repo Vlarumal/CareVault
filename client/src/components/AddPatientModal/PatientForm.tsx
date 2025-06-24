@@ -4,18 +4,16 @@ import type { FormikHelpers } from 'formik';
 import { useNotification } from '../../services/notificationService';
 import {
   TextField,
-  InputLabel,
   MenuItem,
-  Select,
   Grid,
   Button,
-  SelectChangeEvent,
   CircularProgress,
   Alert,
   Typography
 } from '@mui/material';
-import { isDateValid, validateSSN } from '../../utils';
+import { validateSSN } from '../../utils';
 import { PatientFormValues, Gender } from '../../types';
+import { isDateValid } from '../../utils/dateUtils';
 
 interface Props {
   onCancel: () => void;
@@ -130,6 +128,55 @@ const PatientForm = ({
     },
   });
   const errorRef = useRef<HTMLParagraphElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const ssnRef = useRef<HTMLInputElement>(null);
+  const dobRef = useRef<HTMLInputElement>(null);
+  const occupationRef = useRef<HTMLInputElement>(null);
+  const genderRef = useRef<HTMLDivElement>(null) as React.MutableRefObject<HTMLDivElement>;
+
+  const fieldOrder = ['name', 'ssn', 'dateOfBirth', 'occupation', 'gender'];
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      handleNextField(e.currentTarget.id);
+    }
+  };
+
+  const handleNextField = (currentId: string) => {
+    const currentIndex = fieldOrder.indexOf(currentId);
+    if (currentIndex === -1) return;
+
+    // Small delay to allow current field to process Enter key
+    setTimeout(() => {
+      if (currentIndex === fieldOrder.length - 1) {
+        // Submit form if we're on last field
+        formik.handleSubmit();
+        return;
+      }
+
+      // Get the next field in sequence
+      const nextField = fieldOrder[currentIndex + 1];
+      const refs: Record<string, React.RefObject<HTMLElement> | React.MutableRefObject<HTMLElement>> = {
+        name: nameRef,
+        ssn: ssnRef,
+        dateOfBirth: dobRef,
+        occupation: occupationRef,
+        gender: genderRef
+      };
+
+      const nextRef = refs[nextField];
+      if (nextRef?.current) {
+        // Special handling for select components
+        if (nextField === 'gender') {
+          const input = nextRef.current.querySelector('input');
+          input?.focus();
+        } else {
+          nextRef.current.focus();
+        }
+      }
+    }, 10);
+  };
 
   useEffect(() => {
     if (
@@ -149,19 +196,6 @@ const PatientForm = ({
     }
     return () => clearTimeout(timer);
   }, [formik.status?.success]);
-
-  const onGenderChange = (event: SelectChangeEvent<string>) => {
-    event.preventDefault();
-    if (typeof event.target.value === 'string') {
-      const value = event.target.value;
-      const gender = Object.values(Gender).find(
-        (g) => g.toString() === value
-      );
-      if (gender) {
-        formik.setFieldValue('gender', gender);
-      }
-    }
-  };
 
   return (
     <div>
@@ -200,6 +234,8 @@ const PatientForm = ({
           fullWidth
           id='name'
           {...formik.getFieldProps('name')}
+          inputRef={nameRef}
+          onKeyDown={handleInputKeyDown}
           error={Boolean(formik.errors.name) && (formik.touched.name || formik.submitCount > 0)}
           helperText={(formik.touched.name || formik.submitCount > 0) && formik.errors.name}
           sx={{ mb: 3 }}
@@ -232,6 +268,8 @@ const PatientForm = ({
           fullWidth
           id='ssn'
           {...formik.getFieldProps('ssn')}
+          inputRef={ssnRef}
+          onKeyDown={handleInputKeyDown}
           error={formik.touched.ssn && Boolean(formik.errors.ssn)}
           helperText={
             (formik.touched.ssn && formik.errors.ssn) ||
@@ -268,6 +306,8 @@ const PatientForm = ({
           id='dateOfBirth'
           type='date'
           {...formik.getFieldProps('dateOfBirth')}
+          inputRef={dobRef}
+          onKeyDown={handleInputKeyDown}
           error={
             formik.touched.dateOfBirth &&
             Boolean(formik.errors.dateOfBirth)
@@ -308,6 +348,8 @@ const PatientForm = ({
           fullWidth
           id='occupation'
           {...formik.getFieldProps('occupation')}
+          inputRef={occupationRef}
+          onKeyDown={handleInputKeyDown}
           error={
             formik.touched.occupation &&
             Boolean(formik.errors.occupation)
@@ -342,34 +384,28 @@ const PatientForm = ({
           }}
         />
 
-        <InputLabel
-          id='gender-label'
-          style={{ marginTop: 20 }}
-        >
-          Gender
-        </InputLabel>
-        <Select
-          labelId='gender-label'
-          label='Gender'
+        <TextField
+          select
+          label="Gender"
           fullWidth
-          value={formik.values.gender}
-          onChange={onGenderChange}
-          inputProps={{
-            'data-testid': 'gender-select',
-            'aria-required': 'true',
-            role: 'combobox',
-          }}
+          id="gender"
+          {...formik.getFieldProps('gender')}
+          ref={genderRef}
+          onKeyDown={handleInputKeyDown}
+          error={formik.touched.gender && Boolean(formik.errors.gender)}
+          helperText={formik.touched.gender && formik.errors.gender}
+          sx={{ mb: 3 }}
         >
           {genderOptions.map((option) => (
             <MenuItem
               key={option.label}
               value={option.value}
-              role='option'
+              role="option"
             >
               {option.label}
             </MenuItem>
           ))}
-        </Select>
+        </TextField>
 
         <TextField
           label='Death Date (optional)'

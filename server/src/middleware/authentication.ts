@@ -43,7 +43,7 @@ export const authenticate = async (
   }
 
   try {
-    if (token === 'test-token' && (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')) {
+    if (token === process.env.AUTH_TEST_TOKEN && (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')) {
       req.user = {
         id: 'test-user',
         role: 'admin'

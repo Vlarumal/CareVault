@@ -5,6 +5,7 @@ import { ValidationError } from './errors';
 
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || '';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
+const REFRESH_TOKEN_VERSION = process.env.REFRESH_TOKEN_VERSION || '1';
 
 if (!JWT_REFRESH_SECRET) {
   throw new Error('JWT_REFRESH_SECRET must be defined in environment variables');
@@ -15,7 +16,12 @@ export const generateRefreshToken = async (userId: string, role: string, permiss
   
   await RedisClient.getInstance().set(
     `refresh_token:${tokenId}`,
-    JSON.stringify({ userId, role, permissions }),
+    JSON.stringify({
+      userId,
+      role,
+      permissions,
+      version: REFRESH_TOKEN_VERSION
+    }),
     { EX: parseInt(REFRESH_TOKEN_EXPIRES_IN) * 86400 } // Convert days to seconds
   );
   
@@ -32,7 +38,12 @@ export const generateRefreshToken = async (userId: string, role: string, permiss
 
   return new Promise((resolve, reject) => {
     jwt.sign(
-      { userId, role, tokenId },
+      {
+        userId,
+        role,
+        tokenId,
+        version: REFRESH_TOKEN_VERSION
+      },
       JWT_REFRESH_SECRET,
       options,
       (err, token) => {
@@ -48,7 +59,12 @@ export const generateRefreshToken = async (userId: string, role: string, permiss
 
 export const verifyRefreshToken = async (token: string): Promise<{userId: string, role: string, permissions: string[], tokenId: string}> => {
   try {
-    const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as { userId: string, role: string, tokenId: string };
+    const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as {
+      userId: string,
+      role: string,
+      tokenId: string,
+      version: string
+    };
     
     const storedToken = await RedisClient.getInstance().get(`refresh_token:${decoded.tokenId}`);
     if (!storedToken) {
@@ -58,6 +74,11 @@ export const verifyRefreshToken = async (token: string): Promise<{userId: string
     const storedData = JSON.parse(storedToken);
     if (!storedData.permissions) {
       throw new Error('Invalid refresh token payload');
+    }
+
+    // Check token version against current environment
+    if (storedData.version !== REFRESH_TOKEN_VERSION) {
+      throw new Error('Token version mismatch - rotation required');
     }
     
     return {
