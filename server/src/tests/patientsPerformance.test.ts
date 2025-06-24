@@ -2,18 +2,12 @@ import { patientService } from '../services/patientsService';
 import pool from '../../db/connection';
 import { clearDatabase, seedDatabase } from './testUtils';
 import { QueryResult } from 'pg';
-import { buildWhereClause, buildOrderByClause } from '../utils/queryBuilder';
-import { filterSchema, sortSchema } from '../schemas/filterSort.schema';
-import { getLatestHealthRating } from '../../../client/src/services/healthRatingService';
 import {
-  Patient,
   NonSensitivePatientEntry,
   NewPatientEntryWithoutEntries,
-  PaginatedResponse,
   Gender,
 } from '../types';
 import Benchmark from 'benchmark';
-import { Performance } from 'perf_hooks';
 
 jest.mock('../../db/connection');
 jest.mock('../utils/queryBuilder');
@@ -31,7 +25,6 @@ describe('PatientService Performance', () => {
 
   describe('getNonSensitiveEntries performance', () => {
     it('should handle large datasets efficiently', async () => {
-      // Create a large dataset
       const largeDataset: NonSensitivePatientEntry[] = Array.from({ length: 10000 }, (_, i) => ({
         id: i.toString(),
         name: `Patient ${i}`,
@@ -45,7 +38,6 @@ describe('PatientService Performance', () => {
         rows: largeDataset,
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('getNonSensitiveEntries', () => {
@@ -56,7 +48,6 @@ describe('PatientService Performance', () => {
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const result = await patientService.getNonSensitiveEntries();
@@ -65,7 +56,6 @@ describe('PatientService Performance', () => {
     });
 
     it('should handle large datasets with filtering efficiently', async () => {
-      // Create a large dataset
       const largeDataset: NonSensitivePatientEntry[] = Array.from({ length: 10000 }, (_, i) => ({
         id: i.toString(),
         name: `Patient ${i}`,
@@ -79,7 +69,6 @@ describe('PatientService Performance', () => {
         rows: largeDataset.filter(p => p.gender === Gender.Male).slice(0, 100),
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('getNonSensitiveEntries with filtering', () => {
@@ -90,7 +79,6 @@ describe('PatientService Performance', () => {
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const result = await patientService.getFilteredAndPaginatedPatients(1, 100, { gender: 'male' });
@@ -100,7 +88,6 @@ describe('PatientService Performance', () => {
     });
 
     it('should handle large datasets with sorting efficiently', async () => {
-      // Create a large dataset
       const largeDataset: NonSensitivePatientEntry[] = Array.from({ length: 10000 }, (_, i) => ({
         id: i.toString(),
         name: `Patient ${i}`,
@@ -114,7 +101,6 @@ describe('PatientService Performance', () => {
         rows: largeDataset.sort((a, b) => (b.healthRating as number) - (a.healthRating as number)),
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('getNonSensitiveEntries with sorting', () => {
@@ -125,7 +111,6 @@ describe('PatientService Performance', () => {
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const result = await patientService.getFilteredAndPaginatedPatients(1, 10000, {}, { field: 'health_rating', direction: 'DESC' });
@@ -136,7 +121,6 @@ describe('PatientService Performance', () => {
     });
 
     it('should handle large datasets with pagination efficiently', async () => {
-      // Create a large dataset
       const largeDataset: NonSensitivePatientEntry[] = Array.from({ length: 10000 }, (_, i) => ({
         id: i.toString(),
         name: `Patient ${i}`,
@@ -150,7 +134,6 @@ describe('PatientService Performance', () => {
         rows: largeDataset.slice(100, 200),
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('getNonSensitiveEntries with pagination', () => {
@@ -161,7 +144,6 @@ describe('PatientService Performance', () => {
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const result = await patientService.getFilteredAndPaginatedPatients(2, 100);
@@ -171,7 +153,6 @@ describe('PatientService Performance', () => {
     });
 
     it('should handle large datasets with complex queries efficiently', async () => {
-      // Create a large dataset
       const largeDataset: NonSensitivePatientEntry[] = Array.from({ length: 10000 }, (_, i) => ({
         id: i.toString(),
         name: `Patient ${i}`,
@@ -187,7 +168,6 @@ describe('PatientService Performance', () => {
         rows: filteredDataset,
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('getNonSensitiveEntries with complex query', () => {
@@ -198,7 +178,6 @@ describe('PatientService Performance', () => {
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const result = await patientService.getFilteredAndPaginatedPatients(3, 50, { gender: 'male', minHealthRating: 80 }, { field: 'name', direction: 'DESC' });
@@ -208,7 +187,6 @@ describe('PatientService Performance', () => {
     });
 
     it('should handle large datasets with memory efficiency', async () => {
-      // Create a large dataset
       const largeDataset: NonSensitivePatientEntry[] = Array.from({ length: 10000 }, (_, i) => ({
         id: i.toString(),
         name: `Patient ${i}`,
@@ -222,7 +200,6 @@ describe('PatientService Performance', () => {
         rows: largeDataset,
       } as unknown as QueryResult);
 
-      // Measure memory usage
       const memoryUsageBefore = process.memoryUsage();
 
       const result = await patientService.getNonSensitiveEntries();
@@ -238,7 +215,6 @@ describe('PatientService Performance', () => {
     });
 
     it('should handle large datasets with CPU efficiency', async () => {
-      // Create a large dataset
       const largeDataset: NonSensitivePatientEntry[] = Array.from({ length: 10000 }, (_, i) => ({
         id: i.toString(),
         name: `Patient ${i}`,
@@ -252,7 +228,6 @@ describe('PatientService Performance', () => {
         rows: largeDataset,
       } as unknown as QueryResult);
 
-      // Measure CPU usage
       const cpuUsageBefore = process.cpuUsage();
 
       const result = await patientService.getNonSensitiveEntries();
@@ -270,7 +245,6 @@ describe('PatientService Performance', () => {
 
   describe('createPatient performance', () => {
     it('should handle high-frequency insertions efficiently', async () => {
-      // Create multiple patients
       const patients: NewPatientEntryWithoutEntries[] = Array.from({ length: 1000 }, (_, i) => ({
         name: `Patient ${i}`,
         dateOfBirth: '1980-01-01',
@@ -285,7 +259,6 @@ describe('PatientService Performance', () => {
         })),
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('createPatient', () => {
@@ -296,7 +269,6 @@ describe('PatientService Performance', () => {
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const result = await Promise.all(patients.map(patient => patientService.createPatient(patient)));
@@ -307,7 +279,6 @@ describe('PatientService Performance', () => {
 
   describe('editPatient performance', () => {
     it('should handle high-frequency updates efficiently', async () => {
-      // Create multiple patients
       const patients: NewPatientEntryWithoutEntries[] = Array.from({ length: 1000 }, (_, i) => ({
         name: `Patient ${i}`,
         dateOfBirth: '1980-01-01',
@@ -322,7 +293,6 @@ describe('PatientService Performance', () => {
         })),
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('editPatient', () => {
@@ -335,7 +305,6 @@ describe('PatientService Performance', () => {
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const result = await Promise.all(patients.map((patient, index) => patientService.editPatient(index.toString(), patient)));
@@ -346,28 +315,25 @@ describe('PatientService Performance', () => {
 
   describe('deletePatient performance', () => {
     it('should handle high-frequency deletions efficiently', async () => {
-      // Create multiple patients
       const patientIds = Array.from({ length: 1000 }, (_, i) => i.toString());
 
       (pool.query as jest.Mock).mockResolvedValueOnce({
         rows: patientIds.map(id => ({ id })),
       } as unknown as QueryResult);
 
-      // Measure performance
       const suite = new Benchmark.Suite();
       suite
         .add('deletePatient', () => {
-          patientIds.forEach(id => patientService.deletePatient(id));
+          patientIds.forEach(id => patientService.deletePatient(id, 'test-user'));
         })
         .on('complete', function (this: any) {
           console.log(`Fastest is ${this.filter('fastest').map('name')}`);
         })
         .run();
 
-      // Wait for the benchmark to complete
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const result = await Promise.all(patientIds.map(id => patientService.deletePatient(id)));
+      const result = await Promise.all(patientIds.map(id => patientService.deletePatient(id, 'test-user')));
       expect(result).toHaveLength(1000);
       expect(pool.query).toHaveBeenCalledTimes(1000);
     });

@@ -44,12 +44,12 @@ afterEach(() => {
 
 describe('PatientDataGrid component', () => {
   it('renders without crashing', () => {
-    renderWithProviders(<PatientDataGrid patients={[]} page={0} pageSize={10} onPageChange={() => {}} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={0} />);
+    renderWithProviders(<PatientDataGrid patients={[]} page={0} pageSize={10} onPageChange={() => {}} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={0} refetchPatients={() => {}} />);
     expect(screen.getByRole('grid')).toBeInTheDocument();
   });
 
   it('displays pagination controls correctly', () => {
-    renderWithProviders(<PatientDataGrid patients={mockPatients} page={0} pageSize={10} onPageChange={() => {}} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={100} />);
+    renderWithProviders(<PatientDataGrid patients={mockPatients} page={0} pageSize={10} onPageChange={() => {}} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={100} refetchPatients={() => {}} />);
     // Check for pagination buttons
     expect(screen.getByRole('button', { name: /next page/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /previous page/i })).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe('PatientDataGrid component', () => {
 
   it('calls onPageChange when pagination button is clicked', () => {
     const handlePageChange = vi.fn();
-    renderWithProviders(<PatientDataGrid patients={mockPatients} page={0} pageSize={10} onPageChange={handlePageChange} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={100} />);
+    renderWithProviders(<PatientDataGrid patients={mockPatients} page={0} pageSize={10} onPageChange={handlePageChange} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={100} refetchPatients={() => {}} />);
 
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
     expect(handlePageChange).toHaveBeenCalledWith(1);
@@ -65,7 +65,7 @@ describe('PatientDataGrid component', () => {
 
   it('calls onPageSizeChange when page size changes', () => {
     const handlePageSizeChange = vi.fn();
-    renderWithProviders(<PatientDataGrid patients={mockPatients} page={0} pageSize={10} onPageChange={() => {}} onPageSizeChange={handlePageSizeChange} pageSizeOptions={[10, 25, 50, 100]} totalCount={100} />);
+    renderWithProviders(<PatientDataGrid patients={mockPatients} page={0} pageSize={10} onPageChange={() => {}} onPageSizeChange={handlePageSizeChange} pageSizeOptions={[10, 25, 50, 100]} totalCount={100} refetchPatients={() => {}} />);
 
     // Find the page size combobox and select the 25 option
     const combobox = screen.getByRole('combobox');
@@ -81,7 +81,7 @@ describe('PatientDataGrid component', () => {
     const pageSize = 10; // Use a page size that is in the options
     const paginatedPatients = mockPatients.slice(page * pageSize, (page + 1) * pageSize);
 
-    renderWithProviders(<PatientDataGrid patients={paginatedPatients} page={page} pageSize={pageSize} onPageChange={() => {}} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={mockPatients.length} />);
+    renderWithProviders(<PatientDataGrid patients={paginatedPatients} page={page} pageSize={pageSize} onPageChange={() => {}} onPageSizeChange={() => {}} pageSizeOptions={[10, 25, 50, 100]} totalCount={mockPatients.length} refetchPatients={() => {}} />);
     expect(screen.getAllByRole('row')).toHaveLength(11); // 10 data rows + 1 header row
   });
 
@@ -101,10 +101,11 @@ describe('PatientDataGrid component', () => {
         onPageSizeChange={() => {}}
         pageSizeOptions={[10, 25, 50, 100]}
         totalCount={0}
-        filterModel={filterModel}
+        filterModel={{ items: [] }}
         onFilterModelChange={() => {}}
         sortModel={undefined}
         onSortModelChange={() => {}}
+        refetchPatients={() => {}}
       />
     );
 
@@ -144,6 +145,7 @@ describe('PatientDataGrid component', () => {
         onFilterModelChange={() => {}}
         sortModel={sortModel}
         onSortModelChange={() => {}}
+        refetchPatients={() => {}}
       />
     );
 

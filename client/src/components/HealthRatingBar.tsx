@@ -58,6 +58,7 @@ const HealthRatingBar = React.forwardRef<HTMLDivElement, BarProps>(
         style={{
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'start',
           fontSize: '1.2rem',
           animation: rating !== null ? 'pulse 0.5s ease' : 'none'
         }}
@@ -68,7 +69,7 @@ const HealthRatingBar = React.forwardRef<HTMLDivElement, BarProps>(
           {hearts}
         </span>
         {showText ? (
-          <p style={{ marginLeft: 8 }} data-testid="health-rating-text">
+          <p style={{ marginLeft: 1 }} data-testid="health-rating-text">
             {HEALTHBAR_TEXTS[rating]}
           </p>
         ) : null}

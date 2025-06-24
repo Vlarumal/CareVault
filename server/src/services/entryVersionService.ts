@@ -290,14 +290,34 @@ export class EntryVersionService {
     }
   }
 
+  private static async getCurrentStateAsVersion(entryId: string): Promise<EntryVersion> {
+    const entry = await this.getFullEntryData(entryId);
+    return {
+      id: 'current',
+      entryId: entryId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      editorId: 'system',
+      changeReason: 'Current state',
+      entryData: entry
+    };
+  }
+
   static async getVersionDiff(
     entryId: string,
     versionId1: string,
     versionId2: string
   ): Promise<VersionDiff> {
     try {
-      const version1 = await this.getVersionById(entryId, versionId1);
-      const version2 = await this.getVersionById(entryId, versionId2);
+      const getVersionOrCurrent = async (versionId: string): Promise<EntryVersion> => {
+        if (versionId === 'current') {
+          return this.getCurrentStateAsVersion(entryId);
+        }
+        return this.getVersionById(entryId, versionId);
+      };
+
+      const version1 = await getVersionOrCurrent(versionId1);
+      const version2 = await getVersionOrCurrent(versionId2);
       return calculateVersionDiff(
         version1.entryData,
         version2.entryData
@@ -419,25 +439,48 @@ export class EntryVersionService {
         version.entryData
       );
 
-      await this.createVersion(entryId, editorId, changeReason);
 
       const result = await client.query(
         `UPDATE entries SET
               description = $1,
               date = $2,
               specialist = $3,
-              diagnosis_codes = $4,
-              updated_at = $5
-             WHERE id = $6
+              updated_at = $4
+             WHERE id = $5
              RETURNING *`,
         [
           cleanedEntry.description,
           cleanedEntry.date,
           cleanedEntry.specialist,
-          cleanedEntry.diagnosisCodes,
           new Date().toISOString(),
           entryId,
         ]
+      );
+
+      await client.query(
+        `DELETE FROM entry_diagnoses WHERE entry_id = $1`,
+        [entryId]
+      );
+      
+      if (cleanedEntry.diagnosisCodes && cleanedEntry.diagnosisCodes.length > 0) {
+        const insertValues = cleanedEntry.diagnosisCodes
+          .map((_, i) => `($1, $${i + 2})`)
+          .join(',');
+
+        await client.query(
+          `INSERT INTO entry_diagnoses (entry_id, diagnosis_code)
+           VALUES ${insertValues}`,
+          [entryId, ...cleanedEntry.diagnosisCodes]
+        );
+      }
+
+      await this.createVersion(
+        entryId,
+        editorId,
+        changeReason,
+        cleanedEntry,
+        'UPDATE',
+        client
       );
 
       await client.query('COMMIT');

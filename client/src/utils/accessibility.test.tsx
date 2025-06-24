@@ -4,7 +4,7 @@ import App from '../App';
 import { test, expect, vi } from 'vitest';
 import axe from 'axe-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import PatientPage from '../components/PatientPage';
+import { PatientPage } from '../components/PatientPage';
 import patientService from '../services/patients';
 import diagnosisService from '../services/diagnoses';
 import { Patient } from '../types';

@@ -19,20 +19,28 @@ export interface Patient {
   occupation: string;
   gender: Gender;
   ssn?: string;
-  dateOfBirth?: string;
-  deathDate?: string | null;
+  /**
+   * @alias dateOfBirth
+   */
+  date_of_birth?: string;
+  /**
+   * @alias deathDate
+   */
   death_date?: string | null;
-  date_of_birth?: string; // API response format
   createdAt?: string;
   updatedAt?: string;
   entries?: Entry[];
   healthRating?: number | null; // Precomputed health rating from backend
+  
+  // Backward compatibility aliases
+  /** @deprecated Use date_of_birth instead */
+  dateOfBirth?: string;
+  /** @deprecated Use death_date instead */
+  deathDate?: string | null;
 }
 
 export type PatientFormValues = Omit<Patient, 'id' | 'entries'> & {
-  deathDate?: string | null;
-  death_date?: string;
-  
+  death_date?: string | null;
 };
 
 export interface BaseEntry {
@@ -104,7 +112,7 @@ export interface EntryVersion {
   editorId: string;
   changeReason?: string;
   entryId: string;
-  entryData?: Entry; // Add for server-side use
+  entryData: Entry;
 }
 
 export type VersionDiff = {

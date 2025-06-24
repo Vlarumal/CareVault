@@ -81,13 +81,11 @@ class EntryErrorBoundary extends Component<EntryErrorBoundaryProps, EntryErrorBo
     announcement.textContent = message;
     
     this.liveRegionRef.current.appendChild(announcement);
-    this.lastAnnouncement = message;
   };
 
   clearAnnouncements = (): void => {
     if (this.liveRegionRef.current) {
       this.liveRegionRef.current.innerHTML = '';
-      this.lastAnnouncement = null;
     }
   };
 

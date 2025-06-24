@@ -25,6 +25,7 @@ interface Props {
   patientId: string;
   onCancel: () => void;
   onSubmit: (values: NewEntryFormValues) => void;
+  onSuccess?: () => void;
   error?: string;
   loading?: boolean;
   isEditMode?: boolean;
@@ -68,8 +69,11 @@ const EntryForm: React.FC<Props> = ({
           healthCheckRating: 0,
           updatedAt: new Date().toISOString(),
         },
-    onSuccess: (values: NewEntryFormValues) => {
-      onSubmit(values);
+    onSubmit: async (values) => {
+      await onSubmit(values);
+    },
+    onSuccess: (_values: NewEntryFormValues) => {
+      // Success is handled by the parent component
     },
   });
 
@@ -100,12 +104,14 @@ const EntryForm: React.FC<Props> = ({
               margin='normal'
               type='date'
               required
-              InputLabelProps={{ shrink: true }}
               error={!!errors.dischargeDate}
               helperText={
                 errors.dischargeDate ||
                 'Date when the patient was discharged'
               }
+              slotProps={{
+                inputLabel: { shrink: true }
+              }}
             />
             <TextField
               label='Discharge criteria'
@@ -124,7 +130,9 @@ const EntryForm: React.FC<Props> = ({
                 errors.dischargeCriteria ||
                 'Criteria for discharge (max 500 characters)'
               }
-              inputProps={{ maxLength: 500 }}
+              slotProps={{
+                htmlInput: { maxLength: 500 }
+              }}
             />
           </>
         );
@@ -145,7 +153,9 @@ const EntryForm: React.FC<Props> = ({
                 errors.employerName ||
                 'Name of the employer (max 100 characters)'
               }
-              inputProps={{ maxLength: 100 }}
+              slotProps={{
+                htmlInput: { maxLength: 100 }
+              }}
             />
             <TextField
               label='Sick leave start date'
@@ -161,12 +171,14 @@ const EntryForm: React.FC<Props> = ({
               fullWidth
               margin='normal'
               type='date'
-              InputLabelProps={{ shrink: true }}
               error={!!errors.sickLeaveStartDate}
               helperText={
                 errors.sickLeaveStartDate ||
                 'Start date of sick leave (optional)'
               }
+              slotProps={{
+                inputLabel: { shrink: true }
+              }}
             />
             <TextField
               label='Sick leave end date'
@@ -182,12 +194,14 @@ const EntryForm: React.FC<Props> = ({
               fullWidth
               margin='normal'
               type='date'
-              InputLabelProps={{ shrink: true }}
               error={!!errors.sickLeaveEndDate}
               helperText={
                 errors.sickLeaveEndDate ||
                 'End date of sick leave (optional)'
               }
+              slotProps={{
+                inputLabel: { shrink: true }
+              }}
             />
           </>
         );
@@ -251,7 +265,6 @@ const EntryForm: React.FC<Props> = ({
           {error || formError}
         </Alert>
       )}
-
       <Box
         component='form'
         onSubmit={async (e) => {
@@ -295,7 +308,9 @@ const EntryForm: React.FC<Props> = ({
           }
           required
           inputRef={firstInputRef}
-          inputProps={{ maxLength: 500 }}
+          slotProps={{
+            htmlInput: { maxLength: 500 }
+          }}
         />
 
         <TextField
@@ -309,10 +324,12 @@ const EntryForm: React.FC<Props> = ({
           }}
           fullWidth
           margin='normal'
-          InputLabelProps={{ shrink: true }}
           error={!!errors.date}
           helperText={errors.date || 'Date of the entry'}
           required
+          slotProps={{
+            inputLabel: { shrink: true }
+          }}
         />
 
         <TextField
@@ -327,7 +344,9 @@ const EntryForm: React.FC<Props> = ({
             'Name of the specialist (max 100 characters)'
           }
           required
-          inputProps={{ maxLength: 100 }}
+          slotProps={{
+            htmlInput: { maxLength: 100 }
+          }}
         />
 
         <Autocomplete

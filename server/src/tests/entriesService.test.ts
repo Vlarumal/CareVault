@@ -1,6 +1,7 @@
 import { patientService } from '../services/patientsService';
 import pool from '../../db/connection';
 import { clearDatabase, seedDatabase } from './testUtils';
+import { HealthCheckEntrySchema } from '../schemas/entry.schema';
 
 describe('getEntriesByPatientId', () => {
   beforeAll(async () => {
@@ -13,7 +14,6 @@ describe('getEntriesByPatientId', () => {
   });
 
   it('should return entries for a patient', async () => {
-    // Get a patient ID from the database
     const patientResult = await pool.query('SELECT id FROM patients LIMIT 1');
     const patientId = patientResult.rows[0].id;
 
@@ -23,7 +23,6 @@ describe('getEntriesByPatientId', () => {
     expect(Array.isArray(entries)).toBe(true);
     expect(entries.length).toBeGreaterThan(0);
     
-    // Verify entry structure
     const firstEntry = entries[0];
     expect(firstEntry).toHaveProperty('id');
     expect(firstEntry).toHaveProperty('description');

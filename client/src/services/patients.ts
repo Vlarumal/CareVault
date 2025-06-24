@@ -60,9 +60,7 @@ const getAll = async (
 
 const getById = async (id: string) => {
   return apiRetry(() =>
-    api
-      .get<Patient>(`/patients/${id}`)
-      .then((res) => res.data)
+    api.get<Patient>(`/patients/${id}`).then((res) => res.data)
   );
 };
 
@@ -71,7 +69,7 @@ const create = async (object: PatientFormValues) => {
     const response = await apiRetry(() =>
       api.post<Patient>(`/patients`, {
         ...object,
-        deathDate: object.deathDate || null
+        deathDate: object.deathDate || null,
       })
     );
 
@@ -83,18 +81,27 @@ const create = async (object: PatientFormValues) => {
 };
 
 const createNewEntry = async (
-  id: string,
-  object: NewEntryFormValues
-) => {
-  const payload = {
-    ...object,
-    diagnosisCodes: object.diagnosisCodes
-  };
-  return apiRetry(() =>
-    api
-      .post<Entry>(`/patients/${id}/entries`, payload)
-      .then((res) => res.data)
-  );
+  patientId: string,
+  entryData: NewEntryFormValues,
+  idempotencyKey: string
+): Promise<Entry> => {
+  try {
+    const response = await apiRetry(() =>
+      api.post<Entry>(
+        `/patients/${patientId}/entries`,
+        entryData,
+        {
+          headers: {
+            'Idempotency-Key': idempotencyKey
+          }
+        }
+      )
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Entry creation failed: ', error);
+    throw error;
+  }
 };
 
 const getEntriesByPatientId = async (id: string) => {
@@ -119,11 +126,14 @@ const updatePatient = async (
 const updateEntry = async (
   patientId: string,
   entryId: string,
-  values: NewEntryFormValues & { updatedAt: string; changeReason?: string }
+  values: NewEntryFormValues & {
+    updatedAt: string;
+    changeReason?: string;
+  }
 ) => {
   const payload = {
     ...values,
-    diagnosisCodes: values.diagnosisCodes
+    diagnosisCodes: values.diagnosisCodes,
   };
   return apiRetry(() =>
     api
@@ -135,18 +145,27 @@ const updateEntry = async (
   );
 };
 
-const deletePatient = async (id: string, deletedBy: string, reason?: string) => {
+const deletePatient = async (
+  id: string,
+  deletedBy: string,
+  reason?: string
+) => {
   return apiRetry(() =>
     api.delete(`/patients/${id}`, {
-      data: { deletedBy, reason }
+      data: { deletedBy, reason },
     })
   );
 };
 
-const deleteEntry = async (patientId: string, entryId: string, deletedBy: string, reason?: string) => {
+const deleteEntry = async (
+  patientId: string,
+  entryId: string,
+  deletedBy: string,
+  reason?: string
+) => {
   return apiRetry(() =>
     api.delete(`/patients/${patientId}/entries/${entryId}`, {
-      data: { deletedBy, reason }
+      data: { deletedBy, reason },
     })
   );
 };

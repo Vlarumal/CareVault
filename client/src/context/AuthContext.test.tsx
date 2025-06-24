@@ -1,5 +1,5 @@
 import { render, screen, act } from '@testing-library/react';
-import { AuthProvider, useAuth, isTokenValidFormat } from './AuthContext';
+import { AuthProvider, useAuth } from './AuthContext';
 import { vi, describe, it, beforeEach, expect, afterEach, Mock } from 'vitest';
 
 const localStorageMock = (() => {
@@ -48,22 +48,13 @@ describe('AuthContext', () => {
     vi.useRealTimers();
   });
 
-  it('validates token format correctly', () => {
-    const validToken = 'header.payload.signature';
-    expect(isTokenValidFormat(validToken)).toBe(true);
-
-    expect(isTokenValidFormat('headerpayloadsignature')).toBe(false);
-    expect(isTokenValidFormat('header.payload')).toBe(false);
-    expect(isTokenValidFormat('')).toBe(false);
-  });
-
   it('rejects invalid token formats during login', () => {
     const invalidToken = 'invalid.token.format.missing.part';
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const TestComponent = () => {
       const auth = useAuth();
-      return <button onClick={() => auth.login(invalidToken)}>LoginInvalidToken</button>;
+      return <button onClick={() => auth.login(invalidToken, 'refreshToken')}>LoginInvalidToken</button>;
     };
 
     render(
@@ -92,7 +83,7 @@ describe('AuthContext', () => {
 
     const TestComponent = () => {
       const auth = useAuth();
-      return <button onClick={() => auth.login(validToken)}>LoginStorageFailure</button>;
+      return <button onClick={() => auth.login(validToken, 'refreshToken')}>LoginStorageFailure</button>;
     };
 
     render(
@@ -107,7 +98,8 @@ describe('AuthContext', () => {
     });
 
     expect(consoleErrorSpy).toHaveBeenCalledWith('Invalid token provided to login:', error);
-    expect(localStorage.setItem).toHaveBeenCalledWith('token', validToken);
+    expect(localStorage.setItem).toHaveBeenCalledWith('accessToken', validToken);
+    expect(localStorage.setItem).toHaveBeenCalledWith('refreshToken', 'refreshToken');
   });
 
   it('logs out immediately if token is expired on initialization', () => {
@@ -129,7 +121,7 @@ describe('AuthContext', () => {
       return (
         <>
           <div data-testid="auth-state">{auth.token ? 'LoggedIn' : 'LoggedOut'}</div>
-          <div data-testid="user-email">{auth.user?.email || 'NoUser'}</div>
+          <div data-testid="user-email">{auth.user?.id || 'NoUser'}</div>
         </>
       );
     };

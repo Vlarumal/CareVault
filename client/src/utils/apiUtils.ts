@@ -2,8 +2,13 @@
  * Centralized API configuration with credentials support
  * @module apiUtils
  */
-  
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
+
+import axios, {
+  AxiosError,
+  AxiosHeaders,
+  AxiosInstance,
+  AxiosRequestConfig,
+} from 'axios';
 import { QueryClient } from '@tanstack/react-query';
 import DOMPurify from 'dompurify';
 import { apiBaseUrl } from '../constants';
@@ -14,7 +19,7 @@ declare module 'axios' {
     _retry?: boolean;
   }
 }
-  
+
 /**
  * Global query client instance for query deduplication
  */
@@ -26,7 +31,7 @@ export const queryClient = new QueryClient({
     },
   },
 });
-  
+
 /**
  * Axios instance with credentials and base URL configuration
  */
@@ -35,33 +40,55 @@ const apiInstance = axios.create({
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-    'X-User-Id': process.env.NODE_ENV === 'development' ? 'dev-user-id' : undefined
-  }
+    'X-User-Id':
+      process.env.NODE_ENV === 'development'
+        ? 'dev-user-id'
+        : undefined,
+  },
 });
 
-apiInstance.interceptors.request.use(config => {
+apiInstance.interceptors.request.use((config) => {
   console.debug('[DEBUG] API Request:', {
     url: config.url,
     method: config.method,
-    data: config.data
+    data: config.data,
   });
   return config;
 });
 
-apiInstance.interceptors.request.use(config => {
+apiInstance.interceptors.request.use((config) => {
   const token = TokenManager.getAccessToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  // if (token) {
+  //   config.headers.Authorization = `Bearer ${token}`;
+  // }
+
+  const headers = new AxiosHeaders({
+    ...config.headers.toJSON(),
+    ...(token && {
+      Authorization: `Bearer ${token}`,
+    }),
+  });
+
+  // const customHeaders = ['Idempotency-Key'];
+
+  // customHeaders.forEach((header) => {
+  //   if (config.headers?.[header]) {
+  //     config.headers[header] = config.headers[header];
+  //   }
+  // });
+
+  return {
+    ...config,
+    headers,
+  };
 });
 
 apiInstance.interceptors.response.use(
-  response => {
+  (response) => {
     console.debug('[DEBUG] API Response:', {
       url: response.config.url,
       status: response.status,
-      data: response.data
+      data: response.data,
     });
     return response;
   },
@@ -69,18 +96,22 @@ apiInstance.interceptors.response.use(
     console.debug('[DEBUG] API Error:', {
       url: error.config?.url,
       status: error.response?.status,
-      data: error.response?.data
+      data: error.response?.data,
     });
-    
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
-    
-    if (error.response?.status === 401 &&
-        (error.response.data as { code?: string })?.code === 'TOKEN_EXPIRED' &&
-        originalRequest &&
-        !originalRequest._retry) {
-      
+
+    const originalRequest = error.config as AxiosRequestConfig & {
+      _retry?: boolean;
+    };
+
+    if (
+      error.response?.status === 401 &&
+      (error.response.data as { code?: string })?.code ===
+        'TOKEN_EXPIRED' &&
+      originalRequest &&
+      !originalRequest._retry
+    ) {
       originalRequest._retry = true;
-      
+
       try {
         const newToken = await TokenManager.refreshAccessToken();
         if (originalRequest.headers) {
@@ -93,49 +124,64 @@ apiInstance.interceptors.response.use(
         return Promise.reject(refreshError);
       }
     }
-    
-    if (error.response && (error.response.status === 400 || error.response.status >= 500)) {
+
+    if (
+      error.response &&
+      (error.response.status === 400 || error.response.status >= 500)
+    ) {
       interface ApiErrorResponse {
         error?: string;
         userMessage?: string;
         details?: unknown;
       }
-      
+
       const responseData = error.response.data as ApiErrorResponse;
-      
+
       const customError = new Error(
-        responseData.userMessage || responseData.error || 'An error occurred'
-      ) as Error & { isClientError?: boolean; errors?: Record<string, string> };
-      
-      customError.isClientError = (error.response.status === 400);
-      
+        responseData.userMessage ||
+          responseData.error ||
+          'An error occurred'
+      ) as Error & {
+        isClientError?: boolean;
+        errors?: Record<string, string>;
+      };
+
+      customError.isClientError = error.response.status === 400;
+
       if (responseData.details) {
-        if (typeof responseData.details === 'object' && !Array.isArray(responseData.details)) {
+        if (
+          typeof responseData.details === 'object' &&
+          !Array.isArray(responseData.details)
+        ) {
           const fieldErrors: Record<string, string> = {};
-          Object.entries(responseData.details).forEach(([field, messages]) => {
-            if (Array.isArray(messages)) {
-              fieldErrors[field] = messages.join(', ');
-            } else {
-              fieldErrors[field] = String(messages);
+          Object.entries(responseData.details).forEach(
+            ([field, messages]) => {
+              if (Array.isArray(messages)) {
+                fieldErrors[field] = messages.join(', ');
+              } else {
+                fieldErrors[field] = String(messages);
+              }
             }
-          });
+          );
           customError.errors = fieldErrors;
         }
       }
-      
+
       return Promise.reject(customError);
     }
-    
+
     if (error.code === 'ERR_NETWORK') {
-      throw new Error('CORS error: Request blocked by browser security policy');
+      throw new Error(
+        'CORS error: Request blocked by browser security policy'
+      );
     }
-    
+
     return Promise.reject(error);
   }
 );
 
 export const api: AxiosInstance = apiInstance;
-  
+
 export const apiRetry = async <T>(
   fn: () => Promise<T>,
   maxRetries = 3,
@@ -159,9 +205,14 @@ export const apiRetry = async <T>(
         }
       }
 
-      const isNetworkError = !(error instanceof AxiosError) || error.code === 'ERR_NETWORK';
-      const isServerError = error instanceof AxiosError && error.response && error.response.status >= 500;
-      
+      const isNetworkError =
+        !(error instanceof AxiosError) ||
+        error.code === 'ERR_NETWORK';
+      const isServerError =
+        error instanceof AxiosError &&
+        error.response &&
+        error.response.status >= 500;
+
       if (!isNetworkError && !isServerError) {
         throw error;
       }
@@ -172,10 +223,10 @@ export const apiRetry = async <T>(
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-  
+
   throw new Error('Max retries exceeded');
 };
-  
+
 /**
  * Sanitizes API request data to prevent XSS attacks
  * @param data - The data to sanitize
@@ -187,7 +238,7 @@ export const sanitizeRequestData = <T>(data: T): T => {
   }
   return JSON.parse(DOMPurify.sanitize(JSON.stringify(data))) as T;
 };
-  
+
 /**
  * Creates a deduplicated query function for API calls
  * @param queryKey - Unique key for query deduplication

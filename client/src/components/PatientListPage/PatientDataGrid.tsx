@@ -51,7 +51,7 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
   refetchPatients,
 }) => {
   const rows = mapToGridData(patients);
-  
+
   const handleDeleteSuccess = () => {
     refetchPatients();
   };
@@ -93,10 +93,16 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
       headerName: 'Health Rating',
       width: 240,
       renderCell: (params) => (
-        <HealthRatingBar
-          rating={params.value}
-          showText={true}
-        />
+        <Box
+          display='flex'
+          alignItems='center'
+          height='100%'
+        >
+          <HealthRatingBar
+            rating={params.value}
+            showText={true}
+          />
+        </Box>
       ),
     },
     {
@@ -106,7 +112,10 @@ const PatientDataGrid: React.FC<PatientDataGridProps> = ({
       sortable: false,
       filterable: false,
       renderCell: (params) => (
-        <Box display="flex" justifyContent="flex-end">
+        <Box
+          display='flex'
+          justifyContent='flex-end'
+        >
           <DeletePatientButton
             patientId={params.row.id}
             patientName={params.row.name}

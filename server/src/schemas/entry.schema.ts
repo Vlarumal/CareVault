@@ -26,7 +26,7 @@ const BaseEntrySchema = z.object({
   changeReason: z.string().optional(),
 }).catchall(z.never());
 
-const HealthCheckEntrySchema = BaseEntrySchema.extend({
+export const HealthCheckEntrySchema = BaseEntrySchema.extend({
   type: z.literal('HealthCheck'),
   healthCheckRating: z.nativeEnum(HealthCheckRating, {
     errorMap: () => ({ message: 'HealthCheckRating is required for HealthCheck entries' })

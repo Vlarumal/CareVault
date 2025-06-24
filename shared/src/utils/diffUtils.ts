@@ -15,6 +15,14 @@ export const calculateVersionDiff = (
   const diff: VersionDiff = {};
   
   const compareObjects = (oldObj: any, newObj: any, path = '') => {
+    if (oldObj === null || oldObj === undefined ||
+        newObj === null || newObj === undefined) {
+      if (oldObj !== newObj) {
+        diff[path] = { oldValue: oldObj, newValue: newObj };
+      }
+      return;
+    }
+
     const allKeys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
     
     allKeys.forEach(key => {

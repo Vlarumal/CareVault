@@ -32,7 +32,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   private errorRef = createRef<HTMLDivElement>();
   state: ErrorBoundaryState = { hasError: false };
 
-  componentDidUpdate(prevProps: ErrorBoundaryProps, prevState: ErrorBoundaryState) {
+  componentDidUpdate(_prevProps: ErrorBoundaryProps, prevState: ErrorBoundaryState) {
     if (this.state.hasError && !prevState.hasError && this.errorRef.current) {
       this.errorRef.current.focus();
     }

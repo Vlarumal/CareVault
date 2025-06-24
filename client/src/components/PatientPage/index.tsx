@@ -34,6 +34,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EntryHistoryModal from './EntryHistoryModal';
 import EntryForm from './EntryForm';
 import { AxiosError } from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -165,7 +166,8 @@ const PatientPage = () => {
       ) {
         throw new Error('Missing required entry fields');
       }
-      return patientService.createNewEntry(validatedId, object);
+      const idempotencyKey = uuidv4();
+      return patientService.createNewEntry(validatedId, object, idempotencyKey);
     },
     onMutate: async (newEntry) => {
       await queryClient.cancelQueries({
@@ -273,6 +275,11 @@ const PatientPage = () => {
     setIsDrawerOpen(false);
     addMutation.reset();
     updateMutation.reset();
+  };
+
+  const handleEntrySuccess = () => {
+    handleDrawerClose();
+    setEditingEntry(null);
   };
 
   if (isLoading) {
@@ -423,35 +430,32 @@ const PatientPage = () => {
           <EntryForm
             key={editingEntry ? `edit-${editingEntry.id}` : 'add-new'}
             patientId={validatedId}
-            onSubmit={(values) => {
-              if (editingEntry) {
-                if (!editingEntry.updatedAt) {
-                  console.error('Entry updatedAt missing, cannot update');
-                  showNotification('Entry updatedAt missing, cannot update', 'error');
-                  return;
-                }
-                
-                updateMutation.mutate(
-                  {
-                    entryId: editingEntry.id,
-                    values: {
-                      ...values,
-                      updatedAt: new Date().toISOString(),
-                    },
-                  },
-                  {
-                    onSuccess: (updatedEntry) => {
-                      console.log('Update successful', updatedEntry);
-                      handleDrawerClose();
-                      setEditingEntry(null);
-                    },
-                    onError: (error) => {
-                      console.error('Update failed', error);
-                    },
+            onSubmit={async (values) => {
+              try {
+                if (editingEntry) {
+                  if (!editingEntry.updatedAt) {
+                    console.error('Entry updatedAt missing, cannot update');
+                    showNotification('Entry updatedAt missing, cannot update', 'error');
+                    return;
                   }
-                );
-              } else {
-                addMutation.mutate(values);
+                  
+                  await updateMutation.mutateAsync(
+                    {
+                      entryId: editingEntry.id,
+                      values: {
+                        ...values,
+                        updatedAt: new Date().toISOString(),
+                      },
+                    }
+                  );
+                  handleEntrySuccess();
+                } else {
+                  await addMutation.mutateAsync(values);
+                  handleEntrySuccess();
+                }
+              } catch (error) {
+                // Errors are already handled by the mutation's onError callback
+                // We don't need to do anything here as the error state will update
               }
             }}
             error={

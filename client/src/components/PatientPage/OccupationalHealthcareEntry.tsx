@@ -41,6 +41,7 @@ const OccupationalHealthcareEntryComponent: React.FC<{
         <DeleteEntryButton
           patientId={patientId}
           entryId={entry.id}
+          entryTitle={`${entry.type} entry on ${entry.date}`}
           entryDescription={getEntryDescription(entry)}
           onDeleted={onDeleted}
         />

@@ -68,7 +68,7 @@ const restoreVersion = async (
   versionId: string
 ): Promise<Entry> => {
   try {
-    const { data } = await api.post<Entry>(
+    const { data } = await api.put<Entry>(
       `/patients/${patientId}/entries/${entryId}/versions/${versionId}/restore`,
       {},
       { withCredentials: true }

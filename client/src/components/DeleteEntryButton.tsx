@@ -15,14 +15,15 @@ interface DeleteEntryButtonProps {
   patientId: string;
   entryId: string;
   entryTitle: string;
-  onDeleteSuccess: () => void;
+  entryDescription: string;
+  onDeleted: () => void;
 }
 
 const DeleteEntryButton: React.FC<DeleteEntryButtonProps> = ({
   patientId,
   entryId,
   entryTitle,
-  onDeleteSuccess,
+  onDeleted,
 }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -61,8 +62,8 @@ const DeleteEntryButton: React.FC<DeleteEntryButtonProps> = ({
       );
 
       if (response.status >= 200 && response.status < 300) {
-        if (typeof onDeleteSuccess === 'function') {
-          onDeleteSuccess();
+        if (typeof onDeleted === 'function') {
+          onDeleted();
         }
         handleDialogClose();
       } else {

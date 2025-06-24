@@ -1,7 +1,10 @@
 import express, { Request, Response } from 'express';
 import { EntryVersion } from '../../../shared/src/types/medicalTypes';
 import { RedisClient } from '../utils/redis';
-import { adminOnly, authenticate } from '../middleware/authentication';
+import {
+  adminOnly,
+  authenticate,
+} from '../middleware/authentication';
 import { patientService } from '../services/patientsService';
 import {
   NewEntryWithoutId,
@@ -31,6 +34,7 @@ import {
 import qs from 'qs';
 import { EntryVersionService } from '../services/entryVersionService';
 import pool from '../../db/connection';
+import logger from '../utils/logger';
 
 interface PaginationQuery {
   page?: string;
@@ -50,13 +54,13 @@ patientsRouter.get('/health', async (_req, res) => {
     res.json({
       status: 'ok',
       redis: redisHealth.status,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (err) {
     res.status(503).json({
       status: 'error',
       error: 'Service unavailable',
-      details: err instanceof Error ? err.message : 'Unknown error'
+      details: err instanceof Error ? err.message : 'Unknown error',
     });
   }
 });
@@ -190,13 +194,18 @@ patientsRouter.post(
   validate(CreatePatientSchema),
   async (
     req: Request<unknown, unknown, NewPatientEntryWithoutEntries>,
-    res: Response<{ patient: PatientEntry; token: string } | { error: string; details?: any }>
+    res: Response<
+      | { patient: PatientEntry; token: string }
+      | { error: string; details?: any }
+    >
   ) => {
     try {
-      const addedPatient = await patientService.createPatient(req.body);
+      const addedPatient = await patientService.createPatient(
+        req.body
+      );
       res.status(201).json({
         patient: addedPatient,
-        token: '' // Maintain interface compatibility
+        token: '', // Maintain interface compatibility
       });
     } catch (error) {
       if (error instanceof ValidationError) {
@@ -221,25 +230,103 @@ patientsRouter.post(
     req: Request<{ id: string }, unknown, NewEntryWithoutId>,
     res: Response
   ) => {
-    const patient = await patientService.getPatientById(
-      req.params.id
-    );
-    const entryData: NewEntryWithoutId = req.body;
-    
-    const addedEntry = await patientService.addEntry(
-      patient,
-      entryData
-    );
-    
-    await EntryVersionService.createVersion(
-      addedEntry.id,
-      req.user?.id || 'system',
-      'Initial entry creation',
-      addedEntry,
-      'CREATE'
-    );
+    // const patientId = req.params.id;
+    // const entryHash = createHash('sha25')
+    //   .update(JSON.stringify(req.body))
+    //   .digest('hex');
 
-    res.status(201).json(addedEntry);
+    // const lockKey = `lock:${patientId}:${entryHash}`;
+
+    // const idempotencyKey = `idempotency:${req.headers['idempotency-key']}`;
+     const idempotencyKey = req.headers['idempotency-key'] as string;
+     let entryCreated = false; // Track if entry was successfully created
+
+    if (!idempotencyKey) {
+      res.status(400).json({
+        error: 'Idempotency-Key header is required',
+      });
+      return;
+    }
+
+    try {
+      const cachedResponse = await RedisClient.get(
+        `idempotency:${idempotencyKey}`
+      );
+
+      if (cachedResponse) {
+        res.status(201).json(JSON.parse(cachedResponse));
+        return;
+      }
+
+      // Fetch patient BEFORE acquiring lock to reduce critical section
+      const patient = await patientService.getPatientById(
+        req.params.id
+      );
+
+      logger.info(
+        `Attempting to acquire lock for key: ${idempotencyKey}`
+      );
+
+      const lockKey = `lock:${idempotencyKey}`;
+      const lockAcquired = await RedisClient.acquireLock(lockKey, 10);
+
+      if (!lockAcquired) {
+        res.status(409).json({
+          error: 'Concurrent request with same idempotency key',
+        });
+        return;
+      }
+
+      logger.info(`Lock acquired for key: ${idempotencyKey}`);
+
+      const entryData: NewEntryWithoutId = req.body;
+
+      const addedEntry = await patientService.addEntry(
+        patient,
+        entryData
+      );
+
+      await RedisClient.set(
+        `idempotency:${idempotencyKey}`,
+        JSON.stringify(addedEntry),
+        undefined,
+        'EX',
+        86400
+      );
+
+      logger.info(`Response cached for key: ${idempotencyKey}`);
+
+      await RedisClient.releaseLock(lockKey);
+
+      logger.info(`Lock released for key: ${idempotencyKey}`);
+
+      res.status(201).json(addedEntry);
+    } catch (error) {
+      logger.error(`Error processing request: ${error}`);
+
+      // Only release lock if entry wasn't created
+      if (!entryCreated) {
+        const lockKey = `lock:${idempotencyKey}`;
+        await RedisClient.releaseLock(lockKey);
+        logger.warn(`Lock released after error (entry not created) for key: ${idempotencyKey}`);
+      } else {
+        logger.error(`Lock NOT released after error (entry was created) for key: ${idempotencyKey}. Lock will expire naturally.`);
+      }
+
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+      } else if (error instanceof ValidationError) {
+        res.status(400).json({
+          error: error.message,
+          details: error.details,
+        });
+      } else {
+        console.error('Error in POST /patients/:id/entry:', error);
+        res.status(500).json({
+          error: 'Internal server error',
+        });
+      }
+    }
   }
 );
 
@@ -260,24 +347,29 @@ patientsRouter.get(
   }
 );
 
-patientsRouter.delete('/:id', authenticate, adminOnly, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const deletedBy = req.user?.id || 'system'; // Use authenticated user ID or 'system'
-    const reason = req.body.reason || 'No reason provided'; // Get reason from request body
-    
-    await patientService.deletePatient(id, deletedBy, reason);
-    res.status(204).end();
-  } catch (error) {
-    if (error instanceof NotFoundError) {
-      res.status(404).json({ error: error.message });
-    } else if (error instanceof DatabaseError) {
-      res.status(500).json({ error: 'Internal server error' });
-    } else {
-      res.status(500).json({ error: 'Unexpected error occurred' });
+patientsRouter.delete(
+  '/:id',
+  authenticate,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deletedBy = req.user?.id || 'system'; // Use authenticated user ID or 'system'
+      const reason = req.body.reason || 'No reason provided'; // Get reason from request body
+
+      await patientService.deletePatient(id, deletedBy, reason);
+      res.status(204).end();
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+      } else if (error instanceof DatabaseError) {
+        res.status(500).json({ error: 'Internal server error' });
+      } else {
+        res.status(500).json({ error: 'Unexpected error occurred' });
+      }
     }
   }
-});
+);
 
 patientsRouter.put(
   '/:id',
@@ -325,7 +417,8 @@ patientsRouter.put(
   ) => {
     try {
       const { patientId, entryId } = req.params;
-      const { changeReason, updatedAt, ...updateData } = req.body as NewEntryWithoutId;
+      const { changeReason, updatedAt, ...updateData } =
+        req.body as NewEntryWithoutId;
       const editorId = req.user?.id;
 
       if (!editorId) {
@@ -337,18 +430,22 @@ patientsRouter.put(
         await client.query('BEGIN');
 
         if (updatedAt) {
-          const isConflict = await EntryVersionService.checkConcurrency(
-            entryId,
-            updatedAt,
-            client
-          );
+          const isConflict =
+            await EntryVersionService.checkConcurrency(
+              entryId,
+              updatedAt,
+              client
+            );
 
           if (isConflict) {
             throw new ConcurrencyError(
               'Entry has been updated by another user. Please refresh and try again.',
               {
                 currentVersion:
-                  await EntryVersionService.getLatestVersion(entryId, client),
+                  await EntryVersionService.getLatestVersion(
+                    entryId,
+                    client
+                  ),
                 code: 'CONCURRENCY_CONFLICT',
               }
             );
@@ -357,9 +454,9 @@ patientsRouter.put(
 
         const versionEntry: Entry = {
           ...req.body,
-          id: entryId
+          id: entryId,
         } as Entry;
-        
+
         await EntryVersionService.createVersion(
           entryId,
           editorId,
@@ -375,7 +472,7 @@ patientsRouter.put(
           updateData,
           req.user?.id || 'system'
         );
-        
+
         await client.query('COMMIT');
         res.json(updatedEntry);
       } catch (error) {
@@ -450,12 +547,14 @@ patientsRouter.get(
   ): Promise<void> => {
     try {
       const { entryId } = req.params;
-      const versions = await EntryVersionService.getVersionsByEntryId(entryId);
-      
+      const versions = await EntryVersionService.getVersionsByEntryId(
+        entryId
+      );
+
       if (versions.length === 0) {
         res.status(404).json({
           error: 'No versions found for this entry',
-          code: 'NO_VERSIONS'
+          code: 'NO_VERSIONS',
         });
         return;
       }
@@ -465,13 +564,13 @@ patientsRouter.get(
       if (error instanceof NotFoundError) {
         res.status(404).json({
           error: error.message,
-          code: 'NOT_FOUND'
+          code: 'NOT_FOUND',
         });
       } else {
         console.error('Error fetching entry versions:', error);
         res.status(500).json({
           error: 'Failed to fetch entry versions',
-          code: 'SERVER_ERROR'
+          code: 'SERVER_ERROR',
         });
       }
     }
@@ -603,8 +702,14 @@ patientsRouter.delete(
         return;
       }
 
-      if (!reason || typeof reason !== 'string' || reason.trim() === '') {
-        res.status(400).json({ error: 'Deletion reason is required' });
+      if (
+        !reason ||
+        typeof reason !== 'string' ||
+        reason.trim() === ''
+      ) {
+        res
+          .status(400)
+          .json({ error: 'Deletion reason is required' });
         return;
       }
 
@@ -614,7 +719,7 @@ patientsRouter.delete(
         deletedBy,
         reason.trim()
       );
-    res.status(204).end();
+      res.status(204).end();
     } catch (error) {
       if (error instanceof NotFoundError) {
         res.status(404).json({ error: error.message });

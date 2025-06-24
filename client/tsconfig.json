@@ -31,6 +31,6 @@
     /* Custom type roots */
     "typeRoots": ["./node_modules/@types", "./src/types"],
   },
-  "include": ["src"],
+  "include": ["src", "../shared/src"],
   "references": [{ "path": "./tsconfig.node.json" }],
 }

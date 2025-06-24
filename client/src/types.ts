@@ -1,29 +1,23 @@
-import * as medicalTypes from '@shared/src/types/medicalTypes';
+import * as medicalTypes from '../../shared/src/types/medicalTypes';
 
+// Re-export as namespace for external use
+export * as medicalTypes from '../../shared/src/types/medicalTypes';
+
+// Explicitly export all needed types
 export type Gender = medicalTypes.Gender;
 export const Gender = medicalTypes.Gender;
 export const HealthCheckRating = medicalTypes.HealthCheckRating;
-
-export type {
-  DiagnosisEntry,
-  Patient,
-  PatientFormValues,
-  BaseEntry,
-  HealthCheckEntry,
-  Discharge,
-  SickLeave,
-  OccupationalHealthcareEntry,
-  HospitalEntry,
-  Entry,
-  VersionedEntry,
-  AnyEntry,
-  UnionOmit,
-  NewEntryWithoutId,
-} from '@shared/src/types/medicalTypes';
+export type Patient = medicalTypes.Patient;
+export type PatientFormValues = medicalTypes.PatientFormValues;
+export type Entry = medicalTypes.Entry;
+export type DiagnosisEntry = medicalTypes.DiagnosisEntry;
+export type HealthCheckEntry = medicalTypes.HealthCheckEntry;
+export type HospitalEntry = medicalTypes.HospitalEntry;
+export type OccupationalHealthcareEntry = medicalTypes.OccupationalHealthcareEntry;
+export type AnyEntry = medicalTypes.AnyEntry;
 
 export type PatientEntry = medicalTypes.Patient & {
   entries: medicalTypes.AnyEntry[];
-  deathDate?: string | null;
 };
 
 export interface NewEntryFormValues {
@@ -42,8 +36,11 @@ export interface NewEntryFormValues {
     startDate: string;
     endDate: string;
   };
-  updatedAt: string;
+  updatedAt?: string;
   changeReason?: string;
+  version?: number;
 }
 
-export type { EntryVersion, VersionDiff } from '@shared/src/types/medicalTypes';
+export interface LoginResponse {
+  token: string;
+}

@@ -144,7 +144,7 @@ describe('patients service', () => {
         specialist: 'Dr. Smith',
         type: 'HealthCheck',
         healthCheckRating: 0,
-      } as any;
+      };
 
       await patientsService.createNewEntry('patient-123', mockEntry);
       
@@ -166,7 +166,9 @@ describe('patients service', () => {
         type: 'HealthCheck' as const,
         healthCheckRating: 1,
         diagnosisCodes: ['C33', 'D44'],
+        updatedAt: '2025-06-20T00:00:00.000Z'
       };
+        
 
       await patientsService.updateEntry('patient-123', 'entry-456', mockUpdate);
       
@@ -186,6 +188,7 @@ describe('patients service', () => {
         type: 'HealthCheck' as const,
         healthCheckRating: 1,
         diagnosisCodes: [],
+        updatedAt: '2025-06-20T00:00:00.000Z'
       };
 
       await patientsService.updateEntry('patient-123', 'entry-456', mockUpdate);
@@ -203,9 +206,11 @@ describe('patients service', () => {
         description: 'Updated entry',
         date: '2025-06-20',
         specialist: 'Dr. Smith',
-        type: 'HealthCheck',
+        type: 'HealthCheck' as const,
         healthCheckRating: 1,
-      } as any;
+        updatedAt: '2023-01-01T00:00:00.000Z',
+        changeReason: 'test',
+      };
 
       await patientsService.updateEntry('patient-123', 'entry-456', mockUpdate);
       

@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { DiagnosisEntry, NewEntryFormValues } from '../types';
-import patientsService from '../services/patients';
 import { AxiosError } from 'axios';
 
 interface UseEntryFormProps {
@@ -10,6 +9,7 @@ interface UseEntryFormProps {
   initialValues?: NewEntryFormValues;
   onSuccess: (values: NewEntryFormValues) => void;
   diagnosisCodes?: DiagnosisEntry[];
+  onSubmit: (values: NewEntryFormValues) => Promise<void>; // Added callback
 }
 
 interface UseEntryFormReturn {
@@ -27,11 +27,11 @@ interface UseEntryFormReturn {
 
 const useEntryForm = ({
   mode,
-  patientId,
   entryId,
   initialValues,
   onSuccess,
   diagnosisCodes: _diagnosisCodes, // Mark as unused
+  onSubmit,
 }: UseEntryFormProps): UseEntryFormReturn => {
   const [formValues, setFormValues] = useState<NewEntryFormValues>(
     initialValues || {
@@ -41,12 +41,14 @@ const useEntryForm = ({
       type: 'HealthCheck',
       updatedAt: new Date().toISOString(),
       changeReason: '',
+      version: 0,
     }
   );
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [changeReason, setChangeReason] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const isSubmittingRef = useRef(false);
 
   const handleChange = <K extends keyof NewEntryFormValues>(
     field: K,
@@ -66,8 +68,8 @@ const useEntryForm = ({
   };
 
   const handleSubmit = async () => {
-    // Prevent multiple submissions
-    if (loading) return;
+    if (loading || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     
     try {
       setLoading(true);
@@ -81,24 +83,23 @@ const useEntryForm = ({
         }
       }
 
-      if (mode === 'edit' && entryId) {
-        await patientsService.updateEntry(
-          patientId,
-          entryId,
-          {
-            ...formValues,
-            changeReason: changeReason
-          }
-        );
-      } else {
-        await patientsService.createNewEntry(patientId, formValues);
-      }
-      onSuccess(formValues);
+      const submissionData = {
+        ...formValues,
+        updatedAt: formValues.updatedAt || new Date().toISOString(),
+        ...(mode === 'edit' && entryId ? { changeReason } : {})
+      };
+
+      await onSubmit(submissionData); // Delegate to parent
+      onSuccess(submissionData);
     } catch (e: unknown) {
       if (e instanceof AxiosError) {
         if (e.response?.data.error === 'INVALID_CHANGE_REASON') {
           setErrors({ changeReason: e.response.data.message });
-        } else {
+        }
+        else if (e.response?.data.error === 'VERSION_CONFLICT') {
+          setError('This entry has been modified by another user. Please refresh and try again.');
+        }
+        else {
           setError(e.response?.data.error || e.message);
         }
       } else if (e instanceof Error) {
@@ -108,6 +109,7 @@ const useEntryForm = ({
       }
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

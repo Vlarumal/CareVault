@@ -2,7 +2,7 @@
  * Service for calculating health ratings from patient entries
  */
 
-import { Entry, HealthCheckEntry } from '../types';
+import { Entry, HealthCheckEntry } from '../../../shared/src/types/medicalTypes';
 
 /**
  * Gets the latest health rating from patient entries

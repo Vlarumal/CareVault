@@ -5,22 +5,23 @@ import AutoSizer from 'react-virtualized-auto-sizer';
 import { EntryVersion } from '@shared/src/types/medicalTypes';
 
 interface VersionListProps {
+  patientId: string;
   entryId: string;
   onVersionSelect?: (versionId: string) => void;
 }
 
-const VersionRow = ({ 
-  index, 
-  style, 
-  data 
+const VersionRow = ({
+  index,
+  style,
+  data
 }: ListChildComponentProps<{
   versions: EntryVersion[];
   onVersionSelect?: (versionId: string) => void;
 }>) => {
   const version = data.versions[index];
   return (
-    <ListItemButton 
-      style={style} 
+    <ListItemButton
+      style={style}
       onClick={() => data.onVersionSelect?.(version.id)}
       component="div"
     >
@@ -32,8 +33,8 @@ const VersionRow = ({
   );
 };
 
-const VersionList = ({ entryId, onVersionSelect }: VersionListProps) => {
-  const { versions, loading, error } = useEntryVersions(entryId);
+const VersionList = ({ patientId, entryId, onVersionSelect }: VersionListProps) => {
+  const { versions, loading, error } = useEntryVersions(patientId, entryId);
 
   if (loading) return <CircularProgress />;
   if (error) return <Typography color="error">{error.message}</Typography>;

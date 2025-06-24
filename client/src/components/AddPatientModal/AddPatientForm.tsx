@@ -295,7 +295,6 @@ const addPatient = (event: SyntheticEvent) => {
           error={!!errors.name}
           helperText={errors.name || 'Full name (max 100 characters)'}
           sx={{ mb: 3 }}
-          inputProps={{ maxLength: 100 }}
           slotProps={{
             input: {
               sx: {
@@ -306,9 +305,13 @@ const addPatient = (event: SyntheticEvent) => {
             },
 
             htmlInput: {
-              'aria-required': 'true',
-              'aria-describedby': errors.name ? 'name-error' : undefined,
-              'aria-invalid': !!errors.name || undefined
+              ...{ maxLength: 100 },
+
+              ...{
+                'aria-required': 'true',
+                'aria-describedby': errors.name ? 'name-error' : undefined,
+                'aria-invalid': !!errors.name || undefined
+              }
             },
 
             formHelperText: {
@@ -439,7 +442,6 @@ const addPatient = (event: SyntheticEvent) => {
           error={!!errors.occupation}
           helperText={errors.occupation || 'Occupation (max 100 characters)'}
           sx={{ mb: 3 }}
-          inputProps={{ maxLength: 100 }}
           slotProps={{
             input: {
               sx: {
@@ -450,9 +452,13 @@ const addPatient = (event: SyntheticEvent) => {
             },
 
             htmlInput: {
-              'aria-required': 'true',
-              'aria-describedby': errors.occupation ? 'occupation-error' : undefined,
-              'aria-invalid': !!errors.occupation || undefined
+              ...{ maxLength: 100 },
+
+              ...{
+                'aria-required': 'true',
+                'aria-describedby': errors.occupation ? 'occupation-error' : undefined,
+                'aria-invalid': !!errors.occupation || undefined
+              }
             },
 
             formHelperText: {

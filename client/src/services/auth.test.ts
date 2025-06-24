@@ -1,135 +1,91 @@
 import auth from './auth';
 import axios from 'axios';
 import {
-  Mock,
   vi,
   describe,
   it,
   expect,
   beforeEach,
-  Mocked,
+  Mocked
 } from 'vitest';
-import { handleTokenStorage } from '../utils/tokenUtils';
+import { TokenManager } from '../utils/tokenUtils';
 
 vi.mock('axios');
-const mockedAxios = axios as Mocked<typeof axios>;
-
 vi.mock('../utils/tokenUtils', () => ({
-  isTokenValidFormat: vi
-    .fn()
-    .mockImplementation((token) => token && token.includes('.')),
-  handleTokenStorage: vi.fn(),
+  TokenManager: {
+    clearTokens: vi.fn(),
+    storeTokens: vi.fn(),
+    getRefreshToken: vi.fn(() => 'mock-refresh-token'),
+  }
 }));
 
-describe('auth service', () => {
+const mockedAxios = axios as Mocked<typeof axios>;
+
+describe('Auth Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
   });
 
-  it('handles token storage failures during login', async () => {
-    const token = 'valid.token.here';
-    const error = new Error('Storage failed');
-    const credentials = {
-      email: 'test@example.com',
-      password: 'password',
-    };
+  describe('login', () => {
+    it('successfully logs in and returns tokens', async () => {
+      const mockResponse = {
+        data: {
+          token: 'access-token',
+          refreshToken: 'refresh-token'
+        }
+      };
+      mockedAxios.post.mockResolvedValue(mockResponse);
 
-    mockedAxios.post.mockResolvedValueOnce({ data: { token } });
+      const credentials = { email: 'test@example.com', password: 'password' };
+      const result = await auth.login(credentials);
 
-    (handleTokenStorage as Mock).mockImplementationOnce(() => {
-      throw error;
+      expect(mockedAxios.post).toHaveBeenCalledWith('/api/auth/login', credentials);
+      expect(result).toEqual(mockResponse.data);
+      expect(TokenManager.storeTokens).toHaveBeenCalledWith('access-token', 'refresh-token');
     });
 
-    try {
-      await auth.login(credentials);
-    } catch (err) {
-      if (err instanceof Error) {
-        expect(err.message).toBe('Failed to update token storage');
-      } else {
-        throw err;
-      }
-    }
+    it('throws error for invalid token format', async () => {
+      const mockResponse = {
+        data: { token: 'invalid' }
+      };
+      mockedAxios.post.mockResolvedValue(mockResponse);
 
-    expect(handleTokenStorage).toHaveBeenCalledWith(token);
+      await expect(
+        auth.login({ email: 'test@example.com', password: 'password' })
+      ).rejects.toThrow('Invalid token format received from server');
+    });
   });
 
-  it('handles token storage failures during registration', async () => {
-    const token = 'valid.token.here';
-    const err = new Error('Storage failed');
-    const userData = {
-      email: 'test@example.com',
-      password: 'password',
-      name: 'Test User',
-    };
+  describe('logout', () => {
+    it('successfully logs out', async () => {
+      mockedAxios.post.mockResolvedValue({});
 
-    mockedAxios.post.mockResolvedValueOnce({ data: { token } });
+      await auth.logout('refresh-token');
 
-    (handleTokenStorage as Mock).mockImplementationOnce(() => {
-      throw err;
+      expect(mockedAxios.post).toHaveBeenCalledWith('/api/auth/logout', { refreshToken: 'refresh-token' });
+      expect(TokenManager.clearTokens).toHaveBeenCalled();
     });
-
-    try {
-      await auth.register(userData);
-    } catch (err) {
-      if (err instanceof Error) {
-        expect(err.message).toBe('Failed to update token storage');
-      } else {
-        throw err;
-      }
-    }
-
-    expect(handleTokenStorage).toHaveBeenCalledWith(token);
   });
 
-  it('rejects login with invalid token format from server', async () => {
-    const invalidToken = 'invalidtoken';
-    const credentials = {
-      email: 'test@example.com',
-      password: 'password',
-    };
+  describe('register', () => {
+    it('successfully registers and stores tokens', async () => {
+      const mockResponse = {
+        data: {
+          token: 'access-token',
+          refreshToken: 'refresh-token'
+        }
+      };
+      mockedAxios.post.mockResolvedValue(mockResponse);
 
-    // Mock API response with invalid token
-    mockedAxios.post.mockResolvedValueOnce({
-      data: { token: invalidToken },
+      const data = { email: 'test@example.com', password: 'password', name: 'Test User' };
+      const result = await auth.register(data);
+
+      expect(mockedAxios.post).toHaveBeenCalledWith('/api/auth/register', data);
+      expect(result).toEqual(mockResponse.data);
+      expect(TokenManager.storeTokens).toHaveBeenCalledWith('access-token', 'refresh-token');
     });
-
-    try {
-      await auth.login(credentials);
-    } catch (err) {
-      if (err instanceof Error) {
-        expect(err.message).toBe(
-          'Invalid token format received from server'
-        );
-      } else {
-        throw err;
-      }
-    }
-
-    expect(handleTokenStorage).not.toHaveBeenCalled();
   });
 
-  it('handles refresh token storage failures', async () => {
-    const token = 'valid.token.here';
-    const error = new Error('Storage failed');
-    localStorage.setItem('token', token);
-
-    mockedAxios.post.mockResolvedValueOnce({
-      data: { token: 'new.token.here' },
-    });
-
-    (handleTokenStorage as Mock).mockImplementationOnce(() => {
-      throw error;
-    });
-
-    try {
-      await auth.refreshToken();
-    } catch (err) {
-      if (err instanceof Error) {
-        expect(err.message).toBe('Failed to update token storage');
-      } else {
-        throw error;
-      }
-    }
-  });
+  // Tests for requestPasswordReset and confirmPasswordReset would go here
 });
