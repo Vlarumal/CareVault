@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { api, apiRetry } from '../utils/apiUtils';
 import { toServerFilter } from '../utils/gridFilterConverter';
+import axios from 'axios';
 
 export interface PaginatedResponse<T> {
   data: T;
@@ -116,11 +117,23 @@ const updatePatient = async (
   id: string,
   object: PatientFormValues
 ) => {
-  return apiRetry(() =>
-    api
-      .put<Patient>(`/patients/${id}`, object)
-      .then((res) => res.data)
-  );
+  try {
+    const response = await apiRetry(() =>
+      api.put<Patient>(`/patients/${id}`, object)
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
+      const permission = (error.response.data as { missingPermission?: string })?.missingPermission;
+      const message = permission
+        ? `You don't have permission to update patients. Required permission: ${permission}. Please contact your administrator.`
+        : 'You don\'t have permission to update patients. Please contact your administrator.';
+      const err = new Error(message);
+      err.name = 'PermissionError';
+      throw err;
+    }
+    throw error;
+  }
 };
 
 const updateEntry = async (
@@ -135,14 +148,26 @@ const updateEntry = async (
     ...values,
     diagnosisCodes: values.diagnosisCodes,
   };
-  return apiRetry(() =>
-    api
-      .put<Entry>(
+  try {
+    const response = await apiRetry(() =>
+      api.put<Entry>(
         `/patients/${patientId}/entries/${entryId}`,
         payload
       )
-      .then((res) => res.data)
-  );
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
+      const permission = (error.response.data as { missingPermission?: string })?.missingPermission;
+      const message = permission
+        ? `You don't have permission to update entries. Required permission: ${permission}. Please contact your administrator.`
+        : error.response.data?.message || 'You don\'t have permission to update entries. Please contact your administrator.';
+      const err = new Error(message);
+      err.name = 'PermissionError';
+      throw err;
+    }
+    throw error;
+  }
 };
 
 const deletePatient = async (
@@ -150,11 +175,24 @@ const deletePatient = async (
   deletedBy: string,
   reason?: string
 ) => {
-  return apiRetry(() =>
-    api.delete(`/patients/${id}`, {
-      data: { deletedBy, reason },
-    })
-  );
+  try {
+    await apiRetry(() =>
+      api.delete(`/patients/${id}`, {
+        data: { deletedBy, reason },
+      })
+    );
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
+      const permission = (error.response.data as { missingPermission?: string })?.missingPermission;
+      const message = permission
+        ? `You don't have permission to delete patients. Required permission: ${permission}. Please contact your administrator.`
+        : 'You don\'t have permission to delete patients. Please contact your administrator.';
+      const err = new Error(message);
+      err.name = 'PermissionError';
+      throw err;
+    }
+    throw error;
+  }
 };
 
 const deleteEntry = async (
@@ -163,11 +201,24 @@ const deleteEntry = async (
   deletedBy: string,
   reason?: string
 ) => {
-  return apiRetry(() =>
-    api.delete(`/patients/${patientId}/entries/${entryId}`, {
-      data: { deletedBy, reason },
-    })
-  );
+  try {
+    await apiRetry(() =>
+      api.delete(`/patients/${patientId}/entries/${entryId}`, {
+        data: { deletedBy, reason },
+      })
+    );
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
+      const permission = (error.response.data as { missingPermission?: string })?.missingPermission;
+      const message = permission
+        ? `You don't have permission to delete entries. Required permission: ${permission}. Please contact your administrator.`
+        : 'You don\'t have permission to delete entries. Please contact your administrator.';
+      const err = new Error(message);
+      err.name = 'PermissionError';
+      throw err;
+    }
+    throw error;
+  }
 };
 
 export default {

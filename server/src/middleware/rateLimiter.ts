@@ -2,6 +2,13 @@ import rateLimit from 'express-rate-limit';
 import { RedisClient } from '../utils/redis';
 import logger from '../utils/logger';
 
+// export const DEV_SETTINGS = {
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 1000, // More generous limit for development
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// };
+
 const createRedisStore = (prefix: string) => {
   return {
     async increment(key: string): Promise<{
@@ -61,4 +68,13 @@ export const passwordResetLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: createRedisStore('password_reset'),
+});
+
+export const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Stricter limit for login attempts
+  message: 'Too many login attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createRedisStore('login'),
 });

@@ -1,4 +1,5 @@
 import { jwtDecode } from "jwt-decode";
+import { apiBaseUrl } from "../constants";
 
 export class TokenManager {
   static storeTokens(access: string | null, refresh: string | null): void {
@@ -64,7 +65,7 @@ export class TokenManager {
     if (!refreshToken) return;
 
     try {
-      const response = await fetch('/auth/refresh', {
+      const response = await fetch(`${apiBaseUrl}/auth/refresh`, {
         method: 'POST',
         credentials: 'include'
       });
@@ -88,7 +89,7 @@ export class TokenManager {
     }
 
     try {
-      const response = await fetch('/auth/refresh', {
+      const response = await fetch(`${apiBaseUrl}/auth/refresh`, {
         method: 'POST',
         credentials: 'include'
       });

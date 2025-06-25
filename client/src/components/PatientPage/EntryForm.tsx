@@ -319,7 +319,8 @@ const EntryForm: React.FC<Props> = ({
           value={formValues.date.split('T')[0]}
           onChange={(e) => {
             const dateValue = e.target.value;
-            const isoDate = dateValue ? new Date(dateValue + 'T00:00:00Z').toISOString() : '';
+            // const isoDate = dateValue ? new Date(dateValue + 'T00:00:00Z').toISOString() : '';
+            const isoDate = new Date(dateValue + 'T00:00:00Z').toISOString();
             handleChange('date', isoDate);
           }}
           fullWidth

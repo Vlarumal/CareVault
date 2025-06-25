@@ -12,11 +12,6 @@ COPY --chown=node:node package*.json ./
 RUN npm ci
 # RUN npm ci --include=dev || (npm install --include=dev && npm cache clean --force)
 
-# RUN npm install axios @types/axios
-# RUN npm install axios
-# RUN npm install pg
-# RUN npm install dotenv
-
 COPY --chown=node:node . .
 
 ENV NODE_PATH=/usr/src/shared

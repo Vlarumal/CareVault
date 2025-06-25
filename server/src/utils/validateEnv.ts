@@ -4,7 +4,8 @@ export function validateEnv() {
   const requiredVars = [
     'JWT_SECRET',
     'REDIS_URL',
-    'DATABASE_URL'
+    'DATABASE_URL',
+    'AUTH_TEST_TOKEN'
   ];
 
   const missingVars = requiredVars.filter(varName => !process.env[varName]);

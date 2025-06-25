@@ -55,9 +55,12 @@ export const authenticate = async (
     const payload = verifyToken(token);
     
     if (!payload.permissions?.includes('entries:write')) {
-      throw new ValidationError('Insufficient permissions', {
+      console.warn(`Permission denied for user ${payload.userId}: Missing 'entries:write' permission`);
+      throw new ValidationError('Missing required permission: entries:write', {
         status: 403,
-        code: 'INSUFFICIENT_PERMISSIONS',
+        code: 'MISSING_PERMISSION',
+        missingPermission: 'entries:write',
+        userId: payload.userId
       });
     }
     

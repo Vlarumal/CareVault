@@ -1,20 +1,25 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express-serve-static-core';
+import { RedisClient } from '../utils/redis';
+import { csrfProtection, tokens } from '../middleware/csrfMiddleware';
 import {
   authRateLimiter,
   passwordResetLimiter,
+  loginRateLimiter,
 } from '../middleware/rateLimiter';
 
 import crypto from 'crypto';
-import {
-  generateToken,
-} from '../utils/jwtUtils';
+import { generateToken } from '../utils/jwtUtils';
 
 import {
   generateRefreshToken,
   verifyRefreshToken,
-  invalidateToken
+  invalidateToken,
 } from '../utils/refreshTokenUtils';
+import {
+  generateVerificationToken,
+  validateVerificationToken
+} from '../services/verificationService';
 import pool from '../../db/connection';
 import { ValidationError } from '../utils/errors';
 import { validatePassword } from '../middleware/passwordValidator';
@@ -25,12 +30,47 @@ import {
 import { ipBlocker } from '../middleware/ipBlocker';
 import { asyncHandler } from '../utils/asyncMiddleware';
 import { hash } from 'bcrypt';
+import securityHeaders  from '../middleware/securityHeaders';
 
 const authRouter = Router();
 
+authRouter.get('/csrf-token', csrfProtection.generateToken, (_req: Request, res: Response) => {
+  res.json({ csrfToken: res.locals.csrfToken });
+});
+
+authRouter.post('/refresh-csrf',
+  asyncHandler<void>(async (_req: Request, res: Response) => {
+    try {
+      const secret = tokens.secretSync();
+      const token = tokens.create(secret);
+      
+      await RedisClient.set(
+        `csrf:${token}`,
+        secret,
+        undefined,
+        'EX',
+        86400
+      );
+      
+      res.cookie('XSRF-TOKEN', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict',
+        maxAge: 86400
+      });
+      
+      res.json({ csrfToken: token });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to refresh CSRF token' });
+    }
+  })
+);
+
 authRouter.post(
   '/register',
+  authRateLimiter,
   validatePassword,
+  csrfProtection.validateToken,
   asyncHandler<void>(async (req: Request, res: Response) => {
     const { email, password, name } = req.body;
 
@@ -45,27 +85,27 @@ authRouter.post(
           status: 400,
           details: {
             email: 'Email already in use',
-            status: 400
-          }
+            status: 400,
+          },
         });
       }
 
       const hashedPassword = await hash(password, 12);
-      
+
       if (!email || !name) {
         throw new ValidationError('Email and name are required', {
           status: 400,
           details: {
             email: !email ? 'Email is required' : undefined,
-            name: !name ? 'Name is required' : undefined
-          }
+            name: !name ? 'Name is required' : undefined,
+          },
         });
       }
 
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        
+
         const result = await client.query(
           `INSERT INTO users (email, password, name)
            VALUES ($1, $2, $3)
@@ -79,16 +119,28 @@ authRouter.post(
         );
 
         await client.query('COMMIT');
+
+        const userId = result.rows[0].id;
+        const accessToken = await generateToken(
+          userId,
+          'user',
+          ['patients:read', 'entries:read']
+        );
+        const refreshToken = await generateRefreshToken(
+          userId,
+          'user',
+          ['patients:read', 'entries:read']
+        );
         
-        const accessToken = await generateToken(result.rows[0].id, 'user', ['patients:read', 'entries:read']);
-        const refreshToken = await generateRefreshToken(result.rows[0].id, 'user', ['patients:read', 'entries:read']);
+        // // Send verification email
+        // await generateVerificationToken(userId, email);
         res.status(201).json({
           accessToken,
           refreshToken,
           user: {
             id: result.rows[0].id,
-            role: 'user'
-          }
+            role: 'user',
+          },
         });
       } catch (error) {
         await client.query('ROLLBACK');
@@ -100,10 +152,36 @@ authRouter.post(
       if (error instanceof ValidationError) {
         res.status(error.status).json({
           error: error.message,
-          details: error.details
+          details: error.details,
         });
       } else {
-        res.status(500).json({ error: 'Registration failed' });
+        // Generate new CSRF token on failure
+        try {
+          const secret = tokens.secretSync();
+          const token = tokens.create(secret);
+          
+          await RedisClient.set(
+            `csrf:${token}`,
+            secret,
+            undefined,
+            'EX',
+            86400
+          );
+          
+          res.cookie('XSRF-TOKEN', token, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            maxAge: 86400
+          });
+          
+          res.status(500).json({
+            error: 'Registration failed',
+            csrfToken: token
+          });
+        } catch (csrfError) {
+          res.status(500).json({ error: 'Registration and CSRF token refresh failed' });
+        }
       }
     }
   })
@@ -112,7 +190,7 @@ authRouter.post(
 authRouter.post(
   '/login',
   ipBlocker,
-  authRateLimiter,
+  loginRateLimiter,
   checkAccountLockout,
   asyncHandler<void>(async (req: Request, res: Response) => {
     const { email, password } = req.body;
@@ -126,17 +204,23 @@ authRouter.post(
       if (result.rows.length === 0) {
         await recordFailedAttempt(null, req.ip || 'unknown');
         res.status(401).json({
-        error: 'Invalid credentials',
+          error: 'Invalid credentials',
           details: { email: 'Invalid email or password' },
         });
         return;
       }
 
       const { compare } = await import('bcrypt');
-      const passwordMatch = await compare(password, result.rows[0].password);
+      const passwordMatch = await compare(
+        password,
+        result.rows[0].password
+      );
 
       if (!passwordMatch) {
-        await recordFailedAttempt(result.rows[0].id, req.ip || 'unknown');
+        await recordFailedAttempt(
+          result.rows[0].id,
+          req.ip || 'unknown'
+        );
         res.status(401).json({
           error: 'Invalid credentials',
           details: { email: 'Invalid email or password' },
@@ -150,19 +234,33 @@ authRouter.post(
       );
 
       const role = roleResult.rows[0]?.role || 'user';
-      const permissions = role === 'admin'
-        ? ['patients:read', 'patients:write', 'entries:read', 'entries:write']
-        : ['patients:read', 'entries:read'];
-      const accessToken = await generateToken(result.rows[0].id, role, permissions);
-      const refreshToken = await generateRefreshToken(result.rows[0].id, role, permissions);
+      const permissions =
+        role === 'admin'
+          ? [
+              'patients:read',
+              'patients:write',
+              'entries:read',
+              'entries:write',
+            ]
+          : ['patients:read', 'entries:read'];
+      const accessToken = await generateToken(
+        result.rows[0].id,
+        role,
+        permissions
+      );
+      const refreshToken = await generateRefreshToken(
+        result.rows[0].id,
+        role,
+        permissions
+      );
 
       res.json({
         accessToken,
         refreshToken,
         user: {
           id: result.rows[0].id,
-          role
-        }
+          role,
+        },
       });
     } catch (error) {
       if (error instanceof ValidationError) {
@@ -268,34 +366,50 @@ authRouter.post(
       }
     }
   })
-)
+);
 
 authRouter.post(
   '/refresh',
   asyncHandler<void>(async (req: Request, res: Response) => {
     const refreshToken = req.cookies.refreshToken;
-    
+
     if (!refreshToken) {
       throw new ValidationError('Refresh token required', {
         status: 401,
-        code: 'MISSING_REFRESH_TOKEN'
+        code: 'MISSING_REFRESH_TOKEN',
       });
     }
 
     try {
-      const { userId, role, permissions } = await verifyRefreshToken(refreshToken);
-      
-      const newAccessToken = await generateToken(userId, role, permissions);
-      const newRefreshToken = await generateRefreshToken(userId, role, permissions);
-      
+      const { userId, role, permissions } = await verifyRefreshToken(
+        refreshToken
+      );
+
+      const newAccessToken = await generateToken(
+        userId,
+        role,
+        permissions
+      );
+      const newRefreshToken = await generateRefreshToken(
+        userId,
+        role,
+        permissions
+      );
+
       res.cookie('refreshToken', newRefreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
         sameSite: 'strict',
-        maxAge: parseInt(process.env.REFRESH_TOKEN_EXPIRES_IN || '604800000') // 7 days default
+        domain: process.env.COOKIE_DOMAIN || 'localhost',
+        maxAge: parseInt(
+          process.env.REFRESH_TOKEN_EXPIRES_IN || '604800000'
+        ), // 7 days default
       });
-      
-      res.json({ token: newAccessToken });
+
+      res.json({
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+      });
     } catch (error) {
       res.status(401).json({ error: 'Invalid refresh token' });
     }
@@ -312,7 +426,7 @@ authRouter.post(
     if (!refreshToken && req.body) {
       refreshToken = req.body.refreshToken;
     }
-    
+
     if (refreshToken) {
       try {
         const { tokenId } = await verifyRefreshToken(refreshToken);
@@ -324,6 +438,59 @@ authRouter.post(
 
     res.clearCookie('refreshToken');
     res.json({ message: 'Logged out successfully' });
+  })
+);
+
+authRouter.post(
+  '/verify-email',
+  authRateLimiter,
+  securityHeaders,
+  asyncHandler<void>(async (req: Request, res: Response) => {
+    const { token } = req.body;
+    
+    try {
+      const { email } = await validateVerificationToken(token);
+      res.json({
+        message: 'Email verified successfully',
+        email
+      });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        res.status(error.status).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Email verification failed' });
+      }
+    }
+  })
+);
+
+authRouter.post(
+  '/resend-verification',
+  authRateLimiter,
+  securityHeaders,
+  asyncHandler<void>(async (req: Request, res: Response) => {
+    const { email } = req.body;
+    
+    try {
+      const result = await pool.query(
+        'SELECT id FROM users WHERE email = $1',
+        [email]
+      );
+      
+      if (result.rows.length === 0) {
+        res.status(200).json({
+          message: 'If an account exists, a verification email has been sent'
+        });
+        return;
+      }
+
+      await generateVerificationToken(result.rows[0].id, email);
+      res.status(200).json({
+        message: 'Verification email resent successfully'
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to resend verification email' });
+    }
   })
 );
 

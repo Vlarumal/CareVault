@@ -50,7 +50,9 @@ const patientsRouter = express.Router();
  */
 patientsRouter.get('/health', async (_req, res) => {
   try {
-    const redisHealth = await RedisClient.healthCheck();
+    const [redisHealth] = await Promise.all([
+      RedisClient.healthCheck(),
+    ]);
     res.json({
       status: 'ok',
       redis: redisHealth.status,

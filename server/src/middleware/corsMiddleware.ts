@@ -27,7 +27,7 @@ export const corsMiddleware = (req: Request, res: Response, next: NextFunction):
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header(
       'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-User-Id, X-Requested-With, Idempotency-Key'
+      'Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Requested-With, X-User-Id'
     );
     res.status(204).end();
     return;

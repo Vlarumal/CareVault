@@ -35,6 +35,8 @@ app.use(
   })
 );
 
+import cookieParser from 'cookie-parser';
+
 app.use((_req, res, next) => {
   res.setHeader('X-XSS-Protection', '0');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -46,6 +48,7 @@ app.use(metricsMiddleware);
 import { corsMiddleware } from './middleware/corsMiddleware';
 
 app.use(corsMiddleware);
+app.use(cookieParser());
 app.use(express.static('dist'));
 app.use(express.json());
 

@@ -36,6 +36,7 @@ import EntryForm from './EntryForm';
 import { AxiosError } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
+
 const PatientPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -130,6 +131,8 @@ const PatientPage = () => {
           )
         };
       });
+      console.log('Invalidating patients list query');
+      queryClient.invalidateQueries({ queryKey: ['patients'] });
     },
     onError: (error, _variables, context) => {
       if (context?.previousPatient) {
@@ -220,6 +223,8 @@ const PatientPage = () => {
         queryKey: ['patient', validatedId],
         exact: true,
       });
+      console.log('Invalidating patients list query');
+      await queryClient.invalidateQueries({ queryKey: ['patients'] });
     },
   });
 
@@ -518,3 +523,4 @@ const PatientPage = () => {
 };
 
 export default PatientPage;
+

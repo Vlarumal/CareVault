@@ -14,6 +14,7 @@ interface AuthContextType {
   user: { id: string; role: string } | null;
   login: (accessToken: string, refreshToken: string) => void;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -95,8 +96,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(null);
   };
 
+  const refreshUser = async () => {
+    const accessToken = TokenManager.getAccessToken();
+    if (!accessToken) return;
+    
+    try {
+      const decoded = jwtDecode(accessToken) as { userId: string; role: string };
+      setUser({ id: decoded.userId, role: decoded.role });
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      logout();
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ token, user, login, logout }}>
+    <AuthContext.Provider value={{ token, user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

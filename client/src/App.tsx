@@ -34,6 +34,7 @@ import PatientListPage from './components/PatientListPage';
 import { PatientPage } from './components/PatientPage/index.ts';
 import { useMemo } from 'react';
 import { useAuth } from './context/AuthContext.tsx';
+import SessionTimer from './components/SessionTimer';
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   const auth = useAuth();
@@ -115,13 +116,16 @@ const App = () => {
                   label={darkMode ? "Dark Mode" : "Light Mode"}
                 />
                 {auth.token && (
-                  <Button
-                    color="inherit"
-                    onClick={auth.logout}
-                    aria-label="Logout"
-                  >
-                    Logout
-                  </Button>
+                  <>
+                    <SessionTimer />
+                    <Button
+                      color="inherit"
+                      onClick={auth.logout}
+                      aria-label="Logout"
+                    >
+                      Logout
+                    </Button>
+                  </>
                 )}
               </Box>
             </Toolbar>

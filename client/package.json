@@ -26,6 +26,7 @@
     "@types/diff": "^5.0.0",
     "@types/react-syntax-highlighter": "^13.0.4",
     "@types/uuid": "^10.0.0",
+    "@types/zxcvbn": "^4.4.5",
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",
     "diff": "^8.0.2",
@@ -44,7 +45,9 @@
     "react-syntax-highlighter": "^15.6.1",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^1.8.11",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zxcvbn": "^4.4.2",
+    "zxcvbn-typescript": "^5.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
